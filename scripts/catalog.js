@@ -90,15 +90,15 @@ function waves() {
 
 /**
  * Sols : `pattern` est le contenu d'un <pattern> SVG de taille `w`×`h` cases.
- * `swatch` sert à l'aperçu de la palette.
+ * `swatch` sert à l'aperçu de la palette ; `soft` : sol naturel, au bord fondu sur ses voisins.
  */
 export const TERRAINS = [
   { id: "stone", swatch: "#7a746b", w: 2, h: 2, base: "#4a463f", pattern: flagstones() },
   { id: "wood", swatch: "#8a5a33", w: 2, h: 1, base: "#4e3119", pattern: planks() },
   { id: "cobble", swatch: "#837d73", w: 1, h: 1, base: "#4f4b45", pattern: cobbles() },
-  { id: "dirt", swatch: "#6b5236", w: 1, h: 1, base: "#6b5236", pattern: speckles(11, 16, ["#5d4630", "#7a5f40", "#56412b"], 0.015, 0.05) },
-  { id: "grass", swatch: "#4d6b33", w: 1, h: 1, base: "#4d6b33", pattern: speckles(23, 6, ["#45602e"], 0.05, 0.12) + blades(7, 26, ["#6a8c48", "#3f5a2a", "#5f8040"]) },
-  { id: "water", swatch: "#2e5a78", w: 2, h: 1, base: "#2e5a78", pattern: waves() }
+  { id: "dirt", soft: true, swatch: "#6b5236", w: 1, h: 1, base: "#6b5236", pattern: speckles(11, 16, ["#5d4630", "#7a5f40", "#56412b"], 0.015, 0.05) },
+  { id: "grass", soft: true, swatch: "#4d6b33", w: 1, h: 1, base: "#4d6b33", pattern: speckles(23, 6, ["#45602e"], 0.05, 0.12) + blades(7, 26, ["#6a8c48", "#3f5a2a", "#5f8040"]) },
+  { id: "water", soft: true, swatch: "#2e5a78", w: 2, h: 1, base: "#2e5a78", pattern: waves() }
 ];
 
 export const TERRAIN_IDS = new Set(TERRAINS.map((t) => t.id));

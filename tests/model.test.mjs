@@ -1,156 +1,156 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  createMap, normalizeMap, paintCells, brushCells, fillCells, setEdge, cycleDoor,
-  lineEdges, lineEnd, setLine, drawRoom, rectEdges, addProp, propAt, rotateProp,
-  removeProp, resizeMap, isEmpty, propFits
+  createMap, normalizeMap, paintArea, eraseArea, addWall, addRoom, addDoor, doorEnds,
+  removeWall, moveWall, moveNode, toggleNodeSmooth, removeNode, addProp, propAt, updateProp,
+  resizeMap, isEmpty, nearestWall
 } from "../scripts/model.js";
+import { rectNodes, ellipseNodes } from "../scripts/curves.js";
+import { rectRings, strokeRings, totalArea, pointInRings } from "../scripts/poly.js";
 
-const small = () => createMap({ name: "Test", cols: 8, rows: 6 });
+const near = (a, b, eps = 1e-2) => Math.abs(a - b) < eps;
+const area = (map, id) => totalArea(map.terrains[id] ?? []);
 
 test("une carte neuve est vide et bornée", () => {
-  const map = createMap({ cols: 1000, rows: -3, gridSize: 7 });
-  assert.equal(map.cols, 120);
-  assert.equal(map.rows, 4);
+  const map = createMap({ width: 1000, height: -3, gridSize: 7 });
+  assert.equal(map.width, 120);
+  assert.equal(map.height, 4);
   assert.equal(map.gridSize, 50);
   assert.ok(isEmpty(map));
 });
 
-test("le pinceau carré reste dans la carte", () => {
-  const map = small();
-  assert.deepEqual(brushCells(map, 0, 0, 3), [[0, 0], [1, 0], [0, 1], [1, 1]]);
-  assert.equal(brushCells(map, 4, 3, 2).length, 4);
+test("peindre un sol remplace les autres au même endroit", () => {
+  const map = createMap({ width: 10, height: 10 });
+  paintArea(map, rectRings(0, 0, 6, 6), "grass");
+  paintArea(map, rectRings(4, 4, 8, 8), "stone");
+  assert.ok(near(area(map, "grass"), 36 - 4));
+  assert.ok(near(area(map, "stone"), 16));
+  assert.ok(!pointInRings(map.terrains.grass, 5, 5));
 });
 
-test("peindre puis effacer un sol", () => {
-  const map = small();
-  assert.ok(paintCells(map, [[1, 1], [2, 1]], "stone"));
-  assert.equal(paintCells(map, [[1, 1]], "stone"), false, "aucun changement si le sol est déjà là");
-  assert.deepEqual(map.floor, { "1,1": "stone", "2,1": "stone" });
-  assert.ok(paintCells(map, [[1, 1]], null));
-  assert.deepEqual(map.floor, { "2,1": "stone" });
+test("la peinture est rognée au bord de la carte", () => {
+  const map = createMap({ width: 5, height: 5 });
+  paintArea(map, rectRings(-5, -5, 2, 2), "dirt");
+  assert.ok(near(area(map, "dirt"), 4));
 });
 
-test("le remplissage s'arrête aux murs et aux autres sols", () => {
-  const map = small();
-  drawRoom(map, [0, 0], [2, 2], "wood");
-  paintCells(map, [[3, 0], [4, 0]], "wood");
-  // Le mur de droite de la pièce sépare les deux zones de bois.
-  const filled = fillCells(map, 1, 1);
-  assert.equal(filled.length, 9);
-  assert.ok(!filled.some(([x]) => x >= 3));
-});
-
-test("arêtes : bornes, pose, effacement", () => {
-  const map = small();
-  assert.ok(setEdge(map, "h", 7, 6, "wall"));
-  assert.equal(setEdge(map, "h", 8, 0, "wall"), false, "hors de la carte");
-  assert.equal(setEdge(map, "v", 9, 0, "wall"), false);
-  assert.equal(setEdge(map, "h", 7, 6, "wall"), false, "déjà posé");
-  assert.ok(setEdge(map, "h", 7, 6, null));
-  assert.deepEqual(map.edges, {});
-});
-
-test("l'outil porte alterne porte et porte secrète", () => {
-  const map = small();
-  setEdge(map, "v", 2, 2, "wall");
-  cycleDoor(map, "v", 2, 2);
-  assert.equal(map.edges["v,2,2"], "door");
-  cycleDoor(map, "v", 2, 2);
-  assert.equal(map.edges["v,2,2"], "secret");
-  cycleDoor(map, "v", 2, 2);
-  assert.equal(map.edges["v,2,2"], "door");
-});
-
-test("une ligne suit l'axe dominant", () => {
-  assert.deepEqual(lineEdges([1, 2], [4, 3]), [{ o: "h", x: 1, y: 2 }, { o: "h", x: 2, y: 2 }, { o: "h", x: 3, y: 2 }]);
-  assert.deepEqual(lineEdges([3, 3], [2, 1]), [{ o: "v", x: 3, y: 1 }, { o: "v", x: 3, y: 2 }]);
-  assert.deepEqual(lineEnd([1, 2], [4, 3]), [4, 2]);
-});
-
-test("tracer un mur ne remplace pas une porte, la gomme si", () => {
-  const map = small();
-  setEdge(map, "h", 2, 1, "door");
-  setLine(map, [0, 1], [4, 1], "wall");
-  assert.equal(map.edges["h,2,1"], "door");
-  assert.equal(map.edges["h,0,1"], "wall");
-  setLine(map, [0, 1], [4, 1], null);
-  assert.deepEqual(map.edges, {});
-});
-
-test("pourtour et intérieur d'un rectangle", () => {
-  const { perimeter, interior } = rectEdges({ x0: 0, y0: 0, x1: 1, y1: 1 });
-  assert.equal(perimeter.length, 8);
-  assert.equal(interior.length, 4);
-});
-
-test("deux pièces qui se chevauchent n'en font qu'une, les portes restent", () => {
-  const map = small();
-  drawRoom(map, [0, 0], [2, 2], "stone");
-  cycleDoor(map, "h", 1, 3);
-  drawRoom(map, [2, 0], [4, 2], "stone");
-  // L'ancien mur de droite de la première pièce (x = 3) est à l'intérieur de la seconde : retiré.
-  assert.equal(map.edges["v,3,1"], undefined);
-  // La porte du bas, sur le pourtour, est conservée.
-  assert.equal(map.edges["h,1,3"], "door");
-  assert.equal(map.edges["v,5,1"], "wall");
-  assert.equal(Object.keys(map.floor).length, 15);
-});
-
-test("une pièce qui déborde est coupée au bord de la carte", () => {
-  const map = small();
-  assert.ok(drawRoom(map, [6, 4], [12, 9], "dirt"));
-  assert.equal(Object.keys(map.floor).length, 4);
-  assert.equal(map.edges["v,8,5"], "wall");
-});
-
-test("objets : pose, recherche, rotation, retrait", () => {
-  const map = small();
-  assert.equal(addProp(map, "table", 7, 0), null, "une table de 2 cases ne tient pas au bord");
-  const table = addProp(map, "table", 2, 2);
-  assert.ok(table);
-  assert.equal(propAt(map, 3, 2), table);
-  assert.equal(propAt(map, 3, 3), null);
-  assert.ok(rotateProp(map, table.id));
-  assert.equal(propAt(map, 2, 3), table, "tournée, la table occupe 1×2");
-  assert.ok(removeProp(map, table.id));
+test("la gomme retire le sol, coupe les murs et enlève les objets", () => {
+  const map = createMap({ width: 20, height: 20 });
+  paintArea(map, rectRings(0, 0, 10, 10), "wood");
+  addWall(map, [{ x: 0, y: 5 }, { x: 10, y: 5 }]);
+  addProp(map, "barrel", 5, 5.5);
+  assert.ok(eraseArea(map, strokeRings([[5, 5]], 1)));
+  assert.equal(map.walls.length, 2, "le mur coupé en deux");
   assert.equal(map.props.length, 0);
-  assert.ok(!propFits(map, "dragon", 0, 0));
+  assert.ok(area(map, "wood") < 100 - 3);
 });
 
-test("une rotation qui sortirait de la carte est refusée", () => {
-  const map = small();
-  const bed = addProp(map, "bed", 7, 0);
-  assert.ok(bed);
-  rotateProp(map, bed.id);
-  assert.equal(bed.r, 0);
+test("la gomme peut ne viser que les murs", () => {
+  const map = createMap({ width: 20, height: 20 });
+  paintArea(map, rectRings(0, 0, 10, 10), "wood");
+  addWall(map, [{ x: 0, y: 5 }, { x: 10, y: 5 }]);
+  eraseArea(map, strokeRings([[5, 5]], 1), { floor: false, props: false });
+  assert.ok(near(area(map, "wood"), 100));
+  assert.equal(map.walls.length, 2);
+});
+
+test("une pièce : sol et mur fermé sur son contour, courbes conservées", () => {
+  const map = createMap({ width: 20, height: 20 });
+  addRoom(map, ellipseNodes(10, 10, 4, 3), "stone");
+  assert.equal(map.walls.length, 1);
+  assert.ok(map.walls[0].closed);
+  assert.ok(map.walls[0].nodes[0].o, "les poignées de l'ellipse restent");
+  assert.ok(near(area(map, "stone"), Math.PI * 12, 0.1));
+});
+
+test("deux pièces qui se chevauchent n'en font qu'une", () => {
+  const map = createMap({ width: 20, height: 20 });
+  addRoom(map, rectNodes(2, 2, 8, 8), "stone");
+  addRoom(map, rectNodes(6, 4, 12, 10), "wood");
+  // Plus aucun mur dans la partie commune.
+  const inside = map.walls.some((w) => w.nodes.some((n) => n.x > 6.1 && n.x < 7.9 && n.y > 4.1 && n.y < 7.9));
+  assert.ok(!inside);
+  // Le contour de la seconde pièce s'arrête à la première : pas de mur en x = 6 entre y 4 et 8.
+  assert.equal(nearestWall(map, 6, 6, 0.05), null);
+  assert.ok(nearestWall(map, 12, 7, 0.05), "le mur extérieur de la seconde pièce existe");
+  assert.ok(nearestWall(map, 2, 5, 0.05), "celui de la première aussi");
+});
+
+test("une porte reste sur son mur quand la pièce voisine le coupe", () => {
+  const map = createMap({ width: 20, height: 20 });
+  addRoom(map, rectNodes(2, 2, 8, 8), "stone");
+  const wall = map.walls[0];
+  addDoor(map, wall.id, 9, 1); // milieu du mur de droite (x = 8, y = 5)
+  addRoom(map, rectNodes(8, 0, 12, 4), "wood"); // touche l'angle haut-droit, loin de la porte
+  assert.equal(map.doors.length, 1);
+  const ends = doorEnds(map, map.doors[0]);
+  assert.ok(near(ends.a[0], 8) && near((ends.a[1] + ends.b[1]) / 2, 5, 0.05));
+});
+
+test("supprimer un mur supprime ses portes", () => {
+  const map = createMap({ width: 10, height: 10 });
+  const w = addWall(map, [{ x: 1, y: 1 }, { x: 5, y: 1 }]);
+  addDoor(map, w.id, 2);
+  removeWall(map, w.id);
+  assert.equal(map.doors.length, 0);
+});
+
+test("déplacer un mur, un nœud ; coin ↔ courbe ; retirer un nœud", () => {
+  const map = createMap({ width: 10, height: 10 });
+  const w = addWall(map, [{ x: 1, y: 1 }, { x: 3, y: 1 }, { x: 5, y: 1 }]);
+  moveWall(map, w.id, 1, 2);
+  assert.deepEqual([w.nodes[0].x, w.nodes[0].y], [2, 3]);
+  const d = addDoor(map, w.id, 2);
+  moveNode(map, w.id, 2, 10, 3); // le mur passe de 4 à 8 de long
+  assert.ok(near(d.s, 4), "la porte garde sa place relative");
+  toggleNodeSmooth(map, w.id, 1);
+  assert.ok(w.nodes[1].o && w.nodes[1].i);
+  toggleNodeSmooth(map, w.id, 1);
+  assert.ok(!w.nodes[1].o);
+  removeNode(map, w.id, 1);
+  assert.equal(w.nodes.length, 2);
+  removeNode(map, w.id, 0);
+  assert.equal(map.walls.length, 0, "un mur de deux nœuds disparaît");
+});
+
+test("objets : angle, échelle, sélection par la forme tournée", () => {
+  const map = createMap({ width: 10, height: 10 });
+  const t = addProp(map, "table", 5, 5, 90);
+  assert.equal(propAt(map, 5, 5.9), t, "la table tournée s'étend en hauteur");
+  assert.equal(propAt(map, 5.9, 5), null);
+  updateProp(map, t.id, { k: 2, a: -90 });
+  assert.equal(t.a, 270);
+  assert.equal(propAt(map, 5, 6.8), t);
+  assert.equal(addProp(map, "dragon", 1, 1), null);
 });
 
 test("la remise en forme écarte les données invalides", () => {
   const map = normalizeMap({
-    name: "Vieille carte", cols: 5, rows: 5,
-    floor: { "0,0": "stone", "9,9": "stone", "1,1": "lava", "x": "wood" },
-    edges: { "h,0,0": "wall", "v,6,0": "wall", "h,1,1": "portail", "z,1,1": "wall" },
-    props: [{ type: "barrel", x: 1, y: 1 }, { type: "table", x: 4, y: 0 }, null, { type: "crate", x: 2, y: 2, r: 9 }],
-    sceneId: "abc"
+    name: "Vieille", width: 10, height: 10, seq: 3,
+    terrains: { stone: [[0, 0, 2, 0, 2, 2]], lava: [[0, 0, 1, 0, 1, 1]], wood: [[1, 2, 3]] },
+    walls: [{ id: "w1", nodes: [{ x: 0, y: 0 }, { x: 1, y: 0 }] }, { id: "w1", nodes: [{ x: 0, y: 0 }, { x: 0, y: 2 }], closed: true }, { nodes: [{ x: 1 }] }],
+    doors: [{ wall: "w1", s: 0.5, w: 99 }, { wall: "zz", s: 1 }],
+    props: [{ type: "barrel", x: 1, y: 1, a: 400 }, { type: "nope", x: 1, y: 1 }]
   });
-  assert.deepEqual(map.floor, { "0,0": "stone" });
-  assert.deepEqual(map.edges, { "h,0,0": "wall" });
-  assert.equal(map.props.length, 2);
-  assert.equal(map.props[1].r, 3);
-  assert.equal(new Set(map.props.map((p) => p.id)).size, 2);
-  assert.equal(map.sceneId, "abc");
-  assert.equal(normalizeMap(null).cols, 24);
+  assert.deepEqual(Object.keys(map.terrains), ["stone"]);
+  assert.equal(map.walls.length, 2);
+  assert.notEqual(map.walls[0].id, map.walls[1].id, "identifiants uniques");
+  assert.equal(map.walls[1].closed, false, "une boucle de deux nœuds n'est pas fermée");
+  assert.equal(map.doors.length, 1);
+  assert.equal(map.doors[0].w, 8);
+  assert.equal(map.props[0].a, 40);
+  assert.equal(map.props.length, 1);
+  assert.equal(normalizeMap(null).width, 30);
 });
 
-test("réduire la carte retire ce qui dépasse", () => {
-  const map = small();
-  drawRoom(map, [0, 0], [7, 5], "stone");
-  addProp(map, "barrel", 7, 5);
-  map.sceneId = "s1";
-  assert.ok(resizeMap(map, 4, 4));
-  assert.equal(Object.keys(map.floor).length, 16);
+test("réduire la carte rogne sols, murs et objets", () => {
+  const map = createMap({ width: 20, height: 20 });
+  paintArea(map, rectRings(0, 0, 20, 20), "grass");
+  addWall(map, [{ x: 2, y: 5 }, { x: 18, y: 5 }]);
+  addProp(map, "crate", 15, 15);
+  resizeMap(map, 10, 10);
+  assert.ok(near(area(map, "grass"), 100));
+  assert.equal(map.walls.length, 1);
+  assert.ok(map.walls[0].nodes.every((n) => n.x <= 10.01));
   assert.equal(map.props.length, 0);
-  assert.ok(Object.keys(map.edges).every((k) => !k.startsWith("v,8")));
-  assert.equal(map.sceneId, "s1");
 });

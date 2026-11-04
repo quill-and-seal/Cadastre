@@ -1,9 +1,9 @@
 export const MODULE_ID = "cadastre";
 
 /** Version du format de carte enregistré. */
-export const FORMAT_VERSION = 1;
+export const FORMAT_VERSION = 2;
 
-/** Limites de taille d'une carte, en cases. */
+/** Limites de taille d'une carte, en cases (la grille reste une aide). */
 export const MIN_CELLS = 4;
 export const MAX_CELLS = 120;
 
