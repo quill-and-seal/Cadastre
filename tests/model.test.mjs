@@ -5,7 +5,7 @@ import {
   removeWall, moveWall, moveNode, toggleNodeSmooth, removeNode, addProp, propAt, updateProp,
   resizeMap, isEmpty, nearestWall
 } from "../scripts/model.js";
-import { rectNodes, ellipseNodes } from "../scripts/curves.js";
+import { rectNodes, ellipseNodes, flattenNodes } from "../scripts/curves.js";
 import { rectRings, strokeRings, totalArea, pointInRings } from "../scripts/poly.js";
 
 const near = (a, b, eps = 1e-2) => Math.abs(a - b) < eps;
@@ -153,4 +153,56 @@ test("réduire la carte rogne sols, murs et objets", () => {
   assert.equal(map.walls.length, 1);
   assert.ok(map.walls[0].nodes.every((n) => n.x <= 10.01));
   assert.equal(map.props.length, 0);
+});
+
+test("insérer un nœud sur une courbe ne la déforme pas", async () => {
+  const { insertNode, wallPoints } = await import("../scripts/model.js");
+  const { flattenNodes } = await import("../scripts/curves.js");
+  const map = createMap({ width: 20, height: 20 });
+  addRoom(map, ellipseNodes(10, 10, 4, 4), null);
+  const wall = map.walls[0];
+  const before = wallPoints(wall, 0.005);
+  const i = insertNode(map, wall.id, 14.2, 10.8);
+  assert.equal(wall.nodes.length, 5);
+  assert.ok(near(Math.hypot(wall.nodes[i].x - 10, wall.nodes[i].y - 10), 4, 0.01), "le nouveau nœud est sur le cercle");
+  for (const [x, y] of flattenNodes(wall.nodes, true, 0.005)) assert.ok(near(Math.hypot(x - 10, y - 10), 4, 0.02));
+  assert.ok(before.length > 0);
+});
+
+test("une porte glisse le long de son mur sans en sortir", async () => {
+  const { slideDoor } = await import("../scripts/model.js");
+  const map = createMap({ width: 20, height: 20 });
+  const w = addWall(map, [{ x: 0, y: 0 }, { x: 6, y: 0 }]);
+  const d = addDoor(map, w.id, 2, 1);
+  slideDoor(map, d.id, 4, 3);
+  assert.ok(near(d.s, 4));
+  slideDoor(map, d.id, 50, 0);
+  assert.ok(near(d.s, 5.5), "bloquée à une demi-largeur du bout");
+});
+
+test("dupliquer un mur emporte ses portes", async () => {
+  const { duplicateWall } = await import("../scripts/model.js");
+  const map = createMap({ width: 20, height: 20 });
+  const w = addWall(map, [{ x: 0, y: 0 }, { x: 6, y: 0 }]);
+  addDoor(map, w.id, 2, 1);
+  const c = duplicateWall(map, w.id);
+  assert.equal(map.doors.length, 2);
+  assert.equal(map.doors[1].wall, c.id);
+  assert.deepEqual([c.nodes[0].x, c.nodes[0].y], [1, 1]);
+});
+
+test("un mur courbe coupé garde de vraies courbes, sans déformation", () => {
+  const map = createMap({ width: 30, height: 20 });
+  addRoom(map, rectNodes(2, 2, 13, 9), "wood");
+  addRoom(map, ellipseNodes(15, 5.5, 3, 2.5), "stone");
+  const arc = map.walls.find((w) => w.nodes.some((n) => n.x > 17.9));
+  assert.ok(arc, "l'arc de la tour existe");
+  assert.equal(nearestWall(map, 13, 5.5, 0.05), null, "le mur de la pièce ne traverse plus la tour");
+  assert.ok(nearestWall(map, 13, 8.5, 0.05) && nearestWall(map, 13, 2.5, 0.05), "il reste au-dessus et au-dessous");
+  assert.ok(arc.nodes.length <= 6, `${arc.nodes.length} nœuds seulement`);
+  assert.ok(arc.nodes.some((n) => n.o || n.i), "avec des poignées");
+  for (const [x, y] of flattenNodes(arc.nodes, false, 0.005)) {
+    const e = ((x - 15) / 3) ** 2 + ((y - 5.5) / 2.5) ** 2;
+    assert.ok(Math.abs(e - 1) < 0.02, "chaque point reste sur l'ellipse");
+  }
 });

@@ -223,3 +223,99 @@ export function cutIntervals(points, closed, intervals) {
   }
   return pieces;
 }
+
+/* -------------------------------------------- */
+/*  Morceaux de courbe                          */
+/* -------------------------------------------- */
+
+const lerp2 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+
+/** Points de contrôle du segment k (et s'il est courbe). */
+function controls(nodes, k) {
+  const a = nodes[k], b = nodes[(k + 1) % nodes.length];
+  return {
+    p: [[a.x, a.y], [a.x + (a.o?.[0] ?? 0), a.y + (a.o?.[1] ?? 0)], [b.x + (b.i?.[0] ?? 0), b.y + (b.i?.[1] ?? 0)], [b.x, b.y]],
+    curved: !!(a.o || b.i)
+  };
+}
+
+/** Sous-courbe de Bézier entre ta et tb (De Casteljau). */
+function subBezier([p0, p1, p2, p3], ta, tb) {
+  const split = (q, t) => {
+    const [a, b, c, d] = q;
+    const ab = lerp2(a, b, t), bc = lerp2(b, c, t), cd = lerp2(c, d, t);
+    const abc = lerp2(ab, bc, t), bcd = lerp2(bc, cd, t), m = lerp2(abc, bcd, t);
+    return [[a, ab, abc, m], [m, bcd, cd, d]];
+  };
+  const left = split([p0, p1, p2, p3], tb)[0];
+  return ta > 0 ? split(left, tb > 0 ? ta / tb : 0)[1] : left;
+}
+
+/** Polyligne d'un tracé avec, pour chaque point, le segment et le paramètre t d'origine. */
+export function flattenWithParams(nodes, closed = false, tol = 0.005) {
+  const points = [], params = [];
+  const count = closed ? nodes.length : nodes.length - 1;
+  for (let k = 0; k < count; k++) {
+    const pts = flattenNodes([nodes[k], nodes[(k + 1) % nodes.length]], false, tol);
+    const n = pts.length - 1;
+    pts.forEach((pt, j) => {
+      if (j === 0 && k > 0) return; // point partagé avec le segment précédent
+      points.push(pt);
+      params.push([k, j / n]);
+    });
+  }
+  // Tracé fermé : le dernier point est le premier, il n'est pas répété.
+  if (closed && points.length > 1) { points.pop(); params.pop(); }
+  return { points, params };
+}
+
+/**
+ * Nœuds de la portion d'un tracé entre deux abscisses (mesurées sur sa polyligne fine).
+ * Les courbes sont coupées exactement : la portion garde la forme et reste retouchable.
+ * Sur un tracé fermé, s1 peut dépasser la longueur (la portion passe par le départ).
+ */
+export function subNodes(nodes, closed, s0, s1, tol = 0.005) {
+  const { points, params } = flattenWithParams(nodes, closed, tol);
+  const ring = closed ? [...points, points[0]] : points;
+  const prm = closed ? [...params, [nodes.length - 1, 1]] : params;
+  const acc = cumulative(ring, false);
+  const total = acc.at(-1);
+  const segCount = closed ? nodes.length : nodes.length - 1;
+
+  // Abscisse → (segment, t, tour).
+  const locate = (s) => {
+    const lap = closed ? Math.floor(s / total) : 0;
+    let r = closed ? s - lap * total : Math.min(total, Math.max(0, s));
+    let j = 0;
+    while (j < acc.length - 2 && acc[j + 1] < r) j++;
+    const len = acc[j + 1] - acc[j] || 1;
+    const u = Math.min(1, Math.max(0, (r - acc[j]) / len));
+    let [k0, t0] = prm[j];
+    const [k1, t1] = prm[j + 1];
+    // Un point en fin de segment est aussi le début du suivant.
+    if (k1 !== k0 && t0 >= 1) { k0 = k1; t0 = 0; }
+    return { k: k0 + lap * segCount, t: t0 + (t1 - t0) * u };
+  };
+
+  const a = locate(s0), b = locate(s1);
+  let ka = a.k, kb = b.k, ta = a.t, tb = b.t;
+  if (tb === 0 && kb > ka) { kb -= 1; tb = 1; }
+
+  const pieces = [];
+  for (let k = ka; k <= kb; k++) {
+    const { p, curved } = controls(nodes, ((k % segCount) + segCount) % segCount);
+    const from = k === ka ? ta : 0, to = k === kb ? tb : 1;
+    if (to - from < 1e-9) continue;
+    pieces.push({ q: curved ? subBezier(p, from, to) : [lerp2(p[0], p[3], from), null, null, lerp2(p[0], p[3], to)], curved });
+  }
+  if (!pieces.length) return [];
+  const out = [{ x: pieces[0].q[0][0], y: pieces[0].q[0][1] }];
+  for (const { q, curved } of pieces) {
+    const start = out.at(-1);
+    if (curved) start.o = [q[1][0] - q[0][0], q[1][1] - q[0][1]];
+    const end = { x: q[3][0], y: q[3][1] };
+    if (curved) end.i = [q[2][0] - q[3][0], q[2][1] - q[3][1]];
+    out.push(end);
+  }
+  return out.map(cleanNode);
+}

@@ -193,7 +193,14 @@ function segmentHit(ax, ay, bx, by, cx, cy, dx, dy) {
  */
 export function clipPolyline(points, closed, rings, { inside = false } = {}) {
   if (points.length < 2) return [];
+  const segs = splitSegments(points, closed, rings, inside);
+  return assemble(segs, points, closed);
+}
+
+/** Sous-segments d'une polyligne coupée par une zone, marqués gardés ou non. */
+function splitSegments(points, closed, rings, inside) {
   const segs = [];
+  if (points.length < 2) return segs;
   const n = points.length;
   const count = closed ? n : n - 1;
   for (let k = 0; k < count; k++) {
@@ -215,7 +222,35 @@ export function clipPolyline(points, closed, rings, { inside = false } = {}) {
       segs.push({ a: [ax + (bx - ax) * t0, ay + (by - ay) * t0], b: [ax + (bx - ax) * t1, ay + (by - ay) * t1], keep });
     }
   }
+  return segs;
+}
 
+/**
+ * Comme clipPolyline, mais renvoie les intervalles gardés en abscisse curviligne
+ * ([début, fin] ; sur une boucle, un intervalle qui passe par le départ dépasse la longueur).
+ */
+export function clipIntervals(points, closed, rings, { inside = false } = {}) {
+  const segs = splitSegments(points, closed, rings, inside);
+  const out = [];
+  let s = 0;
+  for (const seg of segs) {
+    const len = Math.hypot(seg.b[0] - seg.a[0], seg.b[1] - seg.a[1]);
+    if (seg.keep) {
+      const last = out.at(-1);
+      if (last && Math.abs(last[1] - s) < 1e-9) last[1] = s + len;
+      else out.push([s, s + len]);
+    }
+    s += len;
+  }
+  if (closed && out.length > 1 && out[0][0] < 1e-9 && Math.abs(out.at(-1)[1] - s) < 1e-9) {
+    const first = out.shift();
+    out.at(-1)[1] = s + first[1];
+  }
+  if (closed && out.length === 1 && out[0][0] < 1e-9 && Math.abs(out[0][1] - s) < 1e-9) return [[0, s, "loop"]];
+  return out;
+}
+
+function assemble(segs, points, closed) {
   // Assemble les sous-segments gardés consécutifs.
   const pieces = [];
   let current = null;

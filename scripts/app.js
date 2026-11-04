@@ -181,7 +181,7 @@ export class CadastreManagerApp extends ApplicationV2 {
     const items = entries.map((entry) => {
       const map = readMap(entry);
       const scene = map.sceneId ? game.scenes.get(map.sceneId) : null;
-      const meta = [t("CADASTRE.Manager.Size", { cols: map.cols, rows: map.rows })];
+      const meta = [t("CADASTRE.Manager.Size", { width: map.width, height: map.height })];
       if (scene) meta.push(t("CADASTRE.Manager.Linked", { scene: esc(scene.name) }));
       return `<li class="cad-item" data-entry-id="${entry.id}">
         <div class="cad-item-main" data-action="openMap">

@@ -14,7 +14,7 @@
       "CopyOf": "{name} (copie)",
       "DeleteTitle": "Supprimer la carte",
       "DeleteConfirm": "Supprimer la carte <strong>{name}</strong> ? La scène déjà exportée n'est pas touchée.",
-      "Size": "{cols} × {rows} cases",
+      "Size": "{width} × {height} cases",
       "Linked": "Scène liée : {scene}",
       "Folder": "Cadastre"
     },
@@ -28,41 +28,74 @@
       "Export": "Exporter en scène",
       "Unsaved": "modifications non enregistrées",
       "Saved": "Carte enregistrée.",
-      "Coords": "Case {x}, {y}"
+      "Coords": "{x} ; {y}",
+      "Snap": "Aimanter à la grille (Ctrl inverse)"
     },
     "Tools": {
-      "brush": "Sol (1)",
-      "fill": "Remplir (2)",
-      "room": "Pièce (3)",
+      "select": "Sélection (1)",
+      "brush": "Pinceau de sol (2)",
+      "shape": "Forme (3)",
       "wall": "Mur (4)",
       "door": "Porte (5)",
       "prop": "Objet (6)",
       "eraser": "Gomme (7)"
     },
     "Hints": {
-      "brush": "Glisse pour peindre le sol. [ et ] changent la taille du pinceau.",
-      "fill": "Clic : remplit la zone de même sol, sans traverser les murs.",
-      "room": "Glisse d'un coin à l'autre : sol, murs autour, murs intérieurs retirés. Les portes existantes restent.",
-      "wall": "Glisse d'un coin de case à un autre pour tracer un mur droit. Alt : efface. Clic simple : pose ou retire le mur le plus proche.",
-      "door": "Clic sur un bord de case : porte, puis porte secrète (dessinée comme un mur dans la scène).",
-      "prop": "Clic pour poser. R : tourner d'un quart de tour.",
-      "eraser": "Glisse pour effacer. Taille 1 près d'un bord : n'efface que ce mur.",
-      "pan": "Clic droit ou molette enfoncée (ou Espace + clic) pour déplacer la vue, molette pour zoomer."
+      "select": "Clic : sélectionner, glisser : déplacer. Mur sélectionné : glisse nœuds et poignées (Alt : poignées indépendantes), double-clic sur un nœud : coin ↔ courbe, double-clic sur le mur : nouveau nœud. Suppr : effacer, Ctrl+D : dupliquer.",
+      "brush": "Glisse pour peindre le sol à main levée. Alt : efface le sol.",
+      "shape": "Rectangle, ellipse : glisse (Maj : carré, cercle). Plume : clic pour un coin, clic-glisser pour une courbe, clic sur le premier point ou Entrée pour fermer.",
+      "wall": "Plume : clic pour un coin, clic-glisser pour une courbe, Entrée ou double-clic pour finir, clic sur le premier point pour fermer. Main levée : glisse.",
+      "door": "Clic sur un mur pour y poser une porte.",
+      "prop": "Clic pour poser. R et Maj+R : tourner de 15°.",
+      "eraser": "Glisse pour effacer.",
+      "pan": "Clic droit, molette enfoncée ou Espace + clic : déplacer la vue. Molette : zoom. Échap : annuler le tracé."
     },
     "Panel": {
       "Terrain": "Sol",
-      "BrushSize": "Taille",
+      "BrushSize": "Taille du pinceau",
+      "Shape": "Forme",
+      "ShapeModes": {
+        "rect": "Rectangle",
+        "ellipse": "Ellipse",
+        "pen": "Plume"
+      },
+      "Target": "Crée",
+      "Targets": {
+        "floor": "Sol seul",
+        "room": "Pièce"
+      },
+      "WallMode": "Tracé",
+      "WallModes": {
+        "pen": "Plume",
+        "free": "Main levée"
+      },
+      "Door": "Porte",
+      "DoorWidth": "Largeur (cases)",
+      "DoorKinds": {
+        "door": "Porte",
+        "secret": "Secrète"
+      },
       "Props": "Objet",
-      "Rotate": "Tourner (R)",
+      "Angle": "Angle (°)",
+      "Scale": "Échelle",
       "Eraser": "Efface",
+      "Selection": "Sélection",
+      "NoSelection": "Rien de sélectionné. Clique sur un mur, une porte ou un objet.",
+      "Delete": "Supprimer",
+      "Duplicate": "Dupliquer",
+      "WallClosed": "Mur fermé (boucle)",
+      "Nodes": "{n} nœuds",
+      "SelWall": "Mur",
+      "SelDoor": "Porte",
+      "SelProp": "Objet",
       "Map": "Carte",
       "Name": "Nom",
-      "Cols": "Colonnes",
-      "Rows": "Lignes",
+      "Width": "Largeur (cases)",
+      "Height": "Hauteur (cases)",
       "GridSize": "Pixels par case",
       "Background": "Fond",
       "Apply": "Appliquer",
-      "ApplyHint": "Ce qui dépasse de la nouvelle taille est retiré (Ctrl+Z pour revenir)."
+      "ApplyHint": "Ce qui dépasse de la nouvelle taille est rogné (Ctrl+Z pour revenir)."
     },
     "Terrains": {
       "stone": "Dalles",

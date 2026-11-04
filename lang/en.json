@@ -14,7 +14,7 @@
       "CopyOf": "{name} (copy)",
       "DeleteTitle": "Delete map",
       "DeleteConfirm": "Delete the map <strong>{name}</strong>? An already exported scene is left untouched.",
-      "Size": "{cols} × {rows} cells",
+      "Size": "{width} × {height} cells",
       "Linked": "Linked scene: {scene}",
       "Folder": "Cadastre"
     },
@@ -28,41 +28,74 @@
       "Export": "Export to scene",
       "Unsaved": "unsaved changes",
       "Saved": "Map saved.",
-      "Coords": "Cell {x}, {y}"
+      "Coords": "{x}, {y}",
+      "Snap": "Snap to grid (Ctrl inverts)"
     },
     "Tools": {
-      "brush": "Floor (1)",
-      "fill": "Fill (2)",
-      "room": "Room (3)",
+      "select": "Select (1)",
+      "brush": "Floor brush (2)",
+      "shape": "Shape (3)",
       "wall": "Wall (4)",
       "door": "Door (5)",
       "prop": "Object (6)",
       "eraser": "Eraser (7)"
     },
     "Hints": {
-      "brush": "Drag to paint the floor. [ and ] change the brush size.",
-      "fill": "Click: fills the area with the same floor, without crossing walls.",
-      "room": "Drag from corner to corner: floor, surrounding walls, inner walls removed. Existing doors stay.",
-      "wall": "Drag from one cell corner to another to draw a straight wall. Alt: erase. Single click: add or remove the nearest wall.",
-      "door": "Click a cell edge: door, then secret door (drawn as a wall in the scene).",
-      "prop": "Click to place. R: rotate a quarter turn.",
-      "eraser": "Drag to erase. Size 1 near an edge: only erases that wall.",
-      "pan": "Right click or middle button (or Space + click) to pan, wheel to zoom."
+      "select": "Click: select, drag: move. Selected wall: drag nodes and handles (Alt: independent handles), double-click a node: corner ↔ curve, double-click the wall: new node. Del: delete, Ctrl+D: duplicate.",
+      "brush": "Drag to paint the floor freehand. Alt: erases the floor.",
+      "shape": "Rectangle, ellipse: drag (Shift: square, circle). Pen: click for a corner, click-drag for a curve, click the first point or Enter to close.",
+      "wall": "Pen: click for a corner, click-drag for a curve, Enter or double-click to finish, click the first point to close. Freehand: drag.",
+      "door": "Click a wall to place a door.",
+      "prop": "Click to place. R and Shift+R: rotate by 15°.",
+      "eraser": "Drag to erase.",
+      "pan": "Right click, middle button or Space + click: pan. Wheel: zoom. Esc: cancel the path."
     },
     "Panel": {
       "Terrain": "Floor",
-      "BrushSize": "Size",
+      "BrushSize": "Brush size",
+      "Shape": "Shape",
+      "ShapeModes": {
+        "rect": "Rectangle",
+        "ellipse": "Ellipse",
+        "pen": "Pen"
+      },
+      "Target": "Creates",
+      "Targets": {
+        "floor": "Floor only",
+        "room": "Room"
+      },
+      "WallMode": "Drawing",
+      "WallModes": {
+        "pen": "Pen",
+        "free": "Freehand"
+      },
+      "Door": "Door",
+      "DoorWidth": "Width (cells)",
+      "DoorKinds": {
+        "door": "Door",
+        "secret": "Secret"
+      },
       "Props": "Object",
-      "Rotate": "Rotate (R)",
+      "Angle": "Angle (°)",
+      "Scale": "Scale",
       "Eraser": "Erases",
+      "Selection": "Selection",
+      "NoSelection": "Nothing selected. Click a wall, a door or an object.",
+      "Delete": "Delete",
+      "Duplicate": "Duplicate",
+      "WallClosed": "Closed wall (loop)",
+      "Nodes": "{n} nodes",
+      "SelWall": "Wall",
+      "SelDoor": "Door",
+      "SelProp": "Object",
       "Map": "Map",
       "Name": "Name",
-      "Cols": "Columns",
-      "Rows": "Rows",
+      "Width": "Width (cells)",
+      "Height": "Height (cells)",
       "GridSize": "Pixels per cell",
       "Background": "Background",
       "Apply": "Apply",
-      "ApplyHint": "Anything outside the new size is removed (Ctrl+Z to go back)."
+      "ApplyHint": "Anything outside the new size is clipped (Ctrl+Z to go back)."
     },
     "Terrains": {
       "stone": "Flagstones",

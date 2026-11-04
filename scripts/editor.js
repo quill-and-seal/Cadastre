@@ -1,38 +1,34 @@
 /**
- * Éditeur de carte : interface DOM autonome, sans dépendance à Foundry.
+ * Éditeur de carte vectoriel : interface DOM autonome, sans dépendance à Foundry.
  * La fenêtre Foundry (app.js) l'héberge ; le banc d'essai (tools/editor-lab.html) aussi.
  */
 import { TERRAINS, PROPS, PROP_BY_ID } from "./catalog.js";
 import * as M from "./model.js";
-import { pickCell, pickVertex, pickEdge } from "./geometry.js";
-import { renderDefs, renderFloor, renderProps, renderWalls, renderGrid } from "./render.js";
+import * as P from "./poly.js";
+import { flattenNodes, rectNodes, ellipseNodes, smoothNodes, rdp, cleanNode, polylineLength } from "./curves.js";
+import { renderDefs, renderTerrains, renderProps, renderWalls, renderGrid, polylinePath } from "./render.js";
 import { HISTORY_LIMIT, MIN_CELLS, MAX_CELLS, MIN_GRID_SIZE, MAX_GRID_SIZE } from "./constants.js";
 
 export const TOOLS = [
+  { id: "select", icon: "fa-arrow-pointer" },
   { id: "brush", icon: "fa-paintbrush" },
-  { id: "fill", icon: "fa-fill-drip" },
-  { id: "room", icon: "fa-vector-square" },
-  { id: "wall", icon: "fa-pen-ruler" },
+  { id: "shape", icon: "fa-draw-polygon" },
+  { id: "wall", icon: "fa-pen-nib" },
   { id: "door", icon: "fa-door-open" },
   { id: "prop", icon: "fa-chair" },
   { id: "eraser", icon: "fa-eraser" }
 ];
-const BRUSH_SIZES = [1, 2, 3, 5];
 const ERASE_MODES = ["all", "floor", "walls", "props"];
-const MIN_SCALE = 4, MAX_SCALE = 220;
+const MIN_SCALE = 4, MAX_SCALE = 260;
+const SNAP_STEP = 0.5;
+const HIT_PX = 8;
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 let instances = 0;
 
-const escapeHTML = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-
-/** Cases traversées entre deux cases (pas de trous quand la souris va vite). */
-function cellsBetween([ax, ay], [bx, by]) {
-  const n = Math.max(Math.abs(bx - ax), Math.abs(by - ay));
-  const out = [];
-  for (let i = 1; i <= n; i++) out.push([Math.round(ax + ((bx - ax) * i) / n), Math.round(ay + ((by - ay) * i) / n)]);
-  return out;
-}
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const f2 = (n) => Math.round(n * 100) / 100;
+const dist = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
 
 export class MapEditor {
   /**
@@ -49,21 +45,38 @@ export class MapEditor {
     this.onDirty = onDirty;
     this.prefix = `cad${++instances}`;
 
-    this.tool = "room";
-    this.terrain = "stone";
-    this.brushSize = 1;
-    this.eraseMode = "all";
-    this.propType = PROPS[0].id;
-    this.propRot = 0;
+    this.opts = {
+      terrain: "stone",
+      brushRadius: 0.75,
+      eraserRadius: 0.75,
+      eraseMode: "all",
+      shapeMode: "rect",
+      shapeTarget: "room",
+      wallMode: "pen",
+      doorWidth: 1,
+      doorKind: "door",
+      propType: PROPS[0].id,
+      propAngle: 0,
+      propScale: 1
+    };
+    this.tool = "shape";
     this.showGrid = true;
+    this.snap = true;
 
     this.undoStack = [];
     this.redoStack = [];
     this.dirty = false;
     this.view = { s: 32, tx: 0, ty: 0 };
-    this.pointer = null;      // dernière position en cases
+    this.pointer = null;      // position en cases
+    this.mods = { alt: false, ctrl: false, shift: false };
     this.drag = null;         // geste en cours
+    this.pen = null;          // tracé à la plume en cours
+    this.selection = null;    // { type, id }
+    this.selNode = -1;        // nœud choisi sur le mur sélectionné
+    this.hover = null;
     this.spaceHeld = false;
+    this._frame = null;
+    this._dirtyParts = { terrain: false, map: false, overlay: false };
 
     this._build();
     this.renderMap(true);
@@ -80,7 +93,7 @@ export class MapEditor {
   _build() {
     const t = this.t;
     const btn = (action, icon, title, label = "") =>
-      `<button type="button" data-action="${action}" title="${escapeHTML(title)}"><i class="fa-solid ${icon}"></i>${label ? `<span>${escapeHTML(label)}</span>` : ""}</button>`;
+      `<button type="button" data-action="${action}" title="${esc(title)}"><i class="fa-solid ${icon}"></i>${label ? `<span>${esc(label)}</span>` : ""}</button>`;
 
     this.root.classList.add("cad-editor");
     this.root.tabIndex = 0;
@@ -90,21 +103,25 @@ export class MapEditor {
         ${btn("redo", "fa-rotate-right", t("CADASTRE.Editor.Redo"))}
         <span class="cad-sep"></span>
         ${btn("grid", "fa-border-all", t("CADASTRE.Editor.Grid"))}
+        ${btn("snap", "fa-magnet", t("CADASTRE.Editor.Snap"))}
         ${btn("fit", "fa-expand", t("CADASTRE.Editor.Fit"))}
-        <span class="cad-dirty" hidden>${escapeHTML(t("CADASTRE.Editor.Unsaved"))}</span>
+        <span class="cad-dirty" hidden>${esc(t("CADASTRE.Editor.Unsaved"))}</span>
         <span class="cad-spacer"></span>
         ${this.onSave ? btn("save", "fa-floppy-disk", t("CADASTRE.Editor.SaveHint"), t("CADASTRE.Editor.Save")) : ""}
         ${this.onExport ? btn("export", "fa-map", t("CADASTRE.Editor.Export"), t("CADASTRE.Editor.Export")) : ""}
       </header>
       <div class="cad-body">
         <nav class="cad-tools">
-          ${TOOLS.map((tool) => `<button type="button" data-tool="${tool.id}" title="${escapeHTML(t(`CADASTRE.Tools.${tool.id}`))}"><i class="fa-solid ${tool.icon}"></i></button>`).join("")}
+          ${TOOLS.map((tool) => `<button type="button" data-tool="${tool.id}" title="${esc(t(`CADASTRE.Tools.${tool.id}`))}"><i class="fa-solid ${tool.icon}"></i></button>`).join("")}
         </nav>
         <div class="cad-viewport">
           <svg class="cad-svg" xmlns="${SVG_NS}">
             <g class="cad-defs"></g>
             <g class="cad-world">
-              <g class="cad-map"></g>
+              <rect class="cad-bg"></rect>
+              <g class="cad-terrain"></g>
+              <g class="cad-props"></g>
+              <g class="cad-walls"></g>
               <g class="cad-grid"></g>
               <rect class="cad-border" fill="none"></rect>
               <g class="cad-overlay"></g>
@@ -114,17 +131,17 @@ export class MapEditor {
         <aside class="cad-panel">
           <section class="cad-tool-options"></section>
           <section class="cad-map-options">
-            <h3>${escapeHTML(t("CADASTRE.Panel.Map"))}</h3>
-            <label>${escapeHTML(t("CADASTRE.Panel.Name"))}<input type="text" name="name"></label>
+            <h3>${esc(t("CADASTRE.Panel.Map"))}</h3>
+            <label>${esc(t("CADASTRE.Panel.Name"))}<input type="text" name="name"></label>
             <div class="cad-row">
-              <label>${escapeHTML(t("CADASTRE.Panel.Cols"))}<input type="number" name="cols" min="${MIN_CELLS}" max="${MAX_CELLS}"></label>
-              <label>${escapeHTML(t("CADASTRE.Panel.Rows"))}<input type="number" name="rows" min="${MIN_CELLS}" max="${MAX_CELLS}"></label>
+              <label>${esc(t("CADASTRE.Panel.Width"))}<input type="number" name="width" min="${MIN_CELLS}" max="${MAX_CELLS}"></label>
+              <label>${esc(t("CADASTRE.Panel.Height"))}<input type="number" name="height" min="${MIN_CELLS}" max="${MAX_CELLS}"></label>
             </div>
             <div class="cad-row">
-              <label>${escapeHTML(t("CADASTRE.Panel.GridSize"))}<input type="number" name="gridSize" min="${MIN_GRID_SIZE}" max="${MAX_GRID_SIZE}" step="10"></label>
-              <label>${escapeHTML(t("CADASTRE.Panel.Background"))}<input type="color" name="background"></label>
+              <label>${esc(t("CADASTRE.Panel.GridSize"))}<input type="number" name="gridSize" min="${MIN_GRID_SIZE}" max="${MAX_GRID_SIZE}" step="10"></label>
+              <label>${esc(t("CADASTRE.Panel.Background"))}<input type="color" name="background"></label>
             </div>
-            <button type="button" data-action="apply-size" title="${escapeHTML(t("CADASTRE.Panel.ApplyHint"))}">${escapeHTML(t("CADASTRE.Panel.Apply"))}</button>
+            <button type="button" data-action="apply-size" title="${esc(t("CADASTRE.Panel.ApplyHint"))}">${esc(t("CADASTRE.Panel.Apply"))}</button>
           </section>
         </aside>
       </div>
@@ -133,7 +150,8 @@ export class MapEditor {
     const $ = (sel) => this.root.querySelector(sel);
     this.el = {
       viewport: $(".cad-viewport"), svg: $(".cad-svg"), defs: $(".cad-defs"), world: $(".cad-world"),
-      map: $(".cad-map"), grid: $(".cad-grid"), border: $(".cad-border"), overlay: $(".cad-overlay"),
+      bg: $(".cad-bg"), terrain: $(".cad-terrain"), props: $(".cad-props"), walls: $(".cad-walls"),
+      grid: $(".cad-grid"), border: $(".cad-border"), overlay: $(".cad-overlay"),
       toolOptions: $(".cad-tool-options"), mapOptions: $(".cad-map-options"),
       coords: $(".cad-coords"), hint: $(".cad-hint"), dirty: $(".cad-dirty")
     };
@@ -150,11 +168,14 @@ export class MapEditor {
     on(this.el.viewport, "pointermove", (e) => this._onPointerMove(e));
     on(this.el.viewport, "pointerup", (e) => this._onPointerUp(e));
     on(this.el.viewport, "pointercancel", () => this._cancelDrag());
-    on(this.el.viewport, "pointerleave", () => { this.pointer = null; this._renderOverlay(); });
+    on(this.el.viewport, "pointerleave", () => { this.pointer = null; this.hover = null; this._schedule("overlay"); });
+    on(this.el.viewport, "dblclick", (e) => this._onDoubleClick(e));
     on(this.el.viewport, "wheel", (e) => this._onWheel(e), { passive: false });
     on(this.el.viewport, "contextmenu", (e) => e.preventDefault());
     on(this.el.mapOptions, "change", (e) => this._onMapField(e));
-    on(window, "blur", () => { this.spaceHeld = false; });
+    on(this.el.toolOptions, "input", (e) => this._onOptionInput(e, false));
+    on(this.el.toolOptions, "change", (e) => this._onOptionInput(e, true));
+    on(window, "blur", () => { this.spaceHeld = false; this.mods = { alt: false, ctrl: false, shift: false }; });
 
     this._setTool(this.tool);
     this._updateTopbar();
@@ -163,23 +184,41 @@ export class MapEditor {
   destroy() {
     for (const [target, type, fn, opts] of this._listeners) target.removeEventListener(type, fn, opts);
     this._listeners = [];
+    if (this._frame) cancelAnimationFrame(this._frame);
   }
 
   /* -------------------------------------------- */
   /*  Rendu                                       */
   /* -------------------------------------------- */
 
-  /** Redessine la carte ; `full` refait aussi les motifs (taille de carte changée). */
-  renderMap(full = false) {
+  /** Demande un rendu au prochain affichage (les gestes rapides ne redessinent qu'une fois par image). */
+  _schedule(...parts) {
+    for (const p of parts) this._dirtyParts[p] = true;
+    if (this._frame) return;
+    this._frame = requestAnimationFrame(() => {
+      this._frame = null;
+      const d = this._dirtyParts;
+      this._dirtyParts = { terrain: false, map: false, overlay: false };
+      if (d.terrain || d.map) this.renderMap(false, d.terrain);
+      else if (d.overlay) this._renderOverlay();
+    });
+  }
+
+  /** Redessine la carte ; `full` refait motifs et dimensions, `terrain` les sols. */
+  renderMap(full = false, terrain = true) {
     const { map, prefix } = this;
     if (full) {
       this.el.defs.innerHTML = renderDefs(map, prefix);
-      this.el.border.setAttribute("width", map.cols);
-      this.el.border.setAttribute("height", map.rows);
+      for (const el of [this.el.bg, this.el.border]) {
+        el.setAttribute("width", map.width);
+        el.setAttribute("height", map.height);
+      }
       this.el.grid.innerHTML = renderGrid(map, 0.14);
     }
-    this.el.map.innerHTML = `<rect width="${map.cols}" height="${map.rows}" fill="${map.background}"/>`
-      + renderFloor(map, prefix) + renderProps(map, prefix) + renderWalls(map, "editor", prefix);
+    this.el.bg.setAttribute("fill", map.background);
+    if (full || terrain) this.el.terrain.innerHTML = renderTerrains(map, prefix);
+    this.el.props.innerHTML = renderProps(map, prefix);
+    this.el.walls.innerHTML = renderWalls(map, "editor", prefix);
     this.el.grid.style.display = this.showGrid ? "" : "none";
     this._renderOverlay();
   }
@@ -193,71 +232,140 @@ export class MapEditor {
   fit() {
     const r = this.el.viewport.getBoundingClientRect();
     if (!r.width || !r.height) return;
-    const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min((r.width - 32) / this.map.cols, (r.height - 32) / this.map.rows)));
-    this.view = { s, tx: (r.width - this.map.cols * s) / 2, ty: (r.height - this.map.rows * s) / 2 };
+    const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min((r.width - 32) / this.map.width, (r.height - 32) / this.map.height)));
+    this.view = { s, tx: (r.width - this.map.width * s) / 2, ty: (r.height - this.map.height * s) / 2 };
     this._applyView();
+    this._renderOverlay();
   }
 
-  /** Repères : survol, aperçu du geste en cours. */
+  /** Repères : sélection, survol, aperçus des gestes. */
   _renderOverlay() {
     const px = 1 / this.view.s;
     const p = this.pointer;
+    const o = this.opts;
     let out = "";
-    const rect = (x, y, w, h, cls) => `<rect class="${cls}" x="${x}" y="${y}" width="${w}" height="${h}" stroke-width="${2 * px}"/>`;
-    const line = (a, b, cls, w = 4) => `<path class="${cls}" d="M${a[0]} ${a[1]}L${b[0]} ${b[1]}" stroke-width="${w * px}"/>`;
-    const edgeLine = (e, cls) => line(...M.edgeEnds(e), cls, 6);
+    const pathEl = (d, cls, w = 2, extra = "") => `<path class="${cls}" d="${d}" stroke-width="${w * px}"${extra}/>`;
+    const dot = ([x, y], cls, r = 4) => `<circle class="${cls}" cx="${x}" cy="${y}" r="${r * px}" stroke-width="${1.5 * px}"/>`;
+    const square = ([x, y], cls, r = 4) => `<rect class="${cls}" x="${x - r * px}" y="${y - r * px}" width="${2 * r * px}" height="${2 * r * px}" stroke-width="${1.5 * px}"/>`;
+    const disc = ([x, y], r, cls) => `<circle class="${cls}" cx="${x}" cy="${y}" r="${r}" stroke-width="${1.5 * px}"/>`;
+
+    // Sélection et survol (outil de sélection).
+    if (this.tool === "select") {
+      if (this.hover && !(this.selection && this.hover.id === this.selection.id)) out += this._outline(this.hover, "cad-hover", px);
+      if (this.selection) out += this._outline(this.selection, "cad-sel", px, true);
+    }
 
     const drag = this.drag;
-    if (drag?.kind === "room" && drag.end) {
-      const r = M.normRect(drag.start, drag.end);
-      out += `<rect x="${r.x0}" y="${r.y0}" width="${r.x1 - r.x0 + 1}" height="${r.y1 - r.y0 + 1}" fill="url(#${this.prefix}-t-${this.terrain})" fill-opacity="0.55"/>`;
-      out += rect(r.x0, r.y0, r.x1 - r.x0 + 1, r.y1 - r.y0 + 1, "cad-hl");
-      out += `<text class="cad-label" x="${r.x0}" y="${r.y0 - 6 * px}" font-size="${13 * px}">${r.x1 - r.x0 + 1} × ${r.y1 - r.y0 + 1}</text>`;
-    } else if (drag?.kind === "wall" && drag.end) {
-      const end = M.lineEnd(drag.start, drag.end);
-      out += line(drag.start, end, drag.erase ? "cad-hl-erase" : "cad-hl-wall", 6);
-      out += `<circle class="cad-hl-dot" cx="${drag.start[0]}" cy="${drag.start[1]}" r="${5 * px}"/>`;
-      out += `<circle class="cad-hl-dot" cx="${end[0]}" cy="${end[1]}" r="${5 * px}"/>`;
-    } else if (p) {
-      const [cx, cy] = pickCell(p[0], p[1]);
-      switch (this.tool) {
-        case "brush":
-          for (const [x, y] of M.brushCells(this.map, cx, cy, this.brushSize)) out += rect(x, y, 1, 1, "cad-hl");
-          break;
-        case "eraser": {
-          const edge = this._eraserEdge(p);
-          if (edge) out += edgeLine(edge, "cad-hl-erase");
-          else for (const [x, y] of M.brushCells(this.map, cx, cy, this.brushSize)) out += rect(x, y, 1, 1, "cad-hl-erase-cell");
-          break;
+    switch (this.tool) {
+      case "brush":
+      case "eraser": {
+        const r = this.tool === "brush" ? o.brushRadius : o.eraserRadius;
+        const erase = this.tool === "eraser" || this.mods.alt;
+        if (drag?.kind === "stroke" && drag.points.length) {
+          const d = polylinePath(drag.points.length > 1 ? drag.points : [drag.points[0], [drag.points[0][0] + 0.001, drag.points[0][1]]]);
+          out += erase
+            ? `<path d="${d}" class="cad-stroke-erase" stroke-width="${2 * r}"/>`
+            : `<path d="${d}" fill="none" stroke="url(#${this.prefix}-t-${o.terrain})" stroke-opacity="0.9" stroke-width="${2 * r}" stroke-linecap="round" stroke-linejoin="round"/>`;
         }
-        case "fill":
-        case "room":
-          if (M.inBounds(this.map, cx, cy)) out += rect(cx, cy, 1, 1, "cad-hl");
-          break;
-        case "wall": {
-          const [vx, vy] = pickVertex(p[0], p[1]);
-          out += `<circle class="cad-hl-dot" cx="${vx}" cy="${vy}" r="${5 * px}"/>`;
-          break;
+        if (p) out += disc(p, r, erase ? "cad-brush-erase" : "cad-brush");
+        break;
+      }
+      case "shape": {
+        if (drag?.kind === "shape" && drag.end) {
+          const nodes = this._shapeNodes(drag.start, drag.end);
+          if (nodes) out += this._nodesPreview(nodes, true, px);
         }
-        case "door": {
-          const e = pickEdge(p[0], p[1], 0.45);
-          if (e && M.edgeInBounds(this.map, e.o, e.x, e.y)) out += edgeLine(e, "cad-hl-door");
-          break;
-        }
-        case "prop": {
-          const [x, y] = this._propAnchor(p);
-          const def = PROP_BY_ID.get(this.propType);
-          const fp = M.propFootprint(this.propType, this.propRot);
-          if (def && fp) {
-            const ok = M.propFits(this.map, this.propType, x, y, this.propRot);
-            out += `<g opacity="0.7" transform="translate(${x + fp.w / 2} ${y + fp.h / 2}) rotate(${this.propRot * 90}) translate(${-def.w / 2} ${-def.h / 2})">${def.svg}</g>`;
-            out += rect(x, y, fp.w, fp.h, ok ? "cad-hl" : "cad-hl-erase-cell");
-          }
-          break;
-        }
+        if (this.pen) out += this._penPreview(px);
+        else if (p && !drag) out += dot(this._snap(p), "cad-dot");
+        break;
+      }
+      case "wall": {
+        if (drag?.kind === "freewall" && drag.points.length > 1) out += pathEl(polylinePath(drag.points), "cad-preview", 3);
+        if (this.pen) out += this._penPreview(px);
+        else if (p && !drag && o.wallMode === "pen") out += dot(this._snap(p, true), "cad-dot");
+        break;
+      }
+      case "door": {
+        const target = p && this._doorTarget(p);
+        if (target) out += pathEl(polylinePath([target.a, target.b]), "cad-door-preview", 6);
+        break;
+      }
+      case "prop": {
+        if (!p) break;
+        const def = PROP_BY_ID.get(o.propType);
+        const [x, y] = this._snap(p);
+        if (def) out += `<g opacity="0.75" transform="translate(${x} ${y}) rotate(${o.propAngle}) scale(${o.propScale}) translate(${-def.w / 2} ${-def.h / 2})">${def.svg}</g>`;
+        break;
       }
     }
     this.el.overlay.innerHTML = out;
+  }
+
+  /** Contour de surbrillance d'un objet ; `handles` : nœuds et poignées d'un mur. */
+  _outline(target, cls, px, handles = false) {
+    const map = this.map;
+    if (target.type === "wall") {
+      const wall = map.walls.find((w) => w.id === target.id);
+      if (!wall) return "";
+      const pts = M.wallPoints(wall);
+      let out = `<path class="${cls}" d="${polylinePath(wall.closed ? [...pts, pts[0]] : pts)}" stroke-width="${3 * px}"/>`;
+      if (!handles) return out;
+      wall.nodes.forEach((n, i) => {
+        for (const h of ["i", "o"]) {
+          if (!n[h]) continue;
+          const hx = n.x + n[h][0], hy = n.y + n[h][1];
+          out += `<path class="cad-handle-line" d="M${n.x} ${n.y}L${hx} ${hy}" stroke-width="${1.2 * px}"/>`;
+          out += `<circle class="cad-handle" cx="${hx}" cy="${hy}" r="${4 * px}" stroke-width="${1.2 * px}"/>`;
+        }
+        out += `<rect class="cad-node${i === this.selNode ? " active" : ""}${n.i || n.o ? " smooth" : ""}" x="${n.x - 4.5 * px}" y="${n.y - 4.5 * px}" width="${9 * px}" height="${9 * px}" stroke-width="${1.5 * px}"/>`;
+      });
+      return out;
+    }
+    if (target.type === "door") {
+      const door = map.doors.find((d) => d.id === target.id);
+      const ends = door && M.doorEnds(map, door);
+      return ends ? `<path class="${cls}" d="${polylinePath([ends.a, ends.b])}" stroke-width="${7 * px}" stroke-linecap="round"/>` : "";
+    }
+    if (target.type === "prop") {
+      const prop = map.props.find((q) => q.id === target.id);
+      const def = prop && PROP_BY_ID.get(prop.type);
+      if (!def) return "";
+      return `<rect class="${cls}" transform="translate(${prop.x} ${prop.y}) rotate(${prop.a}) scale(${prop.k})" x="${-def.w / 2}" y="${-def.h / 2}" width="${def.w}" height="${def.h}" stroke-width="${(2 * px) / prop.k}" fill="none"/>`;
+    }
+    return "";
+  }
+
+  _nodesPreview(nodes, closed, px) {
+    const pts = flattenNodes(nodes, closed, 0.01);
+    const d = polylinePath(closed ? [...pts, pts[0]] : pts);
+    const o = this.opts;
+    const fill = this.tool === "shape" ? `url(#${this.prefix}-t-${o.terrain})` : "none";
+    return `<path d="${d}" fill="${fill}" fill-opacity="0.55" class="cad-preview" stroke-width="${2 * px}"/>`;
+  }
+
+  _penPreview(px) {
+    const pen = this.pen;
+    if (!pen?.nodes.length) return "";
+    let out = "";
+    const nodes = pen.nodes;
+    const pts = flattenNodes(nodes, false, 0.01);
+    out += `<path class="cad-preview" d="${polylinePath(pts)}" stroke-width="${2.5 * px}" fill="none"/>`;
+    if (this.pointer && !this.drag) {
+      const q = this._snap(this.pointer, true);
+      const last = nodes.at(-1);
+      const rubber = flattenNodes([last, { x: q[0], y: q[1] }], false, 0.01);
+      out += `<path class="cad-rubber" d="${polylinePath(rubber)}" stroke-width="${1.5 * px}" fill="none"/>`;
+    }
+    for (const n of nodes) {
+      if (n.o) {
+        out += `<path class="cad-handle-line" d="M${n.x + (n.i?.[0] ?? 0)} ${n.y + (n.i?.[1] ?? 0)}L${n.x + n.o[0]} ${n.y + n.o[1]}" stroke-width="${1.2 * px}"/>`;
+      }
+    }
+    nodes.forEach((n, i) => {
+      const closable = i === 0 && nodes.length >= 2 && this.pointer && dist([n.x, n.y], this.pointer) * this.view.s < HIT_PX;
+      out += `<rect class="cad-node${closable ? " active" : ""}" x="${n.x - 4.5 * px}" y="${n.y - 4.5 * px}" width="${9 * px}" height="${9 * px}" stroke-width="${1.5 * px}"/>`;
+    });
+    return out;
   }
 
   /* -------------------------------------------- */
@@ -266,7 +374,9 @@ export class MapEditor {
 
   _setTool(tool) {
     if (!TOOLS.some((x) => x.id === tool)) return;
+    if (this.pen && tool !== this.tool) this.pen = null;
     this.tool = tool;
+    this.hover = null;
     for (const b of this.root.querySelectorAll("[data-tool]")) b.classList.toggle("active", b.dataset.tool === tool);
     this.el.hint.textContent = `${this.t(`CADASTRE.Hints.${tool}`)} ${this.t("CADASTRE.Hints.pan")}`;
     this.el.viewport.dataset.tool = tool;
@@ -276,41 +386,98 @@ export class MapEditor {
 
   _renderPanel() {
     if (!this.el) return;
-    const t = this.t;
-    const title = (key) => `<h3>${escapeHTML(t(key))}</h3>`;
-    let html = "";
-    const terrainTool = ["brush", "fill", "room"].includes(this.tool);
-    if (terrainTool) {
-      html += title("CADASTRE.Panel.Terrain") + `<div class="cad-swatches">${TERRAINS.map((x) => `
-        <button type="button" data-terrain="${x.id}" class="${x.id === this.terrain ? "active" : ""}" title="${escapeHTML(t(`CADASTRE.Terrains.${x.id}`))}">
+    const t = this.t, o = this.opts;
+    const title = (key) => `<h3>${esc(t(key))}</h3>`;
+    const segmented = (opt, values, labelKey) => `<div class="cad-segmented">${values.map((v) =>
+      `<button type="button" data-opt="${opt}" data-val="${v}" class="${o[opt] === v ? "active" : ""}">${esc(t(`${labelKey}.${v}`))}</button>`).join("")}</div>`;
+    const slider = (field, value, min, max, step) =>
+      `<div class="cad-slider"><input type="range" data-field="${field}" min="${min}" max="${max}" step="${step}" value="${value}"><output>${f2(value)}</output></div>`;
+    const number = (field, label, value, min, max, step) =>
+      `<label>${esc(t(label))}<input type="number" data-field="${field}" min="${min}" max="${max}" step="${step}" value="${value}"></label>`;
+    const terrains = () => title("CADASTRE.Panel.Terrain") + `<div class="cad-swatches">${TERRAINS.map((x) => `
+        <button type="button" data-opt="terrain" data-val="${x.id}" class="${x.id === o.terrain ? "active" : ""}" title="${esc(t(`CADASTRE.Terrains.${x.id}`))}">
           <svg viewBox="0 0 1 1"><rect width="1" height="1" fill="url(#${this.prefix}-t-${x.id})"/></svg>
-          <span>${escapeHTML(t(`CADASTRE.Terrains.${x.id}`))}</span>
+          <span>${esc(t(`CADASTRE.Terrains.${x.id}`))}</span>
         </button>`).join("")}</div>`;
-    }
-    if (this.tool === "brush" || this.tool === "eraser") {
-      html += title("CADASTRE.Panel.BrushSize") + `<div class="cad-segmented">${BRUSH_SIZES.map((n) =>
-        `<button type="button" data-size="${n}" class="${n === this.brushSize ? "active" : ""}">${n}</button>`).join("")}</div>`;
-    }
-    if (this.tool === "eraser") {
-      html += title("CADASTRE.Panel.Eraser") + `<div class="cad-segmented">${ERASE_MODES.map((m) =>
-        `<button type="button" data-erase="${m}" class="${m === this.eraseMode ? "active" : ""}">${escapeHTML(t(`CADASTRE.EraseModes.${m}`))}</button>`).join("")}</div>`;
-    }
-    if (this.tool === "prop") {
-      html += title("CADASTRE.Panel.Props") + `<div class="cad-swatches cad-props">${PROPS.map((p) => `
-        <button type="button" data-prop-type="${p.id}" class="${p.id === this.propType ? "active" : ""}" title="${escapeHTML(t(`CADASTRE.Props.${p.id}`))}">
-          <svg viewBox="0 0 ${Math.max(p.w, p.h)} ${Math.max(p.w, p.h)}"><g transform="translate(${(Math.max(p.w, p.h) - p.w) / 2} ${(Math.max(p.w, p.h) - p.h) / 2})">${p.svg}</g></svg>
-          <span>${escapeHTML(t(`CADASTRE.Props.${p.id}`))}</span>
-        </button>`).join("")}</div>
-        <button type="button" data-action="rotate"><i class="fa-solid fa-rotate"></i> ${escapeHTML(t("CADASTRE.Panel.Rotate"))}</button>`;
+
+    let html = "";
+    switch (this.tool) {
+      case "select":
+        html = title("CADASTRE.Panel.Selection") + this._selectionPanel();
+        break;
+      case "brush":
+        html = title("CADASTRE.Panel.BrushSize") + slider("brushRadius", o.brushRadius, 0.1, 5, 0.05) + terrains();
+        break;
+      case "shape":
+        html = title("CADASTRE.Panel.Shape") + segmented("shapeMode", ["rect", "ellipse", "pen"], "CADASTRE.Panel.ShapeModes")
+          + title("CADASTRE.Panel.Target") + segmented("shapeTarget", ["room", "floor"], "CADASTRE.Panel.Targets")
+          + terrains();
+        break;
+      case "wall":
+        html = title("CADASTRE.Panel.WallMode") + segmented("wallMode", ["pen", "free"], "CADASTRE.Panel.WallModes");
+        break;
+      case "door":
+        html = title("CADASTRE.Panel.Door") + segmented("doorKind", ["door", "secret"], "CADASTRE.Panel.DoorKinds")
+          + number("doorWidth", "CADASTRE.Panel.DoorWidth", o.doorWidth, 0.25, 8, 0.25);
+        break;
+      case "prop":
+        html = title("CADASTRE.Panel.Props") + `<div class="cad-swatches cad-props">${PROPS.map((p) => {
+          const side = Math.max(p.w, p.h);
+          return `<button type="button" data-opt="propType" data-val="${p.id}" class="${p.id === o.propType ? "active" : ""}" title="${esc(t(`CADASTRE.Props.${p.id}`))}">
+            <svg viewBox="0 0 ${side} ${side}"><g transform="translate(${(side - p.w) / 2} ${(side - p.h) / 2})">${p.svg}</g></svg>
+            <span>${esc(t(`CADASTRE.Props.${p.id}`))}</span></button>`;
+        }).join("")}</div>
+          <div class="cad-row">${number("propAngle", "CADASTRE.Panel.Angle", o.propAngle, -360, 360, 15)}${number("propScale", "CADASTRE.Panel.Scale", o.propScale, 0.25, 4, 0.05)}</div>`;
+        break;
+      case "eraser":
+        html = title("CADASTRE.Panel.BrushSize") + slider("eraserRadius", o.eraserRadius, 0.1, 5, 0.05)
+          + title("CADASTRE.Panel.Eraser") + segmented("eraseMode", ERASE_MODES, "CADASTRE.EraseModes");
+        break;
     }
     this.el.toolOptions.innerHTML = html;
+  }
+
+  _selectionPanel() {
+    const t = this.t;
+    const sel = this.selection;
+    const actions = (dup = true) => `<div class="cad-row cad-actions">
+      ${dup ? `<button type="button" data-action="duplicate"><i class="fa-solid fa-clone"></i> ${esc(t("CADASTRE.Panel.Duplicate"))}</button>` : ""}
+      <button type="button" data-action="delete" class="cad-danger"><i class="fa-solid fa-trash"></i> ${esc(t("CADASTRE.Panel.Delete"))}</button></div>`;
+    if (!sel) return `<p class="cad-note">${esc(t("CADASTRE.Panel.NoSelection"))}</p>`;
+    if (sel.type === "wall") {
+      const wall = this.map.walls.find((w) => w.id === sel.id);
+      if (!wall) return "";
+      return `<p class="cad-note"><strong>${esc(t("CADASTRE.Panel.SelWall"))}</strong> · ${esc(t("CADASTRE.Panel.Nodes", { n: wall.nodes.length }))}</p>
+        <label class="cad-check"><input type="checkbox" data-field="selWallClosed" ${wall.closed ? "checked" : ""} ${wall.nodes.length < 3 ? "disabled" : ""}> ${esc(t("CADASTRE.Panel.WallClosed"))}</label>
+        ${actions()}`;
+    }
+    if (sel.type === "door") {
+      const door = this.map.doors.find((d) => d.id === sel.id);
+      if (!door) return "";
+      return `<p class="cad-note"><strong>${esc(t("CADASTRE.Panel.SelDoor"))}</strong></p>
+        <div class="cad-segmented">${["door", "secret"].map((k) =>
+          `<button type="button" data-sel-door-kind="${k}" class="${door.kind === k ? "active" : ""}">${esc(t(`CADASTRE.Panel.DoorKinds.${k}`))}</button>`).join("")}</div>
+        <label>${esc(t("CADASTRE.Panel.DoorWidth"))}<input type="number" data-field="selDoorWidth" min="0.25" max="8" step="0.25" value="${door.w}"></label>
+        ${actions(false)}`;
+    }
+    if (sel.type === "prop") {
+      const prop = this.map.props.find((q) => q.id === sel.id);
+      if (!prop) return "";
+      return `<p class="cad-note"><strong>${esc(t(`CADASTRE.Props.${prop.type}`))}</strong></p>
+        <div class="cad-row">
+          <label>${esc(t("CADASTRE.Panel.Angle"))}<input type="number" data-field="selPropAngle" min="-360" max="360" step="15" value="${prop.a}"></label>
+          <label>${esc(t("CADASTRE.Panel.Scale"))}<input type="number" data-field="selPropScale" min="0.25" max="4" step="0.05" value="${prop.k}"></label>
+        </div>
+        ${actions()}`;
+    }
+    return "";
   }
 
   _syncMapFields() {
     const f = this.el.mapOptions;
     f.querySelector('[name="name"]').value = this.map.name;
-    f.querySelector('[name="cols"]').value = this.map.cols;
-    f.querySelector('[name="rows"]').value = this.map.rows;
+    f.querySelector('[name="width"]').value = this.map.width;
+    f.querySelector('[name="height"]').value = this.map.height;
     f.querySelector('[name="gridSize"]').value = this.map.gridSize;
     f.querySelector('[name="background"]').value = this.map.background;
   }
@@ -321,6 +488,7 @@ export class MapEditor {
     if (undo) undo.disabled = !this.undoStack.length;
     if (redo) redo.disabled = !this.redoStack.length;
     this.root.querySelector('[data-action="grid"]')?.classList.toggle("active", this.showGrid);
+    this.root.querySelector('[data-action="snap"]')?.classList.toggle("active", this.snap);
     this.el.dirty.hidden = !this.dirty;
   }
 
@@ -329,6 +497,24 @@ export class MapEditor {
     this.dirty = dirty;
     this._updateTopbar();
     this.onDirty?.(dirty);
+  }
+
+  _select(target, node = -1) {
+    const same = target?.id === this.selection?.id && target?.type === this.selection?.type;
+    this.selection = target;
+    this.selNode = node;
+    if (!same) this._renderPanel();
+    this._renderOverlay();
+  }
+
+  /** La sélection pointe-t-elle encore vers quelque chose (après annulation, gomme…) ? */
+  _checkSelection() {
+    const sel = this.selection;
+    if (!sel) return;
+    const list = { wall: this.map.walls, door: this.map.doors, prop: this.map.props }[sel.type];
+    if (!list?.some((x) => x.id === sel.id)) { this.selection = null; this.selNode = -1; }
+    const wall = sel.type === "wall" && this.map.walls.find((w) => w.id === sel.id);
+    if (wall && this.selNode >= wall.nodes.length) this.selNode = -1;
   }
 
   /* -------------------------------------------- */
@@ -340,16 +526,30 @@ export class MapEditor {
     this._pending = JSON.stringify(this.map);
   }
 
-  _commit(changed, full = false) {
+  _commit(changed, { terrain = true, full = false } = {}) {
     const before = this._pending;
     this._pending = null;
-    if (!changed || before == null) return;
+    if (!changed || before == null) {
+      this._renderOverlay();
+      return;
+    }
     this.undoStack.push(before);
     if (this.undoStack.length > HISTORY_LIMIT) this.undoStack.shift();
     this.redoStack = [];
     this._setDirty(true);
     this._updateTopbar();
-    this.renderMap(full);
+    this._checkSelection();
+    this.renderMap(full, terrain);
+    if (this.tool === "select") this._renderPanel();
+  }
+
+  /** Abandonne le geste en cours et revient à l'état d'avant. */
+  _rollback() {
+    if (this._pending == null) return;
+    this.map = JSON.parse(this._pending);
+    this._pending = null;
+    this._checkSelection();
+    this.renderMap(false, true);
   }
 
   undo() { this._travel(this.undoStack, this.redoStack); }
@@ -358,12 +558,15 @@ export class MapEditor {
   _travel(from, to) {
     if (!from.length) return;
     this._cancelDrag();
+    this.pen = null;
     to.push(JSON.stringify(this.map));
     this.map = JSON.parse(from.pop());
     this._setDirty(true);
     this._updateTopbar();
+    this._checkSelection();
     this.renderMap(true);
     this._syncMapFields();
+    this._renderPanel();
   }
 
   /* -------------------------------------------- */
@@ -384,7 +587,100 @@ export class MapEditor {
   }
 
   /* -------------------------------------------- */
-  /*  Événements                                  */
+  /*  Aides au pointage                           */
+  /* -------------------------------------------- */
+
+  _toMap(event) {
+    const r = this.el.viewport.getBoundingClientRect();
+    const { s, tx, ty } = this.view;
+    return [(event.clientX - r.left - tx) / s, (event.clientY - r.top - ty) / s];
+  }
+
+  /**
+   * Point aimanté : d'abord aux nœuds des murs proches (pour relier les murs), puis à la grille.
+   * Ctrl inverse l'aimant de la grille.
+   */
+  _snap(p, toNodes = false, skip = null) {
+    if (toNodes) {
+      const tol = HIT_PX / this.view.s;
+      let best = null, bestD = tol;
+      for (const wall of this.map.walls) {
+        wall.nodes.forEach((n, i) => {
+          if (skip && skip.wall === wall.id && skip.index === i) return;
+          const d = dist([n.x, n.y], p);
+          if (d < bestD) { bestD = d; best = [n.x, n.y]; }
+        });
+      }
+      if (best) return best;
+    }
+    if (this.snap !== this.mods.ctrl) return [Math.round(p[0] / SNAP_STEP) * SNAP_STEP, Math.round(p[1] / SNAP_STEP) * SNAP_STEP];
+    return [f2(p[0]), f2(p[1])];
+  }
+
+  /** Objet sous le pointeur : porte, puis objet, puis mur. */
+  _hitTest(p) {
+    const tol = HIT_PX / this.view.s;
+    let best = null, bestD = tol;
+    for (const door of this.map.doors) {
+      const ends = M.doorEnds(this.map, door);
+      if (!ends) continue;
+      const d = segmentDistance(p, ends.a, ends.b);
+      if (d < bestD) { bestD = d; best = { type: "door", id: door.id }; }
+    }
+    if (best) return best;
+    const prop = M.propAt(this.map, p[0], p[1]);
+    if (prop) return { type: "prop", id: prop.id };
+    const hit = M.nearestWall(this.map, p[0], p[1], tol);
+    return hit ? { type: "wall", id: hit.wall.id } : null;
+  }
+
+  /** Nœud ou poignée du mur sélectionné sous le pointeur. */
+  _handleHit(p) {
+    const sel = this.selection;
+    if (sel?.type !== "wall") return null;
+    const wall = this.map.walls.find((w) => w.id === sel.id);
+    if (!wall) return null;
+    const tol = HIT_PX / this.view.s;
+    for (let i = 0; i < wall.nodes.length; i++) {
+      const n = wall.nodes[i];
+      for (const which of ["i", "o"]) {
+        if (n[which] && dist([n.x + n[which][0], n.y + n[which][1]], p) < tol) return { kind: "handle", index: i, which };
+      }
+    }
+    for (let i = 0; i < wall.nodes.length; i++) {
+      const n = wall.nodes[i];
+      if (dist([n.x, n.y], p) < tol) return { kind: "node", index: i };
+    }
+    return null;
+  }
+
+  /** Mur visé par l'outil porte et bords de la porte qui y serait posée. */
+  _doorTarget(p) {
+    const hit = M.nearestWall(this.map, p[0], p[1], Math.max(0.6, (HIT_PX * 1.5) / this.view.s));
+    if (!hit) return null;
+    const w = Math.min(this.opts.doorWidth, hit.length);
+    const s = hit.wall.closed ? hit.s : Math.min(Math.max(hit.s, w / 2), hit.length - w / 2);
+    const a = M.pointOnWall(hit.wall, s - w / 2), b = M.pointOnWall(hit.wall, s + w / 2);
+    return { wall: hit.wall, s, w, a: [a.x, a.y], b: [b.x, b.y] };
+  }
+
+  /** Nœuds d'un rectangle ou d'une ellipse entre deux coins (Maj : carré, cercle). */
+  _shapeNodes(a, b) {
+    let [x0, y0] = a, [x1, y1] = b;
+    if (this.mods.shift) {
+      const side = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+      x1 = x0 + Math.sign(x1 - x0 || 1) * side;
+      y1 = y0 + Math.sign(y1 - y0 || 1) * side;
+    }
+    if (Math.abs(x1 - x0) < 0.1 || Math.abs(y1 - y0) < 0.1) return null;
+    const [lx, hx] = [Math.min(x0, x1), Math.max(x0, x1)], [ly, hy] = [Math.min(y0, y1), Math.max(y0, y1)];
+    return this.opts.shapeMode === "ellipse"
+      ? ellipseNodes((lx + hx) / 2, (ly + hy) / 2, (hx - lx) / 2, (hy - ly) / 2)
+      : rectNodes(lx, ly, hx, hy);
+  }
+
+  /* -------------------------------------------- */
+  /*  Événements : boutons et champs              */
   /* -------------------------------------------- */
 
   _onClick(event) {
@@ -393,20 +689,49 @@ export class MapEditor {
     // Le panneau est reconstruit à chaque choix : on garde le clavier sur l'éditeur.
     if (!b.closest(".cad-map-options")) queueMicrotask(() => this.root.focus({ preventScroll: true }));
     if (b.dataset.tool) return this._setTool(b.dataset.tool);
-    if (b.dataset.terrain) { this.terrain = b.dataset.terrain; return this._renderPanel(); }
-    if (b.dataset.size) { this.brushSize = Number(b.dataset.size); this._renderPanel(); return this._renderOverlay(); }
-    if (b.dataset.erase) { this.eraseMode = b.dataset.erase; return this._renderPanel(); }
-    if (b.dataset.propType) { this.propType = b.dataset.propType; this._renderPanel(); return this._renderOverlay(); }
+    if (b.dataset.opt) {
+      this.opts[b.dataset.opt] = b.dataset.val;
+      if (b.dataset.opt === "wallMode" || b.dataset.opt === "shapeMode") this.pen = null;
+      this._renderPanel();
+      return this._renderOverlay();
+    }
+    if (b.dataset.selDoorKind && this.selection?.type === "door") {
+      this._begin();
+      return this._commit(M.updateDoor(this.map, this.selection.id, { kind: b.dataset.selDoorKind }), { terrain: false });
+    }
     switch (b.dataset.action) {
       case "undo": return this.undo();
       case "redo": return this.redo();
-      case "grid": this.showGrid = !this.showGrid; this._updateTopbar(); return this.renderMap();
+      case "grid": this.showGrid = !this.showGrid; this._updateTopbar(); return this.renderMap(false, false);
+      case "snap": this.snap = !this.snap; return this._updateTopbar();
       case "fit": return this.fit();
-      case "rotate": this.propRot = (this.propRot + 1) % 4; return this._renderOverlay();
       case "save": return this.save();
       case "export": return this.onExport?.(this.getMap());
       case "apply-size": return this._applySize();
+      case "delete": return this._deleteSelection();
+      case "duplicate": return this._duplicateSelection();
     }
+  }
+
+  _onOptionInput(event, committed) {
+    const input = event.target;
+    const field = input.dataset?.field;
+    if (!field) return;
+    const value = input.type === "checkbox" ? input.checked : Number(input.value);
+    if (input.type === "range") input.nextElementSibling.textContent = f2(value);
+    if (field in this.opts) {
+      if (Number.isFinite(value)) this.opts[field] = value;
+      return this._renderOverlay();
+    }
+    if (!committed || !this.selection) return;
+    const id = this.selection.id;
+    this._begin();
+    let changed = false;
+    if (field === "selWallClosed") changed = M.setWallClosed(this.map, id, value);
+    else if (field === "selDoorWidth") changed = M.updateDoor(this.map, id, { w: value });
+    else if (field === "selPropAngle") changed = M.updateProp(this.map, id, { a: value });
+    else if (field === "selPropScale") changed = M.updateProp(this.map, id, { k: value });
+    this._commit(changed, { terrain: false });
   }
 
   _onMapField(event) {
@@ -418,7 +743,7 @@ export class MapEditor {
       this._begin();
       const changed = this.map.background !== input.value;
       this.map.background = input.value;
-      this._commit(changed);
+      this._commit(changed, { terrain: false });
     }
   }
 
@@ -426,48 +751,98 @@ export class MapEditor {
     const f = this.el.mapOptions;
     const num = (name) => Number(f.querySelector(`[name="${name}"]`).value);
     this._begin();
-    const before = this.map.gridSize;
-    let changed = M.resizeMap(this.map, num("cols"), num("rows"));
+    let changed = M.resizeMap(this.map, num("width"), num("height"));
     const gridSize = M.createMap({ gridSize: num("gridSize") }).gridSize;
-    if (gridSize !== before) { this.map.gridSize = gridSize; changed = true; }
-    this._commit(changed, true);
+    if (gridSize !== this.map.gridSize) { this.map.gridSize = gridSize; changed = true; }
+    this._commit(changed, { full: true });
     this._syncMapFields();
     if (changed) this.fit();
   }
 
+  _deleteSelection() {
+    const sel = this.selection;
+    if (!sel) return;
+    this._begin();
+    let changed = false;
+    if (sel.type === "wall" && this.selNode >= 0) {
+      changed = M.removeNode(this.map, sel.id, this.selNode);
+      this.selNode = -1;
+    } else if (sel.type === "wall") changed = M.removeWall(this.map, sel.id);
+    else if (sel.type === "door") changed = M.removeDoor(this.map, sel.id);
+    else if (sel.type === "prop") changed = M.removeProp(this.map, sel.id);
+    this._commit(changed, { terrain: false });
+    this._renderPanel();
+  }
+
+  _duplicateSelection() {
+    const sel = this.selection;
+    if (!sel || sel.type === "door") return;
+    this._begin();
+    const copy = sel.type === "wall" ? M.duplicateWall(this.map, sel.id) : M.duplicateProp(this.map, sel.id);
+    this._commit(!!copy, { terrain: false });
+    if (copy) this._select({ type: sel.type, id: copy.id });
+  }
+
+  /* -------------------------------------------- */
+  /*  Événements : clavier                        */
+  /* -------------------------------------------- */
+
   _onKeyDown(event) {
+    this.mods = { alt: event.altKey, ctrl: event.ctrlKey || event.metaKey, shift: event.shiftKey };
     if (event.target.closest?.("input, select, textarea")) return;
     // L'éditeur garde le clavier : les raccourcis de Foundry (Ctrl+Z…) ne doivent pas agir sur la scène.
     event.stopPropagation();
-    const ctrl = event.ctrlKey || event.metaKey;
+    const ctrl = this.mods.ctrl;
     const key = event.key.toLowerCase();
     let handled = true;
     if (ctrl && key === "z") event.shiftKey ? this.redo() : this.undo();
     else if (ctrl && key === "y") this.redo();
     else if (ctrl && key === "s") this.save();
+    else if (ctrl && key === "d") this._duplicateSelection();
     else if (!ctrl && /^[1-7]$/.test(event.key)) this._setTool(TOOLS[Number(event.key) - 1].id);
-    else if (!ctrl && key === "r") { this.propRot = (this.propRot + 1) % 4; this._renderOverlay(); }
+    else if (!ctrl && key === "r") this._rotate(event.shiftKey ? -15 : 15);
+    else if (key === "enter") this._finishPen(this.pen?.purpose === "shape");
+    else if (key === "escape") { if (this.pen) this.pen = null; else if (this.drag) this._cancelDrag(); else this._select(null); }
+    else if (key === "delete" || key === "backspace") {
+      if (this.pen) { this.pen.nodes.pop(); if (!this.pen.nodes.length) this.pen = null; }
+      else this._deleteSelection();
+    }
     else if (key === "[" || key === "]") {
-      const i = BRUSH_SIZES.indexOf(this.brushSize) + (key === "]" ? 1 : -1);
-      this.brushSize = BRUSH_SIZES[Math.min(BRUSH_SIZES.length - 1, Math.max(0, i))];
-      this._renderPanel(); this._renderOverlay();
+      const field = this.tool === "eraser" ? "eraserRadius" : "brushRadius";
+      const k = key === "]" ? 1.25 : 0.8;
+      this.opts[field] = f2(Math.min(5, Math.max(0.1, this.opts[field] * k)));
+      this._renderPanel();
     }
     else if (key === " ") { this.spaceHeld = true; this.el.viewport.classList.add("cad-panning"); }
-    else if (key === "escape") this._cancelDrag();
+    else if (key === "alt" || key === "shift" || key === "control" || key === "meta") { /* modificateur seul */ }
     else handled = false;
     if (handled) event.preventDefault();
+    this._renderOverlay();
   }
 
   _onKeyUp(event) {
+    this.mods = { alt: event.altKey, ctrl: event.ctrlKey || event.metaKey, shift: event.shiftKey };
     if (event.key === " ") { this.spaceHeld = false; this.el.viewport.classList.remove("cad-panning"); }
-    if (event.key === "Alt" && this.drag?.kind === "wall") { this.drag.erase = false; this._renderOverlay(); }
+    this._renderOverlay();
   }
 
-  _toMap(event) {
-    const r = this.el.viewport.getBoundingClientRect();
-    const { s, tx, ty } = this.view;
-    return [(event.clientX - r.left - tx) / s, (event.clientY - r.top - ty) / s];
+  _rotate(deg) {
+    if (this.tool === "prop") {
+      this.opts.propAngle = ((this.opts.propAngle + deg) % 360 + 360) % 360;
+      this._renderPanel();
+      return this._renderOverlay();
+    }
+    if (this.selection?.type === "prop") {
+      const prop = this.map.props.find((q) => q.id === this.selection.id);
+      this._begin();
+      this._commit(M.updateProp(this.map, prop.id, { a: prop.a + deg }), { terrain: false });
+      this._renderPanel();
+    }
   }
+
+  /* -------------------------------------------- */
+  /*  Événements : pointeur                       */
+  /* -------------------------------------------- */
 
   _onWheel(event) {
     event.preventDefault();
@@ -483,6 +858,7 @@ export class MapEditor {
 
   _onPointerDown(event) {
     this.root.focus({ preventScroll: true });
+    this.mods = { alt: event.altKey, ctrl: event.ctrlKey || event.metaKey, shift: event.shiftKey };
     const pan = event.button === 1 || event.button === 2 || (event.button === 0 && this.spaceHeld);
     if (!pan && event.button !== 0) return;
     this.el.viewport.setPointerCapture(event.pointerId);
@@ -495,38 +871,49 @@ export class MapEditor {
       return;
     }
 
-    const cell = pickCell(...p);
+    const o = this.opts;
     switch (this.tool) {
-      case "brush":
-      case "eraser":
-        this._begin();
-        this.drag = { kind: "stroke", last: cell, changed: false };
-        this._strokeAt(p, cell);
-        break;
-      case "fill": {
-        if (!M.inBounds(this.map, ...cell)) return;
-        this._begin();
-        const changed = M.paintCells(this.map, M.fillCells(this.map, ...cell), this.terrain);
-        this._commit(changed);
+      case "select": {
+        const h = this._handleHit(p);
+        if (h) {
+          this._begin();
+          this.selNode = h.index;
+          this.drag = { ...h, moved: false };
+          break;
+        }
+        const hit = this._hitTest(p);
+        this._select(hit);
+        if (hit) {
+          this._begin();
+          const prop = hit.type === "prop" && this.map.props.find((q) => q.id === hit.id);
+          this.drag = { kind: "move", target: hit, start: p, last: p, origin: prop ? [prop.x, prop.y] : null, moved: false };
+        }
         break;
       }
-      case "room":
-        this.drag = { kind: "room", start: cell, end: cell };
+      case "brush":
+      case "eraser":
+        this.drag = { kind: "stroke", points: [p], erase: this.tool === "eraser" || event.altKey };
+        break;
+      case "shape":
+        if (o.shapeMode === "pen") this._penDown(p, "shape");
+        else this.drag = { kind: "shape", start: this._snap(p), end: null };
         break;
       case "wall":
-        this.drag = { kind: "wall", start: pickVertex(...p), end: pickVertex(...p), origin: p, erase: event.altKey };
+        if (o.wallMode === "pen") this._penDown(p, "wall");
+        else this.drag = { kind: "freewall", points: [this._snap(p, true)] };
         break;
       case "door": {
-        const e = pickEdge(p[0], p[1], 0.45);
-        if (!e) return;
+        const target = this._doorTarget(p);
+        if (!target) break;
         this._begin();
-        this._commit(M.cycleDoor(this.map, e.o, e.x, e.y));
+        const door = M.addDoor(this.map, target.wall.id, target.s, target.w, o.doorKind);
+        this._commit(!!door, { terrain: false });
         break;
       }
       case "prop": {
-        const [x, y] = this._propAnchor(p);
+        const [x, y] = this._snap(p);
         this._begin();
-        this._commit(!!M.addProp(this.map, this.propType, x, y, this.propRot));
+        this._commit(!!M.addProp(this.map, o.propType, x, y, o.propAngle, o.propScale), { terrain: false });
         break;
       }
     }
@@ -534,59 +921,150 @@ export class MapEditor {
   }
 
   _onPointerMove(event) {
+    this.mods = { alt: event.altKey, ctrl: event.ctrlKey || event.metaKey, shift: event.shiftKey };
     const p = this._toMap(event);
     this.pointer = p;
-    const [cx, cy] = pickCell(...p);
-    this.el.coords.textContent = M.inBounds(this.map, cx, cy) ? this.t("CADASTRE.Editor.Coords", { x: cx + 1, y: cy + 1 }) : "";
+    this.el.coords.textContent = this.t("CADASTRE.Editor.Coords", { x: f2(p[0]).toFixed(1), y: f2(p[1]).toFixed(1) });
 
     const drag = this.drag;
-    if (drag?.kind === "pan") {
-      this.view.tx = drag.tx + event.clientX - drag.x;
-      this.view.ty = drag.ty + event.clientY - drag.y;
-      this._applyView();
-      return;
+    if (!drag) {
+      if (this.tool === "select") this.hover = this._hitTest(p);
+      return this._schedule("overlay");
     }
-    if (drag?.kind === "stroke") {
-      const cell = [cx, cy];
-      if (cell[0] !== drag.last[0] || cell[1] !== drag.last[1]) {
-        for (const c of cellsBetween(drag.last, cell)) this._strokeAt(p, c);
-        drag.last = cell;
-      } else if (this._eraserEdge(p)) {
-        this._strokeAt(p, cell);
+    switch (drag.kind) {
+      case "pan":
+        this.view.tx = drag.tx + event.clientX - drag.x;
+        this.view.ty = drag.ty + event.clientY - drag.y;
+        this._applyView();
+        break;
+      case "stroke": {
+        const last = drag.points.at(-1);
+        if (dist(last, p) > 0.04) drag.points.push(p);
+        break;
       }
-    } else if (drag?.kind === "room") {
-      drag.end = [Math.min(this.map.cols - 1, Math.max(0, cx)), Math.min(this.map.rows - 1, Math.max(0, cy))];
-    } else if (drag?.kind === "wall") {
-      const v = pickVertex(...p);
-      drag.end = [Math.min(this.map.cols, Math.max(0, v[0])), Math.min(this.map.rows, Math.max(0, v[1]))];
-      drag.erase = event.altKey;
+      case "shape":
+        drag.end = this._snap(p);
+        break;
+      case "freewall": {
+        if (dist(drag.points.at(-1), p) > 0.08) drag.points.push(p);
+        break;
+      }
+      case "pen": {
+        const node = this.pen?.nodes[drag.index];
+        if (!node) break;
+        const d = [p[0] - node.x, p[1] - node.y];
+        if (Math.hypot(...d) * this.view.s > 4) {
+          node.o = [f2(d[0]), f2(d[1])];
+          node.i = [-f2(d[0]), -f2(d[1])];
+        }
+        break;
+      }
+      case "node": {
+        const sel = this.selection;
+        const q = this._snap(p, true, { wall: sel.id, index: drag.index });
+        drag.moved = M.moveNode(this.map, sel.id, drag.index, q[0], q[1]) || drag.moved;
+        this._schedule("map");
+        break;
+      }
+      case "handle": {
+        const wall = this.map.walls.find((w) => w.id === this.selection.id);
+        const n = wall?.nodes[drag.index];
+        if (n) drag.moved = M.moveHandle(this.map, wall.id, drag.index, drag.which, p[0] - n.x, p[1] - n.y, !event.altKey) || drag.moved;
+        this._schedule("map");
+        break;
+      }
+      case "move": {
+        const t = drag.target;
+        if (t.type === "prop") {
+          const q = this._snap([drag.origin[0] + p[0] - drag.start[0], drag.origin[1] + p[1] - drag.start[1]]);
+          drag.moved = M.updateProp(this.map, t.id, { x: q[0], y: q[1] }) || drag.moved;
+        } else if (t.type === "wall") {
+          let dx = p[0] - drag.start[0], dy = p[1] - drag.start[1];
+          if (this.snap !== this.mods.ctrl) { dx = Math.round(dx / SNAP_STEP) * SNAP_STEP; dy = Math.round(dy / SNAP_STEP) * SNAP_STEP; }
+          const [mx, my] = [dx - (drag.applied?.[0] ?? 0), dy - (drag.applied?.[1] ?? 0)];
+          if (mx || my) {
+            M.moveWall(this.map, t.id, mx, my);
+            drag.applied = [dx, dy];
+            drag.moved = true;
+          }
+        } else if (t.type === "door") {
+          drag.moved = M.slideDoor(this.map, t.id, p[0], p[1]) || drag.moved;
+        }
+        this._schedule("map");
+        break;
+      }
     }
-    this._renderOverlay();
+    this._schedule("overlay");
   }
 
-  _onPointerUp(event) {
+  _onPointerUp() {
     const drag = this.drag;
     this.drag = null;
     this.el.viewport.classList.toggle("cad-panning", this.spaceHeld);
     if (!drag) return;
-    if (drag.kind === "stroke") {
-      this._commit(drag.changed);
-    } else if (drag.kind === "room") {
-      this._begin();
-      this._commit(M.drawRoom(this.map, drag.start, drag.end, this.terrain));
-    } else if (drag.kind === "wall") {
-      const p = this._toMap(event);
-      const moved = Math.hypot(p[0] - drag.origin[0], p[1] - drag.origin[1]) > 0.35;
-      const end = M.lineEnd(drag.start, drag.end);
-      this._begin();
-      if (!moved || (end[0] === drag.start[0] && end[1] === drag.start[1])) {
-        // Clic simple : bascule le mur le plus proche.
-        const e = pickEdge(drag.origin[0], drag.origin[1], 0.5);
-        const current = e && this.map.edges[M.edgeKey(e.o, e.x, e.y)];
-        this._commit(!!e && M.setEdge(this.map, e.o, e.x, e.y, current ? null : "wall"));
-      } else {
-        this._commit(M.setLine(this.map, drag.start, end, drag.erase ? null : "wall"));
+    const o = this.opts;
+    switch (drag.kind) {
+      case "stroke": {
+        const r = this.tool === "eraser" ? o.eraserRadius : o.brushRadius;
+        const rings = P.strokeRings(drag.points, r);
+        this._begin();
+        let changed;
+        if (this.tool === "eraser") {
+          const m = o.eraseMode;
+          changed = M.eraseArea(this.map, rings, { floor: m === "all" || m === "floor", walls: m === "all" || m === "walls", props: m === "all" || m === "props" });
+        } else if (drag.erase) {
+          changed = M.eraseArea(this.map, rings, { floor: true, walls: false, props: false });
+        } else {
+          changed = M.paintArea(this.map, rings, o.terrain);
+        }
+        this._commit(changed);
+        break;
       }
+      case "shape": {
+        const nodes = drag.end && this._shapeNodes(drag.start, drag.end);
+        if (nodes) this._createShape(nodes);
+        break;
+      }
+      case "freewall": {
+        const pts = rdp(drag.points, 0.05);
+        if (pts.length < 2 || polylineLength(pts) < 0.2) break;
+        const closed = pts.length > 3 && dist(pts[0], pts.at(-1)) < 0.35;
+        if (closed) pts.pop();
+        this._begin();
+        this._commit(!!M.addWall(this.map, smoothNodes(pts, closed), closed), { terrain: false });
+        break;
+      }
+      case "node":
+      case "handle":
+      case "move":
+        if (drag.moved) this._commit(true, { terrain: false });
+        else this._pending = null;
+        if (drag.kind === "move" && this.tool === "select") this._renderPanel();
+        break;
+    }
+    this._renderOverlay();
+  }
+
+  _onDoubleClick(event) {
+    const p = this._toMap(event);
+    if (this.pen) {
+      // Le double-clic a déjà posé deux nœuds au même endroit : on retire le doublon.
+      const nodes = this.pen.nodes;
+      if (nodes.length > 1 && dist([nodes.at(-1).x, nodes.at(-1).y], [nodes.at(-2).x, nodes.at(-2).y]) < 0.05) nodes.pop();
+      return this._finishPen(this.pen.purpose === "shape");
+    }
+    if (this.tool !== "select" || this.selection?.type !== "wall") return;
+    const h = this._handleHit(p);
+    this._begin();
+    if (h?.kind === "node") {
+      this._commit(M.toggleNodeSmooth(this.map, this.selection.id, h.index), { terrain: false });
+    } else if (M.nearestWall(this.map, p[0], p[1], HIT_PX / this.view.s)?.wall.id === this.selection.id) {
+      const index = M.insertNode(this.map, this.selection.id, p[0], p[1]);
+      this._commit(index >= 0, { terrain: false });
+      this.selNode = index;
+      this._renderPanel();
+    } else {
+      this._pending = null;
     }
     this._renderOverlay();
   }
@@ -594,63 +1072,56 @@ export class MapEditor {
   _cancelDrag() {
     const drag = this.drag;
     this.drag = null;
-    if (drag?.kind === "stroke" && drag.changed && this._pending) {
-      // Le trait déjà peint est annulé.
-      this.map = JSON.parse(this._pending);
-      this._pending = null;
-      this.renderMap();
-    }
+    if (drag && ["node", "handle", "move"].includes(drag.kind)) this._rollback();
     this._renderOverlay();
   }
 
   /* -------------------------------------------- */
-  /*  Outils                                      */
+  /*  Plume                                       */
   /* -------------------------------------------- */
 
-  /** Gomme taille 1 près d'un bord : l'arête visée, sinon null. */
-  _eraserEdge(p) {
-    if (this.tool !== "eraser" || this.brushSize !== 1 || !["all", "walls"].includes(this.eraseMode)) return null;
-    const e = pickEdge(p[0], p[1], 0.22);
-    return e && M.edgeInBounds(this.map, e.o, e.x, e.y) ? e : null;
+  _penDown(p, purpose) {
+    if (!this.pen || this.pen.purpose !== purpose) this.pen = { purpose, nodes: [] };
+    const nodes = this.pen.nodes;
+    const first = nodes[0];
+    if (first && nodes.length >= 2 && dist([first.x, first.y], p) * this.view.s < HIT_PX) {
+      return this._finishPen(true);
+    }
+    const [x, y] = this._snap(p, purpose === "wall");
+    nodes.push({ x, y });
+    this.drag = { kind: "pen", index: nodes.length - 1 };
   }
 
-  _strokeAt(p, [cx, cy]) {
-    const drag = this.drag;
-    let changed = false;
-    if (this.tool === "brush") {
-      changed = M.paintCells(this.map, M.brushCells(this.map, cx, cy, this.brushSize), this.terrain);
+  _finishPen(closed) {
+    const pen = this.pen;
+    this.pen = null;
+    if (!pen) return;
+    const nodes = pen.nodes.map(cleanNode);
+    if (pen.purpose === "shape") {
+      if (nodes.length >= 3) this._createShape(nodes);
+    } else if (nodes.length >= 2) {
+      this._begin();
+      this._commit(!!M.addWall(this.map, nodes, closed && nodes.length >= 3), { terrain: false });
+    }
+    this._renderOverlay();
+  }
+
+  _createShape(nodes) {
+    const o = this.opts;
+    this._begin();
+    let changed;
+    if (o.shapeTarget === "room") {
+      changed = M.addRoom(this.map, nodes, o.terrain);
     } else {
-      const edge = this._eraserEdge(p);
-      if (edge) {
-        changed = M.setEdge(this.map, edge.o, edge.x, edge.y, null);
-      } else {
-        const cells = M.brushCells(this.map, cx, cy, this.brushSize);
-        const mode = this.eraseMode;
-        if (mode === "all" || mode === "floor") changed = M.paintCells(this.map, cells, null) || changed;
-        if (mode === "all" || mode === "props") {
-          for (const [x, y] of cells) {
-            let prop;
-            while ((prop = M.propAt(this.map, x, y))) changed = M.removeProp(this.map, prop.id) || changed;
-          }
-        }
-        if ((mode === "all" && this.brushSize > 1) || mode === "walls") {
-          for (const [x, y] of cells) {
-            for (const [o, ex, ey] of [["h", x, y], ["h", x, y + 1], ["v", x, y], ["v", x + 1, y]]) {
-              changed = M.setEdge(this.map, o, ex, ey, null) || changed;
-            }
-          }
-        }
-      }
+      const ring = P.pointsRing(flattenNodes(nodes, true, 0.005));
+      changed = M.paintArea(this.map, P.normalizeRings([ring]), o.terrain);
     }
-    if (changed) {
-      drag.changed = true;
-      this.renderMap();
-    }
+    this._commit(changed);
   }
+}
 
-  /** Case en haut à gauche d'un objet centré sous le pointeur. */
-  _propAnchor(p) {
-    const fp = M.propFootprint(this.propType, this.propRot) ?? { w: 1, h: 1 };
-    return [Math.round(p[0] - fp.w / 2), Math.round(p[1] - fp.h / 2)];
-  }
+function segmentDistance([px, py], [ax, ay], [bx, by]) {
+  const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+  const t = l2 ? Math.min(1, Math.max(0, ((px - ax) * dx + (py - ay) * dy) / l2)) : 0;
+  return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
 }

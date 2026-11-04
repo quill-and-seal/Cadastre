@@ -59,3 +59,19 @@ test("une porte à cheval sur le départ d'une boucle", () => {
   assert.equal(pieces.length, 1);
   assert.ok(near(polylineLength(pieces[0], false), 15));
 });
+
+test("portion d'un tracé : coins et passage par le départ d'une boucle", async () => {
+  const { subNodes } = await import("../scripts/curves.js");
+  const pts = (nodes) => nodes.map((n) => [n.x, n.y]);
+  assert.deepEqual(pts(subNodes(rectNodes(0, 0, 4, 4), true, 2, 6)), [[2, 0], [4, 0], [4, 2]]);
+  assert.deepEqual(pts(subNodes(rectNodes(0, 0, 4, 4), true, 14, 18)), [[0, 2], [0, 0], [2, 0]]);
+  assert.deepEqual(pts(subNodes([{ x: 0, y: 0 }, { x: 10, y: 0 }], false, 3, 7)), [[3, 0], [7, 0]]);
+});
+
+test("portion d'une ellipse : reste sur l'ellipse, avec des poignées", async () => {
+  const { subNodes } = await import("../scripts/curves.js");
+  const part = subNodes(ellipseNodes(0, 0, 3, 2), true, 1, 9);
+  assert.ok(part.length >= 3 && part.length <= 5);
+  assert.ok(part[0].o && part.at(-1).i);
+  for (const [x, y] of flattenNodes(part, false, 0.005)) assert.ok(Math.abs((x / 3) ** 2 + (y / 2) ** 2 - 1) < 0.01);
+});

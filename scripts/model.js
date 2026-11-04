@@ -15,7 +15,7 @@ import {
   FORMAT_VERSION, MIN_CELLS, MAX_CELLS, DEFAULT_GRID_SIZE, MIN_GRID_SIZE, MAX_GRID_SIZE
 } from "./constants.js";
 import { TERRAIN_IDS, PROP_BY_ID } from "./catalog.js";
-import { flattenNodes, cleanNode, project, polylineLength, round3, rdp } from "./curves.js";
+import { flattenNodes, flattenWithParams, subNodes, cleanNode, project, polylineLength, round3 } from "./curves.js";
 import * as poly from "./poly.js";
 
 export const DOOR_KINDS = ["door", "secret"];
@@ -235,35 +235,38 @@ export function addWall(map, nodes, closed = false) {
   return wall;
 }
 
-/** Polyligne → nœuds de coins, en retirant les points inutiles. */
-function polylineNodes(points) {
-  return rdp(points, 0.004).map(([x, y]) => cleanNode({ x, y }));
-}
-
 /**
- * Retire les parties de murs à l'intérieur d'une zone (ou à l'extérieur, `inside: true` les garde).
- * Un mur coupé devient un ou plusieurs murs à coins ; les portes suivent leur morceau.
+ * Retire les parties de murs à l'intérieur d'une zone (`keepInside` : garde l'intérieur).
+ * Un mur coupé devient un ou plusieurs murs ouverts dont les courbes sont découpées
+ * exactement : ils restent retouchables. Les portes suivent leur morceau.
  */
 function clipWalls(map, rings, { keepInside = false } = {}) {
   const anchors = doorAnchors(map);
   let changed = false;
   const next = [];
   for (const wall of map.walls) {
-    const pts = wallPoints(wall);
-    const pieces = poly.clipPolyline(pts, wall.closed, rings, { inside: keepInside });
-    const untouched = pieces.length === 1
-      && Math.abs(polylineLength(pieces[0], false) - polylineLength(pts, wall.closed)) < 1e-6;
-    if (untouched) { next.push(wall); continue; }
+    const pieces = clipNodes(wall.nodes, wall.closed, rings, keepInside);
+    if (pieces === null) { next.push(wall); continue; }
     changed = true;
-    for (const piece of pieces) {
-      if (polylineLength(piece, false) < 0.02) continue;
-      next.push({ id: nextId(map, "w"), closed: false, nodes: polylineNodes(piece) });
-    }
+    for (const nodes of pieces) next.push({ id: nextId(map, "w"), closed: false, nodes });
   }
   if (!changed) return false;
   map.walls = next;
   rebindDoors(map, anchors);
   return true;
+}
+
+/** Morceaux (en nœuds) d'un tracé coupé par une zone ; null s'il n'est pas touché. */
+function clipNodes(nodes, closed, rings, keepInside = false) {
+  const { points } = flattenWithParams(nodes, closed, 0.005);
+  const intervals = poly.clipIntervals(points, closed, rings, { inside: keepInside });
+  if (intervals.length === 1 && intervals[0][2] === "loop") return null;
+  const total = polylineLength(points, closed);
+  if (!closed && intervals.length === 1 && intervals[0][0] < 1e-9 && Math.abs(intervals[0][1] - total) < 1e-9) return null;
+  return intervals
+    .filter(([a, b]) => b - a >= 0.02)
+    .map(([a, b]) => subNodes(nodes, closed, a, b, 0.005))
+    .filter((n) => n.length >= 2);
 }
 
 export function removeWall(map, id) {
@@ -354,7 +357,6 @@ function rescaleDoors(map, wall, before) {
  * chevauchent n'en font qu'une. Les portes existantes restent sur ce qui reste de leur mur.
  */
 export function addRoom(map, nodes, terrain) {
-  const outline = flattenNodes(nodes, true, WALL_TOLERANCE);
   const shape = poly.normalizeRings([poly.pointsRing(flattenNodes(nodes, true, 0.005))]);
   if (!shape.length) return false;
 
@@ -363,13 +365,9 @@ export function addRoom(map, nodes, terrain) {
   if (inner.length) clipWalls(map, inner);
 
   const existing = poly.offsetRings(map.rooms, -0.03);
-  if (!existing.length || !poly.intersection(existing, shape).length) {
-    addWall(map, nodes, true);
-  } else {
-    for (const piece of poly.clipPolyline(outline, true, existing)) {
-      if (polylineLength(piece, false) >= 0.02) addWall(map, polylineNodes(piece), false);
-    }
-  }
+  const pieces = existing.length ? clipNodes(nodes, true, existing) : null;
+  if (pieces === null) addWall(map, nodes, true);
+  else for (const piece of pieces) addWall(map, piece, false);
   map.rooms = poly.union(map.rooms, shape);
   return true;
 }
@@ -469,4 +467,100 @@ export function resizeMap(map, width, height) {
   clipWalls(map, poly.offsetRings(bounds, 0.001), { keepInside: true });
   map.props = map.props.filter((p) => p.x <= map.width && p.y <= map.height);
   return true;
+}
+
+/* -------------------------------------------- */
+/*  Retouches fines                             */
+/* -------------------------------------------- */
+
+const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+
+/** Points de contrôle du segment k d'un mur. */
+function segmentControls(wall, k) {
+  const a = wall.nodes[k], b = wall.nodes[(k + 1) % wall.nodes.length];
+  return [
+    [a.x, a.y],
+    [a.x + (a.o?.[0] ?? 0), a.y + (a.o?.[1] ?? 0)],
+    [b.x + (b.i?.[0] ?? 0), b.y + (b.i?.[1] ?? 0)],
+    [b.x, b.y]
+  ];
+}
+
+function bezierPoint([p0, p1, p2, p3], t) {
+  const u = 1 - t;
+  const w = [u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t];
+  return [w[0] * p0[0] + w[1] * p1[0] + w[2] * p2[0] + w[3] * p3[0], w[0] * p0[1] + w[1] * p1[1] + w[2] * p2[1] + w[3] * p3[1]];
+}
+
+/**
+ * Ajoute un nœud sur un mur au plus près d'un point, sans changer la forme
+ * (la courbe est coupée en deux par l'algorithme de De Casteljau).
+ */
+export function insertNode(map, id, x, y) {
+  const wall = map.walls.find((w) => w.id === id);
+  if (!wall) return -1;
+  const segs = wall.closed ? wall.nodes.length : wall.nodes.length - 1;
+  let best = { d: Infinity, k: 0, t: 0.5 };
+  for (let k = 0; k < segs; k++) {
+    const ctrl = segmentControls(wall, k);
+    for (let s = 1; s < 64; s++) {
+      const t = s / 64, [px, py] = bezierPoint(ctrl, t);
+      const d = Math.hypot(px - x, py - y);
+      if (d < best.d) best = { d, k, t };
+    }
+  }
+  const { k, t } = best;
+  const before = polylineLength(wallPoints(wall), wall.closed);
+  const a = wall.nodes[k], bIndex = (k + 1) % wall.nodes.length, b = wall.nodes[bIndex];
+  const [p0, p1, p2, p3] = segmentControls(wall, k);
+  let node;
+  if (!a.o && !b.i) {
+    const [nx, ny] = lerp(p0, p3, t);
+    node = cleanNode({ x: nx, y: ny });
+  } else {
+    const q0 = lerp(p0, p1, t), q1 = lerp(p1, p2, t), q2 = lerp(p2, p3, t);
+    const r0 = lerp(q0, q1, t), r1 = lerp(q1, q2, t), s = lerp(r0, r1, t);
+    node = cleanNode({ x: s[0], y: s[1], i: [r0[0] - s[0], r0[1] - s[1]], o: [r1[0] - s[0], r1[1] - s[1]] });
+    Object.assign(a, cleanNode({ ...a, o: [q0[0] - p0[0], q0[1] - p0[1]] }));
+    Object.assign(b, cleanNode({ ...b, i: [q2[0] - p3[0], q2[1] - p3[1]] }));
+  }
+  wall.nodes.splice(k + 1, 0, node);
+  rescaleDoors(map, wall, before);
+  return k + 1;
+}
+
+/** Ouvre ou ferme un mur. */
+export function setWallClosed(map, id, closed) {
+  const wall = map.walls.find((w) => w.id === id);
+  if (!wall || wall.closed === !!closed || (closed && wall.nodes.length < 3)) return false;
+  wall.closed = !!closed;
+  return true;
+}
+
+/** Fait glisser une porte le long de son mur jusqu'au plus près d'un point. */
+export function slideDoor(map, id, x, y) {
+  const door = map.doors.find((d) => d.id === id);
+  const wall = door && map.walls.find((w) => w.id === door.wall);
+  if (!wall) return false;
+  const pts = wallPoints(wall);
+  const hit = project(pts, wall.closed, x, y);
+  const len = polylineLength(pts, wall.closed);
+  const s = wall.closed ? hit.s : Math.min(Math.max(hit.s, door.w / 2), Math.max(door.w / 2, len - door.w / 2));
+  if (Math.abs(s - door.s) < 1e-4) return false;
+  door.s = round3(s);
+  return true;
+}
+
+export function duplicateWall(map, id, dx = 1, dy = 1) {
+  const wall = map.walls.find((w) => w.id === id);
+  if (!wall) return null;
+  const copy = { id: nextId(map, "w"), closed: wall.closed, nodes: wall.nodes.map((n) => cleanNode({ ...n, x: n.x + dx, y: n.y + dy })) };
+  map.walls.push(copy);
+  for (const d of map.doors.filter((q) => q.wall === id)) map.doors.push({ ...d, id: nextId(map, "d"), wall: copy.id });
+  return copy;
+}
+
+export function duplicateProp(map, id, dx = 0.5, dy = 0.5) {
+  const p = map.props.find((q) => q.id === id);
+  return p ? addProp(map, p.type, p.x + dx, p.y + dy, p.a, p.k) : null;
 }

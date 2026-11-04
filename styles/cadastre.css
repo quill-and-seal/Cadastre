@@ -87,19 +87,27 @@
   cursor: crosshair;
 }
 .cad-viewport.cad-panning { cursor: grab; }
+.cad-viewport[data-tool="select"] { cursor: default; }
 .cad-viewport[data-tool="prop"], .cad-viewport[data-tool="door"] { cursor: pointer; }
 .cad-svg { display: block; width: 100%; height: 100%; }
 .cad-border { stroke: var(--cad-border); }
 
-/* Repères de survol */
+/* Repères : sélection, survol, aperçus */
 .cad-overlay { pointer-events: none; }
-.cad-hl { fill: rgba(255, 255, 255, 0.08); stroke: #ffffff; stroke-opacity: 0.85; }
-.cad-hl-erase-cell { fill: rgba(224, 96, 78, 0.2); stroke: var(--cad-danger); }
-.cad-hl-erase { stroke: var(--cad-danger); stroke-linecap: round; fill: none; }
-.cad-hl-wall { stroke: var(--cad-accent); stroke-linecap: round; fill: none; }
-.cad-hl-door { stroke: #5fc8e8; stroke-linecap: round; fill: none; }
-.cad-hl-dot { fill: var(--cad-accent); stroke: #000; stroke-opacity: 0.5; }
-.cad-label { fill: #fff; paint-order: stroke; stroke: #000; stroke-width: 0.03; font-family: sans-serif; }
+.cad-overlay .cad-hover { fill: none; stroke: #ffffff; stroke-opacity: 0.55; stroke-linecap: round; stroke-linejoin: round; }
+.cad-overlay .cad-sel { fill: none; stroke: var(--cad-accent); stroke-linecap: round; stroke-linejoin: round; }
+.cad-overlay .cad-node { fill: #ffffff; stroke: #1a1408; }
+.cad-overlay .cad-node.smooth { rx: 50%; }
+.cad-overlay .cad-node.active { fill: var(--cad-accent); }
+.cad-overlay .cad-handle { fill: #1a1408; stroke: var(--cad-accent); }
+.cad-overlay .cad-handle-line { stroke: var(--cad-accent); stroke-opacity: 0.8; fill: none; }
+.cad-overlay .cad-preview { stroke: var(--cad-accent); stroke-linecap: round; stroke-linejoin: round; }
+.cad-overlay .cad-rubber { stroke: var(--cad-accent); stroke-dasharray: 6 4; stroke-opacity: 0.8; vector-effect: non-scaling-stroke; stroke-width: 1.5px; }
+.cad-overlay .cad-dot { fill: var(--cad-accent); stroke: #000; stroke-opacity: 0.6; }
+.cad-overlay .cad-brush { fill: rgba(255, 255, 255, 0.06); stroke: #ffffff; stroke-opacity: 0.8; }
+.cad-overlay .cad-brush-erase { fill: rgba(224, 96, 78, 0.12); stroke: var(--cad-danger); }
+.cad-overlay .cad-stroke-erase { fill: none; stroke: var(--cad-danger); stroke-opacity: 0.35; stroke-linecap: round; stroke-linejoin: round; }
+.cad-overlay .cad-door-preview { stroke: #5fc8e8; stroke-linecap: round; fill: none; }
 
 /* Panneau de droite */
 .cad-panel {
@@ -136,6 +144,16 @@
 .cad-editor .cad-swatches button.active { background: var(--cad-surface-2); color: var(--cad-text); box-shadow: inset 0 0 0 2px var(--cad-accent); }
 
 .cad-segmented { display: flex; gap: 4px; flex-wrap: wrap; }
+.cad-slider { display: flex; align-items: center; gap: 8px; }
+.cad-slider input[type="range"] { flex: 1; accent-color: var(--cad-accent); }
+.cad-slider output { min-width: 34px; text-align: right; color: var(--cad-text); }
+.cad-note { margin: 4px 0 8px; color: var(--cad-muted); line-height: 1.4; }
+.cad-note strong { color: var(--cad-text); }
+.cad-check { display: flex; align-items: center; gap: 6px; margin: 6px 0; color: var(--cad-text); }
+.cad-actions { margin-top: 8px; }
+.cad-actions button { flex: 1; }
+.cad-editor button.cad-danger:hover:not(:disabled) { border-color: var(--cad-danger); color: var(--cad-danger); }
+.cad-tool-options label { display: flex; flex-direction: column; gap: 3px; margin: 6px 0; color: var(--cad-muted); font-size: 12px; }
 .cad-segmented button { flex: 1; }
 .cad-tool-options > button { width: 100%; margin-top: 8px; }
 
