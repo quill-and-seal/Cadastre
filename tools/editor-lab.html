@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cadastre : banc d'essai</title>
+  <!-- Banc d'essai de l'éditeur hors de Foundry. À servir depuis la racine du dépôt :
+       python3 -m http.server   puis   http://localhost:8000/tools/editor-lab.html -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="../styles/cadastre.css">
+  <style>
+    html, body { margin: 0; height: 100%; background: #0d0c0f; font-family: system-ui, sans-serif; }
+    #editor { position: absolute; inset: 0; }
+  </style>
+</head>
+<body>
+  <div id="editor"></div>
+  <script type="module">
+    import { MapEditor } from "../scripts/editor.js";
+    import { createMap } from "../scripts/model.js";
+    import { renderSVG } from "../scripts/render.js";
+
+    const lang = await (await fetch("../lang/fr.json")).json();
+    const t = (key, data) => {
+      let s = key.split(".").reduce((o, k) => o?.[k], lang) ?? key;
+      for (const [k, v] of Object.entries(data ?? {})) s = s.replaceAll(`{${k}}`, v);
+      return s;
+    };
+
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem("cadastre-lab") ?? "null"); } catch { saved = null; }
+
+    window.editor = new MapEditor(document.getElementById("editor"), saved ?? createMap({ name: "Essai" }), {
+      t,
+      onSave: (map) => {
+        try { localStorage.setItem("cadastre-lab", JSON.stringify(map)); } catch {}
+        window.editor.markSaved(map);
+      },
+      onExport: (map) => {
+        const url = URL.createObjectURL(new Blob([renderSVG(map)], { type: "image/svg+xml" }));
+        window.open(url, "_blank");
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+{
+  "id": "cadastre",
+  "title": "Cadastre",
+  "description": "Éditeur de cartes dans Foundry VTT : on peint les sols, on trace pièces, murs et portes, on pose le mobilier, puis la carte devient une scène prête à jouer, murs compris.",
+  "version": "0.1.0",
+  "compatibility": {
+    "minimum": "14",
+    "verified": "14"
+  },
+  "authors": [
+    {
+      "name": "Argan",
+      "url": "https://github.com/quill-and-seal"
+    }
+  ],
+  "esmodules": [
+    "scripts/main.js"
+  ],
+  "styles": [
+    "styles/cadastre.css"
+  ],
+  "languages": [
+    {
+      "lang": "fr",
+      "name": "Français",
+      "path": "lang/fr.json"
+    },
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    }
+  ],
+  "relationships": {
+    "recommends": [
+      {
+        "id": "palisade",
+        "type": "module",
+        "reason": "Murs auto-reliés : les murs exportés restent soudés quand tu les retouches."
+      },
+      {
+        "id": "vellum",
+        "type": "module",
+        "reason": "Fond de scène en SVG net à tous les zooms (à partir de Cadastre 0.2)."
+      }
+    ]
+  },
+  "url": "https://github.com/quill-and-seal/Cadastre",
+  "manifest": "https://github.com/quill-and-seal/Cadastre/releases/latest/download/module.json",
+  "download": "https://github.com/quill-and-seal/Cadastre/releases/download/v0.1.0/module.zip",
+  "bugs": "https://github.com/quill-and-seal/Cadastre/issues",
+  "license": "LICENSE",
+  "readme": "README.md"
+}

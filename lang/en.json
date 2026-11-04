@@ -1,0 +1,110 @@
+{
+  "CADASTRE": {
+    "Title": "Cadastre",
+    "OpenButton": "Cadastre",
+    "GMOnly": "Only the GM can create and edit Cadastre maps.",
+    "Manager": {
+      "Title": "Cadastre: maps",
+      "New": "New map",
+      "Open": "Open",
+      "Duplicate": "Duplicate",
+      "Delete": "Delete",
+      "Empty": "No maps yet. Start with “New map”.",
+      "Untitled": "Untitled map",
+      "CopyOf": "{name} (copy)",
+      "DeleteTitle": "Delete map",
+      "DeleteConfirm": "Delete the map <strong>{name}</strong>? An already exported scene is left untouched.",
+      "Size": "{cols} × {rows} cells",
+      "Linked": "Linked scene: {scene}",
+      "Folder": "Cadastre"
+    },
+    "Editor": {
+      "Undo": "Undo (Ctrl+Z)",
+      "Redo": "Redo (Ctrl+Shift+Z)",
+      "Grid": "Show grid",
+      "Fit": "Fit the whole map",
+      "Save": "Save",
+      "SaveHint": "Save (Ctrl+S)",
+      "Export": "Export to scene",
+      "Unsaved": "unsaved changes",
+      "Saved": "Map saved.",
+      "Coords": "Cell {x}, {y}"
+    },
+    "Tools": {
+      "brush": "Floor (1)",
+      "fill": "Fill (2)",
+      "room": "Room (3)",
+      "wall": "Wall (4)",
+      "door": "Door (5)",
+      "prop": "Object (6)",
+      "eraser": "Eraser (7)"
+    },
+    "Hints": {
+      "brush": "Drag to paint the floor. [ and ] change the brush size.",
+      "fill": "Click: fills the area with the same floor, without crossing walls.",
+      "room": "Drag from corner to corner: floor, surrounding walls, inner walls removed. Existing doors stay.",
+      "wall": "Drag from one cell corner to another to draw a straight wall. Alt: erase. Single click: add or remove the nearest wall.",
+      "door": "Click a cell edge: door, then secret door (drawn as a wall in the scene).",
+      "prop": "Click to place. R: rotate a quarter turn.",
+      "eraser": "Drag to erase. Size 1 near an edge: only erases that wall.",
+      "pan": "Right click or middle button (or Space + click) to pan, wheel to zoom."
+    },
+    "Panel": {
+      "Terrain": "Floor",
+      "BrushSize": "Size",
+      "Props": "Object",
+      "Rotate": "Rotate (R)",
+      "Eraser": "Erases",
+      "Map": "Map",
+      "Name": "Name",
+      "Cols": "Columns",
+      "Rows": "Rows",
+      "GridSize": "Pixels per cell",
+      "Background": "Background",
+      "Apply": "Apply",
+      "ApplyHint": "Anything outside the new size is removed (Ctrl+Z to go back)."
+    },
+    "Terrains": {
+      "stone": "Flagstones",
+      "wood": "Planks",
+      "cobble": "Cobblestones",
+      "dirt": "Dirt",
+      "grass": "Grass",
+      "water": "Water"
+    },
+    "Props": {
+      "barrel": "Barrel",
+      "crate": "Crate",
+      "chest": "Chest",
+      "table": "Table",
+      "chair": "Chair",
+      "bed": "Bed",
+      "pillar": "Pillar",
+      "stairs": "Stairs"
+    },
+    "EraseModes": {
+      "all": "All",
+      "floor": "Floors",
+      "walls": "Walls",
+      "props": "Objects"
+    },
+    "Export": {
+      "Title": "Export to scene",
+      "Choice": "This map already has a scene: <strong>{scene}</strong>. Updating it replaces its background and the walls placed by Cadastre; tokens, lights and hand-placed walls stay.",
+      "Update": "Update",
+      "New": "New scene",
+      "Working": "Cadastre: rendering the map…",
+      "Created": "Scene “{scene}” created.",
+      "Updated": "Scene “{scene}” updated.",
+      "Failed": "Export failed: {error}",
+      "Empty": "The map is empty: nothing to export.",
+      "Reduced": "Very large map: the image is reduced to {size} px per side, Foundry stretches it to the scene size."
+    },
+    "Close": {
+      "Title": "Unsaved changes",
+      "Content": "Save the map before closing?",
+      "Save": "Save",
+      "Discard": "Close without saving"
+    }
+  }
+}

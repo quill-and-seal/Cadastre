@@ -1,0 +1,110 @@
+{
+  "CADASTRE": {
+    "Title": "Cadastre",
+    "OpenButton": "Cadastre",
+    "GMOnly": "Seul le MJ peut créer et modifier les cartes Cadastre.",
+    "Manager": {
+      "Title": "Cadastre : cartes",
+      "New": "Nouvelle carte",
+      "Open": "Ouvrir",
+      "Duplicate": "Dupliquer",
+      "Delete": "Supprimer",
+      "Empty": "Aucune carte pour l'instant. Commence par « Nouvelle carte ».",
+      "Untitled": "Carte sans nom",
+      "CopyOf": "{name} (copie)",
+      "DeleteTitle": "Supprimer la carte",
+      "DeleteConfirm": "Supprimer la carte <strong>{name}</strong> ? La scène déjà exportée n'est pas touchée.",
+      "Size": "{cols} × {rows} cases",
+      "Linked": "Scène liée : {scene}",
+      "Folder": "Cadastre"
+    },
+    "Editor": {
+      "Undo": "Annuler (Ctrl+Z)",
+      "Redo": "Rétablir (Ctrl+Maj+Z)",
+      "Grid": "Afficher le quadrillage",
+      "Fit": "Voir toute la carte",
+      "Save": "Enregistrer",
+      "SaveHint": "Enregistrer (Ctrl+S)",
+      "Export": "Exporter en scène",
+      "Unsaved": "modifications non enregistrées",
+      "Saved": "Carte enregistrée.",
+      "Coords": "Case {x}, {y}"
+    },
+    "Tools": {
+      "brush": "Sol (1)",
+      "fill": "Remplir (2)",
+      "room": "Pièce (3)",
+      "wall": "Mur (4)",
+      "door": "Porte (5)",
+      "prop": "Objet (6)",
+      "eraser": "Gomme (7)"
+    },
+    "Hints": {
+      "brush": "Glisse pour peindre le sol. [ et ] changent la taille du pinceau.",
+      "fill": "Clic : remplit la zone de même sol, sans traverser les murs.",
+      "room": "Glisse d'un coin à l'autre : sol, murs autour, murs intérieurs retirés. Les portes existantes restent.",
+      "wall": "Glisse d'un coin de case à un autre pour tracer un mur droit. Alt : efface. Clic simple : pose ou retire le mur le plus proche.",
+      "door": "Clic sur un bord de case : porte, puis porte secrète (dessinée comme un mur dans la scène).",
+      "prop": "Clic pour poser. R : tourner d'un quart de tour.",
+      "eraser": "Glisse pour effacer. Taille 1 près d'un bord : n'efface que ce mur.",
+      "pan": "Clic droit ou molette enfoncée (ou Espace + clic) pour déplacer la vue, molette pour zoomer."
+    },
+    "Panel": {
+      "Terrain": "Sol",
+      "BrushSize": "Taille",
+      "Props": "Objet",
+      "Rotate": "Tourner (R)",
+      "Eraser": "Efface",
+      "Map": "Carte",
+      "Name": "Nom",
+      "Cols": "Colonnes",
+      "Rows": "Lignes",
+      "GridSize": "Pixels par case",
+      "Background": "Fond",
+      "Apply": "Appliquer",
+      "ApplyHint": "Ce qui dépasse de la nouvelle taille est retiré (Ctrl+Z pour revenir)."
+    },
+    "Terrains": {
+      "stone": "Dalles",
+      "wood": "Plancher",
+      "cobble": "Pavés",
+      "dirt": "Terre",
+      "grass": "Herbe",
+      "water": "Eau"
+    },
+    "Props": {
+      "barrel": "Tonneau",
+      "crate": "Caisse",
+      "chest": "Coffre",
+      "table": "Table",
+      "chair": "Chaise",
+      "bed": "Lit",
+      "pillar": "Pilier",
+      "stairs": "Escalier"
+    },
+    "EraseModes": {
+      "all": "Tout",
+      "floor": "Sols",
+      "walls": "Murs",
+      "props": "Objets"
+    },
+    "Export": {
+      "Title": "Exporter en scène",
+      "Choice": "Cette carte a déjà une scène : <strong>{scene}</strong>. La mettre à jour remplace son fond et les murs posés par Cadastre ; jetons, lumières et murs ajoutés à la main restent.",
+      "Update": "Mettre à jour",
+      "New": "Nouvelle scène",
+      "Working": "Cadastre : rendu de la carte…",
+      "Created": "Scène « {scene} » créée.",
+      "Updated": "Scène « {scene} » mise à jour.",
+      "Failed": "Export impossible : {error}",
+      "Empty": "La carte est vide : rien à exporter.",
+      "Reduced": "Carte très grande : l'image est réduite à {size} px de côté, Foundry l'étire à la taille de la scène."
+    },
+    "Close": {
+      "Title": "Modifications non enregistrées",
+      "Content": "Enregistrer la carte avant de fermer ?",
+      "Save": "Enregistrer",
+      "Discard": "Fermer sans enregistrer"
+    }
+  }
+}

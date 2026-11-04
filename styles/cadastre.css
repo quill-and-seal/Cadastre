@@ -1,0 +1,191 @@
+/* Cadastre : éditeur de cartes. Interface sombre, comme un logiciel de dessin, quel que soit le thème de Foundry. */
+
+.cad-editor {
+  --cad-bg: #17161a;
+  --cad-surface: #222126;
+  --cad-surface-2: #2c2a31;
+  --cad-border: #3a3840;
+  --cad-text: #e8e4dc;
+  --cad-muted: #9a958c;
+  --cad-accent: #d9a441;
+  --cad-accent-text: #1a1408;
+  --cad-danger: #e0604e;
+
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--cad-bg);
+  color: var(--cad-text);
+  font-size: 13px;
+  outline: none;
+  user-select: none;
+}
+.cad-editor *, .cad-editor *::before, .cad-editor *::after { box-sizing: border-box; }
+
+.cad-editor button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  margin: 0;
+  padding: 0 9px;
+  width: auto;
+  line-height: 1;
+  font-size: 13px;
+  color: var(--cad-text);
+  background: var(--cad-surface-2);
+  border: 1px solid var(--cad-border);
+  border-radius: 5px;
+  box-shadow: none;
+  cursor: pointer;
+}
+.cad-editor button:hover:not(:disabled) { border-color: var(--cad-accent); }
+.cad-editor button:disabled { opacity: 0.4; cursor: default; }
+.cad-editor button.active { background: var(--cad-accent); color: var(--cad-accent-text); border-color: var(--cad-accent); }
+.cad-editor button:focus-visible { outline: 2px solid var(--cad-accent); outline-offset: 1px; }
+
+/* Barre du haut */
+.cad-topbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--cad-surface);
+  border-bottom: 1px solid var(--cad-border);
+  flex: none;
+}
+.cad-sep { width: 1px; align-self: stretch; margin: 2px 4px; background: var(--cad-border); }
+.cad-spacer { flex: 1; }
+.cad-dirty { color: var(--cad-accent); font-style: italic; margin-left: 6px; }
+.cad-topbar [data-action="export"] { background: var(--cad-accent); color: var(--cad-accent-text); border-color: var(--cad-accent); }
+
+/* Corps */
+.cad-body { display: flex; flex: 1; min-height: 0; }
+
+.cad-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 6px;
+  background: var(--cad-surface);
+  border-right: 1px solid var(--cad-border);
+  flex: none;
+}
+.cad-tools button { width: 36px; height: 36px; padding: 0; font-size: 15px; }
+
+.cad-viewport {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 40%, #232128 0%, #121115 75%);
+  touch-action: none;
+  cursor: crosshair;
+}
+.cad-viewport.cad-panning { cursor: grab; }
+.cad-viewport[data-tool="prop"], .cad-viewport[data-tool="door"] { cursor: pointer; }
+.cad-svg { display: block; width: 100%; height: 100%; }
+.cad-border { stroke: var(--cad-border); }
+
+/* Repères de survol */
+.cad-overlay { pointer-events: none; }
+.cad-hl { fill: rgba(255, 255, 255, 0.08); stroke: #ffffff; stroke-opacity: 0.85; }
+.cad-hl-erase-cell { fill: rgba(224, 96, 78, 0.2); stroke: var(--cad-danger); }
+.cad-hl-erase { stroke: var(--cad-danger); stroke-linecap: round; fill: none; }
+.cad-hl-wall { stroke: var(--cad-accent); stroke-linecap: round; fill: none; }
+.cad-hl-door { stroke: #5fc8e8; stroke-linecap: round; fill: none; }
+.cad-hl-dot { fill: var(--cad-accent); stroke: #000; stroke-opacity: 0.5; }
+.cad-label { fill: #fff; paint-order: stroke; stroke: #000; stroke-width: 0.03; font-family: sans-serif; }
+
+/* Panneau de droite */
+.cad-panel {
+  width: 236px;
+  flex: none;
+  overflow-y: auto;
+  padding: 8px 10px 12px;
+  background: var(--cad-surface);
+  border-left: 1px solid var(--cad-border);
+}
+.cad-panel h3 {
+  margin: 10px 0 6px;
+  padding: 0;
+  border: none;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cad-muted);
+}
+.cad-panel section + section { margin-top: 10px; padding-top: 4px; border-top: 1px solid var(--cad-border); }
+
+.cad-swatches { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.cad-editor .cad-swatches button {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  height: auto;
+  padding: 5px;
+}
+.cad-swatches svg { width: 100%; aspect-ratio: 2 / 1; border-radius: 3px; background: #2a2622; }
+.cad-props svg { aspect-ratio: 1 / 1; background: #6f6a62; }
+.cad-swatches span { font-size: 12px; text-align: center; }
+.cad-editor .cad-swatches button.active { background: var(--cad-surface-2); color: var(--cad-text); box-shadow: inset 0 0 0 2px var(--cad-accent); }
+
+.cad-segmented { display: flex; gap: 4px; flex-wrap: wrap; }
+.cad-segmented button { flex: 1; }
+.cad-tool-options > button { width: 100%; margin-top: 8px; }
+
+.cad-map-options label { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; color: var(--cad-muted); font-size: 12px; }
+.cad-row { display: flex; gap: 8px; }
+.cad-row label { flex: 1; min-width: 0; }
+.cad-editor input[type="text"], .cad-editor input[type="number"] {
+  width: 100%;
+  height: 28px;
+  padding: 0 6px;
+  color: var(--cad-text);
+  background: var(--cad-bg);
+  border: 1px solid var(--cad-border);
+  border-radius: 4px;
+  user-select: text;
+}
+.cad-editor input[type="color"] { width: 100%; height: 28px; padding: 1px; background: var(--cad-bg); border: 1px solid var(--cad-border); border-radius: 4px; }
+.cad-map-options > button { width: 100%; }
+
+/* Barre d'état */
+.cad-status {
+  display: flex;
+  gap: 14px;
+  padding: 4px 10px;
+  min-height: 24px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--cad-muted);
+  background: var(--cad-surface);
+  border-top: 1px solid var(--cad-border);
+  flex: none;
+}
+.cad-coords { min-width: 80px; color: var(--cad-text); }
+.cad-hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Fenêtres Foundry */
+.application.cadastre-editor .window-content { padding: 0; overflow: hidden; }
+
+.application.cadastre-manager .window-content { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.cadastre-manager .cad-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+.cadastre-manager .cad-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border, #7a7971);
+  border-radius: 6px;
+}
+.cadastre-manager .cad-item-main { flex: 1; min-width: 0; cursor: pointer; }
+.cadastre-manager .cad-item-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cadastre-manager .cad-item-meta { font-size: 12px; opacity: 0.75; }
+.cadastre-manager .cad-item button { flex: none; width: 32px; height: 32px; padding: 0; }
+.cadastre-manager .cad-empty { opacity: 0.75; font-style: italic; margin: 6px 0; }
