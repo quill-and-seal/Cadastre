@@ -10,7 +10,9 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - Retouche des nœuds et poignées, annulation, aimant optionnel.
 - Export en scène : image de fond, grille, murs natifs ; mise à jour d'une scène déjà exportée.
 
-## 0.2 — Palisade, Vellum, étages, zones retouchables
+## 0.2 — Bibliothèque, Palisade, Vellum, étages, zones retouchables
+
+- Bibliothèque d'assets (en cours, branche `bibliotheque-assets`) : objets et textures venus de l'extérieur.
 
 - Vellum actif : fond de scène exporté en SVG, net à tous les zooms.
 - Palisade actif : murs exportés reliés comme s'ils avaient été tracés avec Palisade.

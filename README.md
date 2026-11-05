@@ -44,11 +44,28 @@ Le panneau de droite règle l'outil en cours et la carte : nom, largeur et haute
 
 Sols disponibles : dalles, plancher, pavés, terre, herbe, eau. Les sols naturels (herbe, terre, eau) se fondent dans leurs voisins, les sols construits gardent un bord net. Tout est dessiné en vectoriel par le module : aucune image à fournir.
 
+## Bibliothèque d'assets
+
+Les sols et objets intégrés ne suffisent pas : la bibliothèque ajoute tes propres images, ou celles d'un pack d'assets (Forgotten Adventures, 2-Minute Tabletop…), comme **objets** ou comme **textures de sol** qui se répètent.
+
+Elle s'ouvre depuis la liste des cartes (**Bibliothèque**), depuis la palette de l'éditeur (bouton livre à côté de « Bibliothèque ») ou dans les réglages du module. Trois façons d'ajouter des images :
+
+- **Fichier** : une image déjà présente dans les données de Foundry ;
+- **Dossier** : toutes les images d'un dossier et de ses sous-dossiers, d'un coup (5000 au plus) ; les sous-dossiers deviennent des étiquettes ;
+- **Téléverser** : des images de ton ordinateur, envoyées dans `worlds/<ton monde>/cadastre/assets/`.
+
+À l'import, Cadastre devine le type (un dossier ou un nom qui parle de « textures », « sols », « floors », « terrain »… donne une texture, le reste un objet) et calcule la taille en cases à partir des pixels par case des images (200 par défaut, la norme de la plupart des packs). Une taille écrite dans le nom du fichier, comme `Table_Long_3x1.webp`, l'emporte pour les objets. Tout se corrige ensuite asset par asset : nom, type, taille, étiquettes, bord fondu pour un sol naturel. Réimporter un fichier met à jour son asset au lieu de le dupliquer.
+
+Dans l'éditeur, les assets apparaissent sous les sols et objets intégrés, avec une recherche par nom et étiquette. Une carte garde une copie des assets qu'elle utilise : elle reste affichable si l'asset est retiré de la bibliothèque, et suit ses changements de taille ou de nom tant qu'il y est. Les images elles-mêmes restent à leur place : déplacer ou supprimer un fichier le fait disparaître de la carte.
+
+La liste se partage entre mondes avec **Exporter la liste** et **Importer une liste** (fichier JSON). Les images doivent être au même endroit dans les données de Foundry.
+
 ## Exporter en scène
 
 **Exporter en scène** rend la carte en image (WebP), l'enregistre dans `worlds/<ton monde>/cadastre/` et crée une scène :
 
 - à la taille de la carte (largeur × pixels par case), sans marge, grille carrée à la bonne taille ;
+- images d'assets comprises, intégrées au rendu (une image introuvable est signalée et laissée vide) ;
 - avec les murs de Foundry déjà posés : les courbes sont suivies par des segments droits (écart de 5 % de case au plus), chaque porte devient une porte, chaque porte secrète une porte secrète ;
 - les portes secrètes sont dessinées comme des murs sur l'image : les joueurs ne les voient pas.
 
@@ -62,6 +79,10 @@ Au-delà de 8192 px de côté, l'image est réduite et Foundry l'étire à la ta
 const cadastre = game.modules.get("cadastre").api;
 cadastre.openManager();            // liste des cartes
 cadastre.openMap(entryOrId);       // ouvre une carte
+cadastre.openLibrary();            // bibliothèque d'assets
+cadastre.library.get();            // liste des assets
+await cadastre.library.add(["assets/pack/Barrel_1x1.webp"], { ppc: 200 });
+await cadastre.library.importFolder("assets/pack", { kind: "prop" });
 cadastre.renderSVG(map, { scale }); // rendu SVG d'une carte
 await cadastre.exportMap(map, { scene }); // export (scene : scène à mettre à jour)
 cadastre.model;                    // fonctions du modèle de carte
@@ -70,7 +91,7 @@ cadastre.model;                    // fonctions du modèle de carte
 ## Développement
 
 - `node --test tests/*.test.mjs` : tests des courbes, des zones, du modèle, du rendu et de l'export des murs.
-- `tools/editor-lab.html` : l'éditeur hors de Foundry. Depuis la racine du dépôt, `python3 -m http.server`, puis ouvrir `http://localhost:8000/tools/editor-lab.html`. Le bouton d'export y ouvre le SVG rendu.
+- `tools/editor-lab.html` : l'éditeur hors de Foundry. Depuis la racine du dépôt, `python3 -m http.server`, puis ouvrir `http://localhost:8000/tools/editor-lab.html`. Le bouton d'export y ouvre le SVG rendu. Pour la bibliothèque, glisse des images sur la page (ou bouton livre de la palette) : un nom qui contient « texture », « sol »… en fait une texture.
 
 ## Licence
 

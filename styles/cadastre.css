@@ -207,3 +207,82 @@
 .cadastre-manager .cad-item-meta { font-size: 12px; opacity: 0.75; }
 .cadastre-manager .cad-item button { flex: none; width: 32px; height: 32px; padding: 0; }
 .cadastre-manager .cad-empty { opacity: 0.75; font-style: italic; margin: 6px 0; }
+
+/* Bibliothèque dans la palette */
+.cad-lib-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 12px; }
+.cad-lib-head h3 { margin: 0; }
+.cad-editor .cad-lib-head button { width: 28px; min-height: 26px; padding: 0; }
+.cad-editor input.cad-search {
+  width: 100%;
+  height: 28px;
+  margin: 6px 0;
+  padding: 0 8px;
+  color: var(--cad-text);
+  background: var(--cad-bg);
+  border: 1px solid var(--cad-border);
+  border-radius: 4px;
+  user-select: text;
+}
+.cad-thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 3px;
+  background-color: #6f6a62;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+.cad-thumb.tile { aspect-ratio: 2 / 1; background-repeat: repeat; background-size: auto 100%; background-color: #2a2622; }
+.cad-lib span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Fenêtre de la bibliothèque (Foundry) */
+.application.cadastre-library .window-content { padding: 0; display: flex; flex-direction: column; min-height: 0; }
+.cadastre-library .cad-libapp { display: flex; flex-direction: column; gap: 8px; padding: 10px; min-height: 0; height: 100%; }
+.cadastre-library .cad-libapp-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cadastre-library .cad-libapp-bar input[type="search"] { flex: 1 1 160px; min-width: 120px; }
+.cadastre-library .cad-libapp-bar select { flex: 0 0 auto; width: auto; }
+.cadastre-library .cad-libapp-bar button { flex: 0 0 auto; width: auto; white-space: nowrap; }
+.cadastre-library .cad-libapp-count { font-size: 12px; opacity: 0.75; }
+.cadastre-library .cad-libapp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+  align-content: start;
+}
+.cadastre-library .cad-asset {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--color-border, #7a7971);
+  border-radius: 6px;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.04);
+}
+.cadastre-library .cad-asset.active { outline: 2px solid #d9a441; }
+.cadastre-library .cad-asset .cad-thumb { background-color: #6f6a62; }
+.cadastre-library .cad-asset .cad-thumb.tile { aspect-ratio: 1 / 1; background-size: 50% 50%; }
+.cadastre-library .cad-asset-name { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cadastre-library .cad-asset-meta { font-size: 11px; opacity: 0.7; }
+.cadastre-library .cad-libapp-edit {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 6px 10px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--color-border, #7a7971);
+  border-radius: 6px;
+}
+.cadastre-library .cad-libapp-edit .cad-thumb { grid-row: span 4; align-self: start; }
+.cadastre-library .cad-libapp-edit .cad-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px; }
+.cadastre-library .cad-libapp-edit label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.cadastre-library .cad-libapp-edit .cad-src { font-size: 11px; opacity: 0.7; word-break: break-all; }
+.cadastre-library .cad-libapp-edit .cad-edit-actions { display: flex; gap: 6px; justify-content: flex-end; grid-column: 1 / -1; }
+.cadastre-library .cad-libapp-edit .cad-edit-actions button { width: auto; }
+.cadastre-library .cad-empty { opacity: 0.75; font-style: italic; }
+.cadastre-manager .cad-manager-bar { display: flex; gap: 6px; }
+.cadastre-manager .cad-manager-bar button { flex: 1; }

@@ -95,7 +95,14 @@
       "GridSize": "Pixels per cell",
       "Background": "Background",
       "Apply": "Apply",
-      "ApplyHint": "Anything outside the new size is clipped (Ctrl+Z to go back)."
+      "ApplyHint": "Anything outside the new size is clipped (Ctrl+Z to go back).",
+      "Library": "Library",
+      "ManageLibrary": "Manage the library",
+      "NoTextures": "No imported textures. The button on the right opens the library.",
+      "NoProps": "No imported objects. The button on the right opens the library.",
+      "Search": "Search…",
+      "MoreResults": "… and {n} more: refine the search.",
+      "NoResults": "Nothing matches."
     },
     "Terrains": {
       "stone": "Flagstones",
@@ -131,13 +138,57 @@
       "Updated": "Scene “{scene}” updated.",
       "Failed": "Export failed: {error}",
       "Empty": "The map is empty: nothing to export.",
-      "Reduced": "Very large map: the image is reduced to {size} px per side, Foundry stretches it to the scene size."
+      "Reduced": "Very large map: the image is reduced to {size} px per side, Foundry stretches it to the scene size.",
+      "Missing": "Images not found, left blank on the scene: {list}"
     },
     "Close": {
       "Title": "Unsaved changes",
       "Content": "Save the map before closing?",
       "Save": "Save",
       "Discard": "Close without saving"
+    },
+    "Library": {
+      "Title": "Cadastre: asset library",
+      "MenuName": "Asset library",
+      "MenuLabel": "Open the library",
+      "MenuHint": "Outside images (asset packs, your own files) used as objects or floor textures in the editor.",
+      "AddFile": "File",
+      "AddFileHint": "Add an image already in Foundry's data",
+      "AddFolder": "Folder",
+      "AddFolderHint": "Import every image of a folder and its subfolders (an asset pack, for instance)",
+      "Upload": "Upload",
+      "UploadHint": "Send images from your computer to the world",
+      "ExportJson": "Export the list",
+      "ImportJson": "Import a list",
+      "Search": "Search by name or tag…",
+      "AllKinds": "All kinds",
+      "AllTags": "All tags",
+      "Kinds": {
+        "prop": "Object",
+        "texture": "Floor texture"
+      },
+      "KindAuto": "Guess (“textures”, “floors”… folder → texture)",
+      "Count": "{shown} of {total}",
+      "Empty": "The library is empty. Add a file, a whole folder, or upload images.",
+      "Name": "Name",
+      "Kind": "Kind",
+      "Width": "Width (cells)",
+      "Height": "Height (cells)",
+      "Tags": "Tags (commas)",
+      "Soft": "Soft edge (natural floor)",
+      "Save": "Save",
+      "Delete": "Remove",
+      "DeleteHint": "Removes the asset from the library. The file stays in place, and maps using it keep their copy.",
+      "ImportTitle": "Import images",
+      "ImportFrom": "From: <strong>{path}</strong>",
+      "Ppc": "Image pixels per cell",
+      "PpcHint": "200 for most packs. A size written in the file name (“_2x1”) wins for objects.",
+      "Scanning": "Cadastre: reading the folder…",
+      "Imported": "{n} asset(s) added or updated.",
+      "NothingFound": "No images found.",
+      "Truncated": "Very large folder: only the first {n} images were read.",
+      "Uploading": "Cadastre: uploading {n} image(s)…",
+      "BadJson": "Unreadable list file."
     }
   }
 }

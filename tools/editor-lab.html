@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cadastre : banc d'essai</title>
   <!-- Banc d'essai de l'éditeur hors de Foundry. À servir depuis la racine du dépôt :
-       python3 -m http.server   puis   http://localhost:8000/tools/editor-lab.html -->
+       python3 -m http.server   puis   http://localhost:8000/tools/editor-lab.html
+       Le bouton « Bibliothèque » de la palette (ou un glisser-déposer d'images sur la page)
+       ajoute des images ; un nom qui contient « texture », « sol », « floor »… en fait une texture. -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <link rel="stylesheet" href="../styles/cadastre.css">
   <style>
@@ -15,10 +17,12 @@
 </head>
 <body>
   <div id="editor"></div>
+  <input type="file" id="files" accept="image/*" multiple hidden>
   <script type="module">
     import { MapEditor } from "../scripts/editor.js";
     import { createMap } from "../scripts/model.js";
     import { renderSVG } from "../scripts/render.js";
+    import { assetFromFile, mergeAssets, normalizeLibrary } from "../scripts/library.js";
 
     const lang = await (await fetch("../lang/fr.json")).json();
     const t = (key, data) => {
@@ -26,16 +30,37 @@
       for (const [k, v] of Object.entries(data ?? {})) s = s.replaceAll(`{${k}}`, v);
       return s;
     };
+    const load = (key) => { try { return JSON.parse(localStorage.getItem(key) ?? "null"); } catch { return null; } };
+    const store = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* quota, navigation privée */ } };
 
-    let saved = null;
-    try { saved = JSON.parse(localStorage.getItem("cadastre-lab") ?? "null"); } catch { saved = null; }
+    let library = normalizeLibrary(load("cadastre-lab-library") ?? []);
 
-    window.editor = new MapEditor(document.getElementById("editor"), saved ?? createMap({ name: "Essai" }), {
+    /** Images du disque → assets (data URI : rien n'est envoyé nulle part). */
+    async function addFiles(files) {
+      const assets = [];
+      for (const file of files) {
+        if (!file.type.startsWith("image/")) continue;
+        const src = await new Promise((resolve) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.readAsDataURL(file); });
+        const img = new Image(); img.src = src; await img.decode().catch(() => {});
+        const asset = assetFromFile(file.name, { width: img.naturalWidth, height: img.naturalHeight, ppc: 200 });
+        assets.push({ ...asset, src });
+      }
+      library = mergeAssets(library, assets);
+      store("cadastre-lab-library", library);
+      window.editor.setLibrary(library);
+    }
+    window.addLabFiles = addFiles;
+
+    const input = document.getElementById("files");
+    input.addEventListener("change", () => { addFiles([...input.files]); input.value = ""; });
+    document.addEventListener("dragover", (e) => e.preventDefault());
+    document.addEventListener("drop", (e) => { e.preventDefault(); addFiles([...e.dataTransfer.files]); });
+
+    window.editor = new MapEditor(document.getElementById("editor"), load("cadastre-lab") ?? createMap({ name: "Essai" }), {
       t,
-      onSave: (map) => {
-        try { localStorage.setItem("cadastre-lab", JSON.stringify(map)); } catch {}
-        window.editor.markSaved(map);
-      },
+      library,
+      onOpenLibrary: () => input.click(),
+      onSave: (map) => { store("cadastre-lab", map); window.editor.markSaved(map); },
       onExport: (map) => {
         const url = URL.createObjectURL(new Blob([renderSVG(map)], { type: "image/svg+xml" }));
         window.open(url, "_blank");

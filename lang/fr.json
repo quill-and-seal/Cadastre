@@ -95,7 +95,14 @@
       "GridSize": "Pixels par case",
       "Background": "Fond",
       "Apply": "Appliquer",
-      "ApplyHint": "Ce qui dépasse de la nouvelle taille est rogné (Ctrl+Z pour revenir)."
+      "ApplyHint": "Ce qui dépasse de la nouvelle taille est rogné (Ctrl+Z pour revenir).",
+      "Library": "Bibliothèque",
+      "ManageLibrary": "Gérer la bibliothèque",
+      "NoTextures": "Aucune texture importée. Le bouton à droite ouvre la bibliothèque.",
+      "NoProps": "Aucun objet importé. Le bouton à droite ouvre la bibliothèque.",
+      "Search": "Rechercher…",
+      "MoreResults": "… et {n} autres : affine la recherche.",
+      "NoResults": "Rien ne correspond."
     },
     "Terrains": {
       "stone": "Dalles",
@@ -131,13 +138,57 @@
       "Updated": "Scène « {scene} » mise à jour.",
       "Failed": "Export impossible : {error}",
       "Empty": "La carte est vide : rien à exporter.",
-      "Reduced": "Carte très grande : l'image est réduite à {size} px de côté, Foundry l'étire à la taille de la scène."
+      "Reduced": "Carte très grande : l'image est réduite à {size} px de côté, Foundry l'étire à la taille de la scène.",
+      "Missing": "Images introuvables, laissées vides sur la scène : {list}"
     },
     "Close": {
       "Title": "Modifications non enregistrées",
       "Content": "Enregistrer la carte avant de fermer ?",
       "Save": "Enregistrer",
       "Discard": "Fermer sans enregistrer"
+    },
+    "Library": {
+      "Title": "Cadastre : bibliothèque d'assets",
+      "MenuName": "Bibliothèque d'assets",
+      "MenuLabel": "Ouvrir la bibliothèque",
+      "MenuHint": "Images de l'extérieur (packs d'assets, tes fichiers) utilisées comme objets ou textures de sol dans l'éditeur.",
+      "AddFile": "Fichier",
+      "AddFileHint": "Ajouter une image déjà présente dans les données de Foundry",
+      "AddFolder": "Dossier",
+      "AddFolderHint": "Importer toutes les images d'un dossier et de ses sous-dossiers (un pack d'assets, par exemple)",
+      "Upload": "Téléverser",
+      "UploadHint": "Envoyer des images depuis ton ordinateur dans le monde",
+      "ExportJson": "Exporter la liste",
+      "ImportJson": "Importer une liste",
+      "Search": "Rechercher par nom ou étiquette…",
+      "AllKinds": "Tous les types",
+      "AllTags": "Toutes les étiquettes",
+      "Kinds": {
+        "prop": "Objet",
+        "texture": "Texture de sol"
+      },
+      "KindAuto": "Deviner (dossier « textures », « sols »… → texture)",
+      "Count": "{shown} sur {total}",
+      "Empty": "La bibliothèque est vide. Ajoute un fichier, un dossier entier ou téléverse des images.",
+      "Name": "Nom",
+      "Kind": "Type",
+      "Width": "Largeur (cases)",
+      "Height": "Hauteur (cases)",
+      "Tags": "Étiquettes (virgules)",
+      "Soft": "Bord fondu (sol naturel)",
+      "Save": "Enregistrer",
+      "Delete": "Retirer",
+      "DeleteHint": "Retire l'asset de la bibliothèque. Le fichier reste en place, et les cartes qui l'utilisent gardent leur copie.",
+      "ImportTitle": "Importer des images",
+      "ImportFrom": "Depuis : <strong>{path}</strong>",
+      "Ppc": "Pixels par case des images",
+      "PpcHint": "200 pour la plupart des packs. Une taille écrite dans le nom du fichier (« _2x1 ») l'emporte pour les objets.",
+      "Scanning": "Cadastre : lecture du dossier…",
+      "Imported": "{n} asset(s) ajouté(s) ou mis à jour.",
+      "NothingFound": "Aucune image trouvée.",
+      "Truncated": "Dossier très grand : seules les {n} premières images ont été lues.",
+      "Uploading": "Cadastre : envoi de {n} image(s)…",
+      "BadJson": "Fichier de liste illisible."
     }
   }
 }
