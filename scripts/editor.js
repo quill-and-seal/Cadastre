@@ -6,6 +6,7 @@ import { TERRAINS, PROPS } from "./catalog.js";
 import * as M from "./model.js";
 import * as P from "./poly.js";
 import { flattenNodes, rectNodes, ellipseNodes, smoothNodes, rdp, cleanNode, polylineLength } from "./curves.js";
+import { ringsPath as ringsPathD } from "./render.js";
 import { renderDefs, renderTerrains, renderProps, renderWalls, renderGrid, polylinePath, terrainFill, terrainPatternId, propArt, defaultResolve } from "./render.js";
 import { isAssetKey, assetIdOf, assetKey, embedAsset, refreshMapAssets, filterAssets, normalizeLibrary, pruneAssets } from "./library.js";
 import { HISTORY_LIMIT, MIN_CELLS, MAX_CELLS, MIN_GRID_SIZE, MAX_GRID_SIZE } from "./constants.js";
@@ -13,6 +14,7 @@ import { HISTORY_LIMIT, MIN_CELLS, MAX_CELLS, MIN_GRID_SIZE, MAX_GRID_SIZE } fro
 export const TOOLS = [
   { id: "select", icon: "fa-arrow-pointer" },
   { id: "brush", icon: "fa-paintbrush" },
+  { id: "fill", icon: "fa-fill-drip" },
   { id: "shape", icon: "fa-draw-polygon" },
   { id: "wall", icon: "fa-pen-nib" },
   { id: "door", icon: "fa-door-open" },
@@ -286,6 +288,14 @@ export class MapEditor {
         if (p) out += disc(p, r, erase ? "cad-brush-erase" : "cad-brush");
         break;
       }
+      case "fill": {
+        const prev = this._fillPreview;
+        if (prev?.rings.length) {
+          out += `<path d="${ringsPathD(prev.rings)}" fill="${this._fill(o.terrain)}" fill-opacity="0.6" class="cad-preview" stroke-width="${2 * px}"/>`;
+        }
+        if (p) out += dot(p, "cad-dot", 3);
+        break;
+      }
       case "shape": {
         if (drag?.kind === "shape" && drag.end) {
           const nodes = this._shapeNodes(drag.start, drag.end);
@@ -393,6 +403,7 @@ export class MapEditor {
     if (this.pen && tool !== this.tool) this.pen = null;
     this.tool = tool;
     this.hover = null;
+    this._fillPreview = null;
     for (const b of this.root.querySelectorAll("[data-tool]")) b.classList.toggle("active", b.dataset.tool === tool);
     this.el.hint.textContent = `${this.t(`CADASTRE.Hints.${tool}`)} ${this.t("CADASTRE.Hints.pan")}`;
     this.el.viewport.dataset.tool = tool;
@@ -423,6 +434,9 @@ export class MapEditor {
         break;
       case "brush":
         html = title("CADASTRE.Panel.BrushSize") + slider("brushRadius", o.brushRadius, 0.1, 5, 0.05) + terrains();
+        break;
+      case "fill":
+        html = terrains();
         break;
       case "shape":
         html = title("CADASTRE.Panel.Shape") + segmented("shapeMode", ["rect", "ellipse", "pen"], "CADASTRE.Panel.ShapeModes")
@@ -632,6 +646,9 @@ export class MapEditor {
         });
       }
       if (best) return best;
+      // Sinon, sur le mur le plus proche : une cloison s'arrête pile contre le mur.
+      const onWall = M.nearestWallPoint(this.map, p[0], p[1], tol);
+      if (onWall && !(skip && M.nearestWall(this.map, p[0], p[1], tol)?.wall.id === skip.wall)) return onWall;
     }
     if (this.snap !== this.mods.ctrl) return [Math.round(p[0] / SNAP_STEP) * SNAP_STEP, Math.round(p[1] / SNAP_STEP) * SNAP_STEP];
     return [f2(p[0]), f2(p[1])];
@@ -820,7 +837,7 @@ export class MapEditor {
     else if (ctrl && key === "y") this.redo();
     else if (ctrl && key === "s") this.save();
     else if (ctrl && key === "d") this._duplicateSelection();
-    else if (!ctrl && /^[1-7]$/.test(event.key)) this._setTool(TOOLS[Number(event.key) - 1].id);
+    else if (!ctrl && /^[1-8]$/.test(event.key)) this._setTool(TOOLS[Number(event.key) - 1].id);
     else if (!ctrl && key === "r") this._rotate(event.shiftKey ? -15 : 15);
     else if (key === "enter") this._finishPen(this.pen?.purpose === "shape");
     else if (key === "escape") { if (this.pen) this.pen = null; else if (this.drag) this._cancelDrag(); else this._select(null); }
@@ -915,6 +932,13 @@ export class MapEditor {
       case "eraser":
         this.drag = { kind: "stroke", points: [p], erase: this.tool === "eraser" || event.altKey };
         break;
+      case "fill": {
+        this._begin();
+        const changed = this._useAsset(o.terrain) && M.fillAt(this.map, p[0], p[1], o.terrain, this._barrier());
+        this._commit(changed);
+        this._fillPreview = null;
+        break;
+      }
       case "shape":
         if (o.shapeMode === "pen") this._penDown(p, "shape");
         else this.drag = { kind: "shape", start: this._snap(p), end: null };
@@ -950,6 +974,7 @@ export class MapEditor {
     const drag = this.drag;
     if (!drag) {
       if (this.tool === "select") this.hover = this._hitTest(p);
+      if (this.tool === "fill") this._queueFillPreview(p);
       return this._schedule("overlay");
     }
     switch (drag.kind) {
@@ -1125,6 +1150,32 @@ export class MapEditor {
       this._commit(!!M.addWall(this.map, nodes, closed && nodes.length >= 3), { terrain: false });
     }
     this._renderOverlay();
+  }
+
+  /* -------------------------------------------- */
+  /*  Remplissage                                 */
+  /* -------------------------------------------- */
+
+  /** Murs épaissis, recalculés seulement quand les murs ou les portes changent. */
+  _barrier() {
+    const sig = JSON.stringify([this.map.walls, this.map.width, this.map.height]);
+    if (this._barrierCache?.sig !== sig) this._barrierCache = { sig, rings: M.wallBarrier(this.map) };
+    return this._barrierCache.rings;
+  }
+
+  /** Aperçu de la pièce qui serait remplie, calculé quand le pointeur ralentit. */
+  _queueFillPreview(p) {
+    clearTimeout(this._fillTimer);
+    const inside = this._fillPreview?.rings.length && P.pointInRings(this._fillPreview.rings, p[0], p[1])
+      && this._fillPreview.sig === this._barrierCache?.sig;
+    if (inside) return;
+    this._fillPreview = null;
+    this._fillTimer = setTimeout(() => {
+      if (this.tool !== "fill" || !this.pointer) return;
+      const rings = M.enclosedArea(this.map, this.pointer[0], this.pointer[1], M.FILL_WALL_RADIUS, this._barrier());
+      this._fillPreview = { rings, sig: this._barrierCache.sig };
+      this._renderOverlay();
+    }, 90);
   }
 
   /* -------------------------------------------- */

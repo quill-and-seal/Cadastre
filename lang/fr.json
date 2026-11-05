@@ -34,21 +34,23 @@
     "Tools": {
       "select": "Sélection (1)",
       "brush": "Pinceau de sol (2)",
-      "shape": "Forme (3)",
-      "wall": "Mur (4)",
-      "door": "Porte (5)",
-      "prop": "Objet (6)",
-      "eraser": "Gomme (7)"
+      "fill": "Remplir une pièce (3)",
+      "shape": "Forme (4)",
+      "wall": "Mur (5)",
+      "door": "Porte (6)",
+      "prop": "Objet (7)",
+      "eraser": "Gomme (8)"
     },
     "Hints": {
       "select": "Clic : sélectionner, glisser : déplacer. Mur sélectionné : glisse nœuds et poignées (Alt : poignées indépendantes), double-clic sur un nœud : coin ↔ courbe, double-clic sur le mur : nouveau nœud. Suppr : effacer, Ctrl+D : dupliquer.",
       "brush": "Glisse pour peindre le sol à main levée. Alt : efface le sol.",
       "shape": "Rectangle, ellipse : glisse (Maj : carré, cercle). Plume : clic pour un coin, clic-glisser pour une courbe, clic sur le premier point ou Entrée pour fermer.",
-      "wall": "Plume : clic pour un coin, clic-glisser pour une courbe, Entrée ou double-clic pour finir, clic sur le premier point pour fermer. Main levée : glisse.",
+      "wall": "Plume : clic pour un coin, clic-glisser pour une courbe, Entrée ou double-clic pour finir, clic sur le premier point pour fermer. Main levée : glisse. Les bouts s'accrochent aux murs voisins : une cloison ferme bien sa pièce.",
       "door": "Clic sur un mur pour y poser une porte.",
       "prop": "Clic pour poser. R et Maj+R : tourner de 15°.",
       "eraser": "Glisse pour effacer.",
-      "pan": "Clic droit, molette enfoncée ou Espace + clic : déplacer la vue. Molette : zoom. Échap : annuler le tracé."
+      "pan": "Clic droit, molette enfoncée ou Espace + clic : déplacer la vue. Molette : zoom. Échap : annuler le tracé.",
+      "fill": "Clic dans une pièce : pose le sol jusqu'aux murs (portes fermées comprises). Dehors, remplit tout ce qui n'est pas enclos."
     },
     "Panel": {
       "Terrain": "Sol",
