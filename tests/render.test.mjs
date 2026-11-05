@@ -64,3 +64,15 @@ test("l'image est réduite au-delà de la taille maximale, pas la scène", () =>
 test("une carte vide se rend sans erreur", () => {
   assert.match(renderSVG(createMap({ width: 4, height: 4 })), /<\/svg>$/);
 });
+
+test("un chemin se dessine avec sa bordure, sous les objets", async () => {
+  const { addPath } = await import("../scripts/model.js");
+  const map = createMap({ width: 12, height: 10 });
+  const q = addPath(map, [{ x: 1, y: 5 }, { x: 6, y: 2, i: [-2, 0], o: [2, 0] }, { x: 11, y: 5 }], { width: 2, terrain: "cobble", edge: "wood", edgeWidth: 0.4 });
+  addProp(map, "barrel", 6, 2);
+  const svg = renderSVG(map);
+  assert.ok(q);
+  assert.match(svg, /stroke="url\(#cad-t-wood\)" stroke-width="2.8"/);
+  assert.match(svg, new RegExp(`data-path="${q.id}"[^>]*stroke="url\\(#cad-t-cobble\\)" stroke-width="2"`));
+  assert.ok(svg.indexOf(`data-path="${q.id}"`) < svg.indexOf('data-prop="p'), "le chemin passe sous les objets");
+});

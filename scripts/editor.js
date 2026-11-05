@@ -7,20 +7,24 @@ import * as M from "./model.js";
 import * as P from "./poly.js";
 import { flattenNodes, rectNodes, ellipseNodes, smoothNodes, rdp, cleanNode, polylineLength } from "./curves.js";
 import { ringsPath as ringsPathD } from "./render.js";
+import { renderPaths } from "./render.js";
 import { renderDefs, renderTerrains, renderProps, renderWalls, renderGrid, polylinePath, terrainFill, terrainPatternId, propArt, defaultResolve } from "./render.js";
 import { isAssetKey, assetIdOf, assetKey, embedAsset, refreshMapAssets, filterAssets, normalizeLibrary, pruneAssets } from "./library.js";
 import { HISTORY_LIMIT, MIN_CELLS, MAX_CELLS, MIN_GRID_SIZE, MAX_GRID_SIZE } from "./constants.js";
 
+/** Outils, dans l'ordre de la barre ; `key` : raccourci (les anciens gardent le leur). */
 export const TOOLS = [
-  { id: "select", icon: "fa-arrow-pointer" },
-  { id: "brush", icon: "fa-paintbrush" },
-  { id: "fill", icon: "fa-fill-drip" },
-  { id: "shape", icon: "fa-draw-polygon" },
-  { id: "wall", icon: "fa-pen-nib" },
-  { id: "door", icon: "fa-door-open" },
-  { id: "prop", icon: "fa-chair" },
-  { id: "eraser", icon: "fa-eraser" }
+  { id: "select", icon: "fa-arrow-pointer", key: "1" },
+  { id: "brush", icon: "fa-paintbrush", key: "2" },
+  { id: "fill", icon: "fa-fill-drip", key: "3" },
+  { id: "shape", icon: "fa-draw-polygon", key: "4" },
+  { id: "path", icon: "fa-route", key: "9" },
+  { id: "wall", icon: "fa-pen-nib", key: "5" },
+  { id: "door", icon: "fa-door-open", key: "6" },
+  { id: "prop", icon: "fa-chair", key: "7" },
+  { id: "eraser", icon: "fa-eraser", key: "8" }
 ];
+const isCurve = (sel) => sel?.type === "wall" || sel?.type === "path";
 const ERASE_MODES = ["all", "floor", "walls", "props"];
 const MIN_SCALE = 4, MAX_SCALE = 260;
 const SNAP_STEP = 0.5;
@@ -65,6 +69,11 @@ export class MapEditor {
       shapeMode: "rect",
       shapeTarget: "room",
       wallMode: "pen",
+      pathMode: "pen",
+      pathWidth: 2,
+      pathTerrain: "cobble",
+      pathEdge: "wood",
+      pathEdgeWidth: 0.35,
       doorWidth: 1,
       doorKind: "door",
       propType: PROPS[0].id,
@@ -134,6 +143,7 @@ export class MapEditor {
             <g class="cad-world">
               <rect class="cad-bg"></rect>
               <g class="cad-terrain"></g>
+              <g class="cad-paths"></g>
               <g class="cad-props"></g>
               <g class="cad-walls"></g>
               <g class="cad-grid"></g>
@@ -165,7 +175,7 @@ export class MapEditor {
     const $ = (sel) => this.root.querySelector(sel);
     this.el = {
       viewport: $(".cad-viewport"), svg: $(".cad-svg"), defs: $(".cad-defs"), world: $(".cad-world"),
-      bg: $(".cad-bg"), terrain: $(".cad-terrain"), props: $(".cad-props"), walls: $(".cad-walls"),
+      bg: $(".cad-bg"), terrain: $(".cad-terrain"), paths: $(".cad-paths"), props: $(".cad-props"), walls: $(".cad-walls"),
       grid: $(".cad-grid"), border: $(".cad-border"), overlay: $(".cad-overlay"), extraDefs: $(".cad-extra-defs"),
       toolOptions: $(".cad-tool-options"), mapOptions: $(".cad-map-options"),
       coords: $(".cad-coords"), hint: $(".cad-hint"), dirty: $(".cad-dirty")
@@ -235,6 +245,7 @@ export class MapEditor {
     }
     this.el.bg.setAttribute("fill", map.background);
     if (full || terrain) this.el.terrain.innerHTML = renderTerrains(map, prefix);
+    this.el.paths.innerHTML = renderPaths(map, prefix);
     this.el.props.innerHTML = renderProps(map, prefix, this.resolve);
     this.el.walls.innerHTML = renderWalls(map, "editor", prefix);
     this.el.grid.style.display = this.showGrid ? "" : "none";
@@ -305,6 +316,15 @@ export class MapEditor {
         else if (p && !drag) out += dot(this._snap(p), "cad-dot");
         break;
       }
+      case "path": {
+        const w = o.pathWidth + (o.pathEdge ? 2 * o.pathEdgeWidth : 0);
+        const band = (pts) => `<path d="${polylinePath(pts)}" fill="none" stroke="${this._fill(o.pathTerrain)}" stroke-opacity="0.7" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+        if (drag?.kind === "freepath" && drag.points.length > 1) out += band(drag.points);
+        if (this.pen?.purpose === "path" && this.pen.nodes.length > 1) out += band(flattenNodes(this.pen.nodes, false, 0.02));
+        if (this.pen) out += this._penPreview(px);
+        else if (p && !drag && o.pathMode === "pen") out += dot(this._snap(p), "cad-dot");
+        break;
+      }
       case "wall": {
         if (drag?.kind === "freewall" && drag.points.length > 1) out += pathEl(polylinePath(drag.points), "cad-preview", 3);
         if (this.pen) out += this._penPreview(px);
@@ -330,11 +350,17 @@ export class MapEditor {
   /** Contour de surbrillance d'un objet ; `handles` : nœuds et poignées d'un mur. */
   _outline(target, cls, px, handles = false) {
     const map = this.map;
-    if (target.type === "wall") {
-      const wall = map.walls.find((w) => w.id === target.id);
+    if (target.type === "wall" || target.type === "path") {
+      const wall = M.curveById(map, target.id);
       if (!wall) return "";
       const pts = M.wallPoints(wall);
-      let out = `<path class="${cls}" d="${polylinePath(wall.closed ? [...pts, pts[0]] : pts)}" stroke-width="${3 * px}"/>`;
+      let out = "";
+      if (target.type === "path") {
+        // Bords de la bande, pour voir la largeur du chemin.
+        const w = wall.width + (wall.edge ? 2 * wall.edgeWidth : 0);
+        out += `<path class="${cls}" d="${polylinePath(wall.closed ? [...pts, pts[0]] : pts)}" stroke-width="${w}" stroke-opacity="0.18" stroke-linecap="round" stroke-linejoin="round"/>`;
+      }
+      out += `<path class="${cls}" d="${polylinePath(wall.closed ? [...pts, pts[0]] : pts)}" stroke-width="${3 * px}"/>`;
       if (!handles) return out;
       wall.nodes.forEach((n, i) => {
         for (const h of ["i", "o"]) {
@@ -356,7 +382,14 @@ export class MapEditor {
       const prop = map.props.find((q) => q.id === target.id);
       const def = prop && M.propDef(map, prop.type);
       if (!def) return "";
-      return `<rect class="${cls}" transform="translate(${prop.x} ${prop.y}) rotate(${prop.a}) scale(${prop.k})" x="${-def.w / 2}" y="${-def.h / 2}" width="${def.w}" height="${def.h}" stroke-width="${(2 * px) / prop.k}" fill="none"/>`;
+      let out = `<rect class="${cls}" transform="translate(${prop.x} ${prop.y}) rotate(${prop.a}) scale(${prop.k})" x="${-def.w / 2}" y="${-def.h / 2}" width="${def.w}" height="${def.h}" stroke-width="${(2 * px) / prop.k}" fill="none"/>`;
+      if (!handles) return out;
+      // Poignées de transformation : coins pour l'échelle, rond au-dessus pour la rotation.
+      const g = this._propGizmo(prop, def);
+      out += `<path class="cad-handle-line" d="M${g.top[0]} ${g.top[1]}L${g.rot[0]} ${g.rot[1]}" stroke-width="${1.2 * px}"/>`;
+      for (const c of g.corners) out += `<rect class="cad-node" x="${c[0] - 4.5 * px}" y="${c[1] - 4.5 * px}" width="${9 * px}" height="${9 * px}" stroke-width="${1.5 * px}"/>`;
+      out += `<circle class="cad-handle cad-rot" cx="${g.rot[0]}" cy="${g.rot[1]}" r="${5.5 * px}" stroke-width="${1.5 * px}"/>`;
+      return out;
     }
     return "";
   }
@@ -421,11 +454,13 @@ export class MapEditor {
       `<div class="cad-slider"><input type="range" data-field="${field}" min="${min}" max="${max}" step="${step}" value="${value}"><output>${f2(value)}</output></div>`;
     const number = (field, label, value, min, max, step) =>
       `<label>${esc(t(label))}<input type="number" data-field="${field}" min="${min}" max="${max}" step="${step}" value="${value}"></label>`;
-    const terrains = () => title("CADASTRE.Panel.Terrain") + `<div class="cad-swatches">${TERRAINS.map((x) => `
-        <button type="button" data-opt="terrain" data-val="${x.id}" class="${x.id === o.terrain ? "active" : ""}" title="${esc(t(`CADASTRE.Terrains.${x.id}`))}">
+    const terrains = (opt = "terrain", label = "CADASTRE.Panel.Terrain", none = false) => title(label) + `<div class="cad-swatches">${
+      none ? `<button type="button" data-opt="${opt}" data-val="" class="${!o[opt] ? "active" : ""}"><span class="cad-thumb cad-none"></span><span>${esc(t("CADASTRE.Panel.NoEdge"))}</span></button>` : ""
+    }${TERRAINS.map((x) => `
+        <button type="button" data-opt="${opt}" data-val="${x.id}" class="${x.id === o[opt] ? "active" : ""}" title="${esc(t(`CADASTRE.Terrains.${x.id}`))}">
           <svg viewBox="0 0 1 1"><rect width="1" height="1" fill="url(#${this.prefix}-t-${x.id})"/></svg>
           <span>${esc(t(`CADASTRE.Terrains.${x.id}`))}</span>
-        </button>`).join("")}</div>` + this._libraryPalette("texture", "terrain");
+        </button>`).join("")}</div>` + this._libraryPalette("texture", opt);
 
     let html = "";
     switch (this.tool) {
@@ -445,6 +480,13 @@ export class MapEditor {
         break;
       case "wall":
         html = title("CADASTRE.Panel.WallMode") + segmented("wallMode", ["pen", "free"], "CADASTRE.Panel.WallModes");
+        break;
+      case "path":
+        html = title("CADASTRE.Panel.WallMode") + segmented("pathMode", ["pen", "free"], "CADASTRE.Panel.WallModes")
+          + title("CADASTRE.Panel.PathWidth") + slider("pathWidth", o.pathWidth, 0.2, 12, 0.1)
+          + terrains("pathTerrain", "CADASTRE.Panel.PathTerrain")
+          + title("CADASTRE.Panel.EdgeWidth") + slider("pathEdgeWidth", o.pathEdgeWidth, 0.05, 2, 0.05)
+          + terrains("pathEdge", "CADASTRE.Panel.PathEdge", true);
         break;
       case "door":
         html = title("CADASTRE.Panel.Door") + segmented("doorKind", ["door", "secret"], "CADASTRE.Panel.DoorKinds")
@@ -479,6 +521,21 @@ export class MapEditor {
       if (!wall) return "";
       return `<p class="cad-note"><strong>${esc(t("CADASTRE.Panel.SelWall"))}</strong> · ${esc(t("CADASTRE.Panel.Nodes", { n: wall.nodes.length }))}</p>
         <label class="cad-check"><input type="checkbox" data-field="selWallClosed" ${wall.closed ? "checked" : ""} ${wall.nodes.length < 3 ? "disabled" : ""}> ${esc(t("CADASTRE.Panel.WallClosed"))}</label>
+        ${actions()}`;
+    }
+    if (sel.type === "path") {
+      const q = this.map.paths.find((x) => x.id === sel.id);
+      if (!q) return "";
+      const options = (current, none) => (none ? `<option value="" ${!current ? "selected" : ""}>${esc(t("CADASTRE.Panel.NoEdge"))}</option>` : "")
+        + this._terrainChoices().map(([key, name]) => `<option value="${esc(key)}" ${key === current ? "selected" : ""}>${esc(name)}</option>`).join("");
+      return `<p class="cad-note"><strong>${esc(t("CADASTRE.Panel.SelPath"))}</strong> · ${esc(t("CADASTRE.Panel.Nodes", { n: q.nodes.length }))}</p>
+        <div class="cad-row">
+          <label>${esc(t("CADASTRE.Panel.PathWidth"))}<input type="number" data-field="selPathWidth" min="0.2" max="20" step="0.1" value="${q.width}"></label>
+          <label>${esc(t("CADASTRE.Panel.EdgeWidth"))}<input type="number" data-field="selPathEdgeWidth" min="0.05" max="3" step="0.05" value="${q.edgeWidth}"></label>
+        </div>
+        <label>${esc(t("CADASTRE.Panel.PathTerrain"))}<select data-field="selPathTerrain">${options(q.terrain, false)}</select></label>
+        <label>${esc(t("CADASTRE.Panel.PathEdge"))}<select data-field="selPathEdge">${options(q.edge, true)}</select></label>
+        <label class="cad-check"><input type="checkbox" data-field="selPathClosed" ${q.closed ? "checked" : ""} ${q.nodes.length < 3 ? "disabled" : ""}> ${esc(t("CADASTRE.Panel.PathClosed"))}</label>
         ${actions()}`;
     }
     if (sel.type === "door") {
@@ -541,9 +598,9 @@ export class MapEditor {
   _checkSelection() {
     const sel = this.selection;
     if (!sel) return;
-    const list = { wall: this.map.walls, door: this.map.doors, prop: this.map.props }[sel.type];
+    const list = { wall: this.map.walls, path: this.map.paths, door: this.map.doors, prop: this.map.props }[sel.type];
     if (!list?.some((x) => x.id === sel.id)) { this.selection = null; this.selNode = -1; }
-    const wall = sel.type === "wall" && this.map.walls.find((w) => w.id === sel.id);
+    const wall = isCurve(sel) && M.curveById(this.map, sel.id);
     if (wall && this.selNode >= wall.nodes.length) this.selNode = -1;
   }
 
@@ -668,16 +725,41 @@ export class MapEditor {
     const prop = M.propAt(this.map, p[0], p[1]);
     if (prop) return { type: "prop", id: prop.id };
     const hit = M.nearestWall(this.map, p[0], p[1], tol);
-    return hit ? { type: "wall", id: hit.wall.id } : null;
+    if (hit) return { type: "wall", id: hit.wall.id };
+    const path = M.nearestPath(this.map, p[0], p[1], 0);
+    return path ? { type: "path", id: path.path.id } : null;
+  }
+
+  /** Repères des poignées d'un objet : coins, milieu du haut, poignée de rotation. */
+  _propGizmo(prop, def) {
+    const r = (prop.a * Math.PI) / 180, c = Math.cos(r), s = Math.sin(r);
+    const at = (lx, ly) => [prop.x + (lx * c - ly * s) * prop.k, prop.y + (lx * s + ly * c) * prop.k];
+    const hw = def.w / 2, hh = def.h / 2;
+    const lift = 26 / this.view.s / prop.k;
+    return {
+      corners: [at(-hw, -hh), at(hw, -hh), at(hw, hh), at(-hw, hh)],
+      top: at(0, -hh),
+      rot: at(0, -hh - lift),
+      half: Math.hypot(hw, hh)
+    };
   }
 
   /** Nœud ou poignée du mur sélectionné sous le pointeur. */
   _handleHit(p) {
     const sel = this.selection;
-    if (sel?.type !== "wall") return null;
-    const wall = this.map.walls.find((w) => w.id === sel.id);
-    if (!wall) return null;
     const tol = HIT_PX / this.view.s;
+    if (sel?.type === "prop") {
+      const prop = this.map.props.find((q) => q.id === sel.id);
+      const def = prop && M.propDef(this.map, prop.type);
+      if (!def) return null;
+      const g = this._propGizmo(prop, def);
+      if (dist(g.rot, p) < tol * 1.2) return { kind: "rotate", id: prop.id };
+      if (g.corners.some((c) => dist(c, p) < tol)) return { kind: "scale", id: prop.id, half: g.half };
+      return null;
+    }
+    if (!isCurve(sel)) return null;
+    const wall = M.curveById(this.map, sel.id);
+    if (!wall) return null;
     for (let i = 0; i < wall.nodes.length; i++) {
       const n = wall.nodes[i];
       for (const which of ["i", "o"]) {
@@ -728,7 +810,7 @@ export class MapEditor {
     if (b.dataset.tool) return this._setTool(b.dataset.tool);
     if (b.dataset.opt) {
       this.opts[b.dataset.opt] = b.dataset.val;
-      if (b.dataset.opt === "wallMode" || b.dataset.opt === "shapeMode") this.pen = null;
+      if (["wallMode", "shapeMode", "pathMode"].includes(b.dataset.opt)) this.pen = null;
       this._renderPanel();
       return this._renderOverlay();
     }
@@ -755,7 +837,7 @@ export class MapEditor {
     const input = event.target;
     const field = input.dataset?.field;
     if (!field) return;
-    const value = input.type === "checkbox" ? input.checked : Number(input.value);
+    const value = input.type === "checkbox" ? input.checked : input.tagName === "SELECT" ? input.value : Number(input.value);
     if (input.type === "range") input.nextElementSibling.textContent = f2(value);
     if (field in this.opts) {
       if (Number.isFinite(value)) this.opts[field] = value;
@@ -769,6 +851,13 @@ export class MapEditor {
     else if (field === "selDoorWidth") changed = M.updateDoor(this.map, id, { w: value });
     else if (field === "selPropAngle") changed = M.updateProp(this.map, id, { a: value });
     else if (field === "selPropScale") changed = M.updateProp(this.map, id, { k: value });
+    else if (field === "selPathWidth") changed = M.updatePath(this.map, id, { width: value });
+    else if (field === "selPathEdgeWidth") changed = M.updatePath(this.map, id, { edgeWidth: value });
+    else if (field === "selPathClosed") changed = M.updatePath(this.map, id, { closed: value });
+    else if (field === "selPathTerrain" || field === "selPathEdge") {
+      const key = value || null;
+      if (!key || this._useAsset(key)) changed = M.updatePath(this.map, id, field === "selPathTerrain" ? { terrain: key } : { edge: key });
+    }
     this._commit(changed, { terrain: false });
   }
 
@@ -802,10 +891,10 @@ export class MapEditor {
     if (!sel) return;
     this._begin();
     let changed = false;
-    if (sel.type === "wall" && this.selNode >= 0) {
+    if (isCurve(sel) && this.selNode >= 0) {
       changed = M.removeNode(this.map, sel.id, this.selNode);
       this.selNode = -1;
-    } else if (sel.type === "wall") changed = M.removeWall(this.map, sel.id);
+    } else if (isCurve(sel)) changed = M.removeWall(this.map, sel.id);
     else if (sel.type === "door") changed = M.removeDoor(this.map, sel.id);
     else if (sel.type === "prop") changed = M.removeProp(this.map, sel.id);
     this._commit(changed, { terrain: false });
@@ -816,7 +905,7 @@ export class MapEditor {
     const sel = this.selection;
     if (!sel || sel.type === "door") return;
     this._begin();
-    const copy = sel.type === "wall" ? M.duplicateWall(this.map, sel.id) : M.duplicateProp(this.map, sel.id);
+    const copy = isCurve(sel) ? M.duplicateWall(this.map, sel.id) : M.duplicateProp(this.map, sel.id);
     this._commit(!!copy, { terrain: false });
     if (copy) this._select({ type: sel.type, id: copy.id });
   }
@@ -837,7 +926,7 @@ export class MapEditor {
     else if (ctrl && key === "y") this.redo();
     else if (ctrl && key === "s") this.save();
     else if (ctrl && key === "d") this._duplicateSelection();
-    else if (!ctrl && /^[1-8]$/.test(event.key)) this._setTool(TOOLS[Number(event.key) - 1].id);
+    else if (!ctrl && TOOLS.some((x) => x.key === event.key)) this._setTool(TOOLS.find((x) => x.key === event.key).id);
     else if (!ctrl && key === "r") this._rotate(event.shiftKey ? -15 : 15);
     else if (key === "enter") this._finishPen(this.pen?.purpose === "shape");
     else if (key === "escape") { if (this.pen) this.pen = null; else if (this.drag) this._cancelDrag(); else this._select(null); }
@@ -915,7 +1004,7 @@ export class MapEditor {
         const h = this._handleHit(p);
         if (h) {
           this._begin();
-          this.selNode = h.index;
+          if (h.index != null) this.selNode = h.index;
           this.drag = { ...h, moved: false };
           break;
         }
@@ -946,6 +1035,10 @@ export class MapEditor {
       case "wall":
         if (o.wallMode === "pen") this._penDown(p, "wall");
         else this.drag = { kind: "freewall", points: [this._snap(p, true)] };
+        break;
+      case "path":
+        if (o.pathMode === "pen") this._penDown(p, "path");
+        else this.drag = { kind: "freepath", points: [p] };
         break;
       case "door": {
         const target = this._doorTarget(p);
@@ -991,8 +1084,27 @@ export class MapEditor {
       case "shape":
         drag.end = this._snap(p);
         break;
-      case "freewall": {
+      case "freewall":
+      case "freepath": {
         if (dist(drag.points.at(-1), p) > 0.08) drag.points.push(p);
+        break;
+      }
+      case "rotate": {
+        const prop = this.map.props.find((q) => q.id === drag.id);
+        if (!prop) break;
+        let a = (Math.atan2(p[1] - prop.y, p[0] - prop.x) * 180) / Math.PI + 90;
+        if (!event.altKey) a = Math.round(a / 15) * 15; // Alt : rotation libre
+        drag.moved = M.updateProp(this.map, prop.id, { a }) || drag.moved;
+        this._schedule("map");
+        break;
+      }
+      case "scale": {
+        const prop = this.map.props.find((q) => q.id === drag.id);
+        if (!prop) break;
+        let k = Math.hypot(p[0] - prop.x, p[1] - prop.y) / drag.half;
+        if (!event.altKey) k = Math.round(k / 0.05) * 0.05; // Alt : échelle libre
+        drag.moved = M.updateProp(this.map, prop.id, { k }) || drag.moved;
+        this._schedule("map");
         break;
       }
       case "pen": {
@@ -1007,13 +1119,13 @@ export class MapEditor {
       }
       case "node": {
         const sel = this.selection;
-        const q = this._snap(p, true, { wall: sel.id, index: drag.index });
+        const q = this._snap(p, sel.type === "wall", { wall: sel.id, index: drag.index });
         drag.moved = M.moveNode(this.map, sel.id, drag.index, q[0], q[1]) || drag.moved;
         this._schedule("map");
         break;
       }
       case "handle": {
-        const wall = this.map.walls.find((w) => w.id === this.selection.id);
+        const wall = M.curveById(this.map, this.selection.id);
         const n = wall?.nodes[drag.index];
         if (n) drag.moved = M.moveHandle(this.map, wall.id, drag.index, drag.which, p[0] - n.x, p[1] - n.y, !event.altKey) || drag.moved;
         this._schedule("map");
@@ -1024,7 +1136,7 @@ export class MapEditor {
         if (t.type === "prop") {
           const q = this._snap([drag.origin[0] + p[0] - drag.start[0], drag.origin[1] + p[1] - drag.start[1]]);
           drag.moved = M.updateProp(this.map, t.id, { x: q[0], y: q[1] }) || drag.moved;
-        } else if (t.type === "wall") {
+        } else if (t.type === "wall" || t.type === "path") {
           let dx = p[0] - drag.start[0], dy = p[1] - drag.start[1];
           if (this.snap !== this.mods.ctrl) { dx = Math.round(dx / SNAP_STEP) * SNAP_STEP; dy = Math.round(dy / SNAP_STEP) * SNAP_STEP; }
           const [mx, my] = [dx - (drag.applied?.[0] ?? 0), dy - (drag.applied?.[1] ?? 0)];
@@ -1080,6 +1192,16 @@ export class MapEditor {
         this._commit(!!M.addWall(this.map, smoothNodes(pts, closed), closed), { terrain: false });
         break;
       }
+      case "freepath": {
+        const pts = rdp(drag.points, 0.05);
+        if (pts.length < 2 || polylineLength(pts) < 0.3) break;
+        const closed = pts.length > 3 && dist(pts[0], pts.at(-1)) < Math.max(0.35, o.pathWidth / 2);
+        if (closed) pts.pop();
+        this._createPath(smoothNodes(pts, closed), closed);
+        break;
+      }
+      case "rotate":
+      case "scale":
       case "node":
       case "handle":
       case "move":
@@ -1099,12 +1221,12 @@ export class MapEditor {
       if (nodes.length > 1 && dist([nodes.at(-1).x, nodes.at(-1).y], [nodes.at(-2).x, nodes.at(-2).y]) < 0.05) nodes.pop();
       return this._finishPen(this.pen.purpose === "shape");
     }
-    if (this.tool !== "select" || this.selection?.type !== "wall") return;
+    if (this.tool !== "select" || !isCurve(this.selection)) return;
     const h = this._handleHit(p);
     this._begin();
     if (h?.kind === "node") {
       this._commit(M.toggleNodeSmooth(this.map, this.selection.id, h.index), { terrain: false });
-    } else if (M.nearestWall(this.map, p[0], p[1], HIT_PX / this.view.s)?.wall.id === this.selection.id) {
+    } else if (this._hitTest(p)?.id === this.selection.id) {
       const index = M.insertNode(this.map, this.selection.id, p[0], p[1]);
       this._commit(index >= 0, { terrain: false });
       this.selNode = index;
@@ -1145,6 +1267,8 @@ export class MapEditor {
     const nodes = pen.nodes.map(cleanNode);
     if (pen.purpose === "shape") {
       if (nodes.length >= 3) this._createShape(nodes);
+    } else if (pen.purpose === "path") {
+      if (nodes.length >= 2) this._createPath(nodes, closed && nodes.length >= 3);
     } else if (nodes.length >= 2) {
       this._begin();
       this._commit(!!M.addWall(this.map, nodes, closed && nodes.length >= 3), { terrain: false });
@@ -1216,6 +1340,15 @@ export class MapEditor {
     return !!(asset && embedAsset(this.map, asset));
   }
 
+  /** Sols proposés dans les listes : intégrés, puis textures de la carte et de la bibliothèque. */
+  _terrainChoices() {
+    const out = TERRAINS.map((x) => [x.id, this.t(`CADASTRE.Terrains.${x.id}`)]);
+    const seen = new Set();
+    for (const [id, a] of Object.entries(this.map.assets ?? {})) if (a.kind === "texture") { seen.add(id); out.push([assetKey(id), a.name]); }
+    for (const a of this.library) if (a.kind === "texture" && !seen.has(a.id)) out.push([assetKey(a.id), a.name]);
+    return out;
+  }
+
   _propDef(type) {
     return M.propDef(this.map, type) ?? this._libraryAsset(type, "prop");
   }
@@ -1282,6 +1415,15 @@ export class MapEditor {
     const input = this.el.toolOptions.querySelector(`[data-search="${field}"]`);
     input?.focus();
     input?.setSelectionRange(pos, pos);
+  }
+
+  _createPath(nodes, closed) {
+    const o = this.opts;
+    const edge = o.pathEdge || null;
+    this._begin();
+    const ok = this._useAsset(o.pathTerrain) && (!edge || this._useAsset(edge));
+    const path = ok && M.addPath(this.map, nodes, { closed, width: o.pathWidth, terrain: o.pathTerrain, edge, edgeWidth: o.pathEdgeWidth });
+    this._commit(!!path, { terrain: false });
   }
 
   _createShape(nodes) {

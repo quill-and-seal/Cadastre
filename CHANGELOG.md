@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+- Outil **Chemin** (touche 9) : une courbe à la plume ou à main levée devient une bande de sol (route, quai, rivière), avec une bordure optionnelle de chaque côté. Largeur, sol et bordure réglables, puis modifiables sur le chemin sélectionné ; points et poignées retouchables comme un mur ; la gomme coupe les chemins.
+- **Poignées de transformation** sur l'objet sélectionné : coins pour l'échelle, rond pour la rotation (par 15°, Alt : libre).
+- Les raccourcis existants ne changent pas.
+
 ## 0.1.1
 
 - Outil **Remplir une pièce** (touche 3) : un clic pose le sol jusqu'aux murs, portes fermées comprises ; dehors, il remplit tout ce qui n'est pas enclos. Aperçu de la zone au survol. Un petit écart entre une cloison et un mur compte comme fermé.

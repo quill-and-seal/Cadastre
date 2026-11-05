@@ -39,10 +39,11 @@
       "wall": "Mur (5)",
       "door": "Porte (6)",
       "prop": "Objet (7)",
-      "eraser": "Gomme (8)"
+      "eraser": "Gomme (8)",
+      "path": "Chemin (9)"
     },
     "Hints": {
-      "select": "Clic : sélectionner, glisser : déplacer. Mur sélectionné : glisse nœuds et poignées (Alt : poignées indépendantes), double-clic sur un nœud : coin ↔ courbe, double-clic sur le mur : nouveau nœud. Suppr : effacer, Ctrl+D : dupliquer.",
+      "select": "Clic : sélectionner, glisser : déplacer. Mur sélectionné : glisse nœuds et poignées (Alt : poignées indépendantes), double-clic sur un nœud : coin ↔ courbe, double-clic sur le mur : nouveau nœud. Suppr : effacer, Ctrl+D : dupliquer. Objet sélectionné : coins pour l'échelle, rond pour tourner (par 15°, Alt : libre).",
       "brush": "Glisse pour peindre le sol à main levée. Alt : efface le sol.",
       "shape": "Rectangle, ellipse : glisse (Maj : carré, cercle). Plume : clic pour un coin, clic-glisser pour une courbe, clic sur le premier point ou Entrée pour fermer.",
       "wall": "Plume : clic pour un coin, clic-glisser pour une courbe, Entrée ou double-clic pour finir, clic sur le premier point pour fermer. Main levée : glisse. Les bouts s'accrochent aux murs voisins : une cloison ferme bien sa pièce.",
@@ -50,7 +51,8 @@
       "prop": "Clic pour poser. R et Maj+R : tourner de 15°.",
       "eraser": "Glisse pour effacer.",
       "pan": "Clic droit, molette enfoncée ou Espace + clic : déplacer la vue. Molette : zoom. Échap : annuler le tracé.",
-      "fill": "Clic dans une pièce : pose le sol jusqu'aux murs (portes fermées comprises). Dehors, remplit tout ce qui n'est pas enclos."
+      "fill": "Clic dans une pièce : pose le sol jusqu'aux murs (portes fermées comprises). Dehors, remplit tout ce qui n'est pas enclos.",
+      "path": "Route, quai, rivière : trace la courbe à la plume (clic : coin, clic-glisser : courbe, Entrée : finir) ou à main levée. Largeur, sol et bordure dans le panneau. Avec la sélection, glisse ses points pour le redessiner."
     },
     "Panel": {
       "Terrain": "Sol",
@@ -104,7 +106,14 @@
       "NoProps": "Aucun objet importé. Le bouton à droite ouvre la bibliothèque.",
       "Search": "Rechercher…",
       "MoreResults": "… et {n} autres : affine la recherche.",
-      "NoResults": "Rien ne correspond."
+      "NoResults": "Rien ne correspond.",
+      "PathWidth": "Largeur (cases)",
+      "PathTerrain": "Sol du chemin",
+      "PathEdge": "Bordure",
+      "EdgeWidth": "Largeur de la bordure",
+      "NoEdge": "Aucune",
+      "SelPath": "Chemin",
+      "PathClosed": "Chemin fermé (boucle)"
     },
     "Terrains": {
       "stone": "Dalles",

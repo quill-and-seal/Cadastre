@@ -4,6 +4,7 @@
  */
 import { TERRAINS, PROP_BY_ID } from "./catalog.js";
 import { wallPoints, doorEnds } from "./model.js";
+import { flattenNodes } from "./curves.js";
 import { isAssetKey } from "./library.js";
 import { cutIntervals } from "./curves.js";
 
@@ -111,6 +112,29 @@ export function renderTerrains(map, prefix = "cad", { feather = true } = {}) {
   return base || soft ? `<g clip-path="url(#${prefix}-clip)">${base}${soft}</g>` : "";
 }
 
+/**
+ * Chemins : bande texturée le long de la courbe, bordure de chaque côté (un trait plus
+ * large dessous), ombre douce. Les textures restent fixes sur la carte : elles ne suivent
+ * pas la courbe, comme des pavés posés sur le sol.
+ */
+export function renderPaths(map, prefix = "cad") {
+  let shadow = "", body = "";
+  for (const q of map.paths ?? []) {
+    const pts = flattenNodes(q.nodes, q.closed, 0.01);
+    if (pts.length < 2) continue;
+    const d = polylinePath(q.closed ? [...pts, pts[0]] : pts) + (q.closed ? "Z" : "");
+    const outer = q.width + (q.edge ? 2 * q.edgeWidth : 0);
+    const cap = `stroke-linecap="round" stroke-linejoin="round" fill="none"`;
+    shadow += `<path d="${d}" stroke="#000" stroke-opacity="0.35" stroke-width="${f3(outer + 0.12)}" ${cap}/>`;
+    if (q.edge) {
+      body += `<path d="${d}" stroke="${terrainFill(prefix, q.edge)}" stroke-width="${f3(outer)}" ${cap}/>`;
+      body += `<path d="${d}" stroke="#000" stroke-opacity="0.45" stroke-width="${f3(q.width + 0.06)}" ${cap}/>`;
+    }
+    body += `<path data-path="${q.id}" d="${d}" stroke="${terrainFill(prefix, q.terrain)}" stroke-width="${f3(q.width)}" ${cap}/>`;
+  }
+  return shadow ? `<g clip-path="url(#${prefix}-clip)"><g filter="url(#${prefix}-blur)">${shadow}</g>${body}</g>` : "";
+}
+
 /** Dessin d'un type d'objet dans son rectangle w×h (catalogue : SVG, bibliothèque : image). */
 export function propArt(def, resolve = defaultResolve) {
   return def.src
@@ -201,6 +225,7 @@ export function renderContent(map, { mode = "export", grid = false, prefix = "ca
   return renderDefs(map, prefix, resolve)
     + `<rect x="0" y="0" width="${map.width}" height="${map.height}" fill="${map.background}"/>`
     + renderTerrains(map, prefix)
+    + renderPaths(map, prefix)
     + renderProps(map, prefix, resolve)
     + renderWalls(map, mode, prefix)
     + (grid ? renderGrid(map) : "");
