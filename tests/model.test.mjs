@@ -206,3 +206,47 @@ test("un mur courbe coupé garde de vraies courbes, sans déformation", () => {
     assert.ok(Math.abs(e - 1) < 0.02, "chaque point reste sur l'ellipse");
   }
 });
+
+test("remplir une pièce : le sol s'arrête aux murs et aux cloisons", async () => {
+  const { fillAt, enclosedArea } = await import("../scripts/model.js");
+  const map = createMap({ width: 20, height: 20 });
+  addRoom(map, rectNodes(2, 2, 12, 10), null);           // bâtiment 10 × 8
+  addWall(map, [{ x: 7, y: 2 }, { x: 7, y: 10 }]);        // cloison qui le coupe en deux
+  assert.ok(fillAt(map, 4, 5, "wood"));
+  const wood = totalArea(map.terrains.wood);
+  assert.ok(wood > 5 * 8 - 0.1 && wood < 5 * 8 + 3, `pièce de gauche seule : ${wood}`);
+  assert.ok(!pointInRings(map.terrains.wood, 9, 5), "la pièce voisine n'est pas touchée");
+  assert.ok(fillAt(map, 9, 5, "stone"));
+  assert.ok(!pointInRings(map.terrains.wood, 9, 5) && pointInRings(map.terrains.stone, 9, 5));
+  assert.deepEqual(enclosedArea(map, 7, 5), [], "un clic sur un mur ne remplit rien");
+});
+
+test("une cloison qui touche presque le mur ferme quand même la pièce", async () => {
+  const { fillAt } = await import("../scripts/model.js");
+  const map = createMap({ width: 20, height: 20 });
+  addRoom(map, rectNodes(2, 2, 12, 10), null);
+  addWall(map, [{ x: 7, y: 2.1 }, { x: 7, y: 9.92 }]);   // 0,1 case de jeu en haut, 0,08 en bas
+  fillAt(map, 4, 5, "wood");
+  assert.ok(!pointInRings(map.terrains.wood, 9, 5));
+});
+
+test("remplir dehors ne remplit pas une tour fermée posée dans la cour", async () => {
+  const { fillAt } = await import("../scripts/model.js");
+  const map = createMap({ width: 20, height: 20 });
+  addRoom(map, ellipseNodes(10, 10, 3, 3), null);
+  assert.ok(fillAt(map, 1, 1, "grass"));
+  assert.ok(pointInRings(map.terrains.grass, 1, 1));
+  assert.ok(!pointInRings(map.terrains.grass, 10, 10), "l'intérieur de la tour reste vide");
+  assert.ok(fillAt(map, 10, 10, "stone"));
+  assert.ok(pointInRings(map.terrains.stone, 10, 10));
+});
+
+test("une porte fermée sépare deux pièces", async () => {
+  const { fillAt } = await import("../scripts/model.js");
+  const map = createMap({ width: 20, height: 20 });
+  addRoom(map, rectNodes(2, 2, 12, 10), null);
+  const w = addWall(map, [{ x: 7, y: 2 }, { x: 7, y: 10 }]);
+  addDoor(map, w.id, 4, 1);
+  fillAt(map, 4, 5, "wood");
+  assert.ok(!pointInRings(map.terrains.wood, 9, 5));
+});

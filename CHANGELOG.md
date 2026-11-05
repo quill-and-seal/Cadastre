@@ -1,6 +1,12 @@
 # Changelog
 
-## Non publié (branche `bibliotheque-assets`)
+## Non publié (branche `remplissage-pieces`)
+
+- Outil **Remplir une pièce** (touche 3) : un clic pose le sol jusqu'aux murs, portes fermées comprises ; dehors, il remplit tout ce qui n'est pas enclos. Aperçu de la zone au survol. Un petit écart entre une cloison et un mur compte comme fermé.
+- Les murs tracés s'accrochent aux murs voisins, plus seulement à leurs nœuds.
+- Raccourcis des outils renumérotés de 1 à 8.
+
+## Non publié (branche `bibliotheque-assets`, fusionnée)
 
 - Bibliothèque d'assets : images de l'extérieur (packs, fichiers du MJ) utilisées comme objets ou comme textures de sol. Ajout d'un fichier, d'un dossier entier (sous-dossiers en étiquettes) ou par téléversement ; type et taille devinés à l'import, modifiables ensuite ; recherche, filtres, export et import de la liste en JSON.
 - Éditeur : assets de la bibliothèque dans les palettes de sols et d'objets, avec recherche. Les cartes gardent une copie des assets qu'elles utilisent.

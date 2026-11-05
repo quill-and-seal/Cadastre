@@ -589,3 +589,65 @@ export function duplicateProp(map, id, dx = 0.5, dy = 0.5) {
   const p = map.props.find((q) => q.id === id);
   return p ? addProp(map, p.type, p.x + dx, p.y + dy, p.a, p.k) : null;
 }
+
+/* -------------------------------------------- */
+/*  Remplissage d'une pièce                     */
+/* -------------------------------------------- */
+
+/**
+ * Demi-épaisseur des murs pour le remplissage, en cases. Un trou plus petit que deux fois
+ * cette valeur entre deux murs (une cloison qui n'arrive pas tout à fait) compte comme fermé.
+ */
+export const FILL_WALL_RADIUS = 0.08;
+
+/** Zone occupée par les murs (portes fermées comprises), épaissie de `radius`. */
+export function wallBarrier(map, radius = FILL_WALL_RADIUS) {
+  let barrier = [];
+  for (const wall of map.walls) {
+    const pts = wallPoints(wall);
+    if (pts.length < 2) continue;
+    barrier = poly.union(barrier, poly.strokeRings(wall.closed ? [...pts, pts[0]] : pts, radius));
+  }
+  return barrier;
+}
+
+/**
+ * Zone fermée par les murs (et les bords de la carte) qui contient le point (x, y),
+ * élargie jusque sous les murs. Vide si le point est sur un mur ou hors de la carte.
+ */
+export function enclosedArea(map, x, y, radius = FILL_WALL_RADIUS, barrier = null) {
+  if (x < 0 || y < 0 || x > map.width || y > map.height) return [];
+  const bounds = poly.rectRings(0, 0, map.width, map.height);
+  const free = poly.difference(bounds, barrier ?? wallBarrier(map, radius));
+  if (!poly.pointInRings(free, x, y)) return [];
+
+  // Contours extérieurs : même sens que la carte entière. Le plus petit qui contient le point borde la pièce.
+  const sign = Math.sign(poly.ringArea(bounds[0]));
+  const outers = free.filter((r) => Math.sign(poly.ringArea(r)) === sign);
+  const containing = outers
+    .filter((r) => poly.pointInRings([r], x, y))
+    .sort((a, b) => Math.abs(poly.ringArea(a)) - Math.abs(poly.ringArea(b)));
+  const outer = containing[0];
+  if (!outer) return [];
+
+  // Ce qui est libre dans ce contour, moins les îlots (pièces fermées à l'intérieur, comme une tour dans une cour).
+  const islands = outers.filter((r) => r !== outer && poly.pointInRings([outer], r[0], r[1]));
+  let region = poly.intersection(free, [outer]);
+  if (islands.length) region = poly.difference(region, islands);
+  if (!poly.pointInRings(region, x, y)) return [];
+
+  // Le sol passe sous les murs, pour ne laisser aucun liseré.
+  return poly.intersection(poly.offsetRings(region, radius * 1.5), bounds);
+}
+
+/** Pose un sol dans la pièce sous le point (seau de peinture). */
+export function fillAt(map, x, y, terrain, barrier = null) {
+  const area = enclosedArea(map, x, y, FILL_WALL_RADIUS, barrier);
+  return area.length ? paintArea(map, area, terrain) : false;
+}
+
+/** Point de mur le plus proche (pour accrocher une cloison à un mur), à moins de `maxDist`. */
+export function nearestWallPoint(map, x, y, maxDist) {
+  const hit = nearestWall(map, x, y, maxDist);
+  return hit ? [round3(hit.x), round3(hit.y)] : null;
+}
