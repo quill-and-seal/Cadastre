@@ -32,10 +32,11 @@ La façon la plus rapide de bâtir : pose l'emprise du bâtiment avec des **form
 
 | Outil | Touche | Ce qu'il fait |
 |---|---|---|
-| Sélection | 1 | Clic pour choisir un mur, une porte ou un objet, glisser pour le déplacer. Un mur sélectionné montre ses nœuds et poignées : glisse-les pour le déformer (**Alt** : poignées indépendantes). Double-clic sur un nœud : coin ↔ courbe. Double-clic sur le mur : nouveau nœud, sans changer la forme. **Suppr** efface, **Ctrl+D** duplique. |
+| Sélection | 1 | Clic pour choisir un mur, un chemin, une porte ou un objet, glisser pour le déplacer. Un objet sélectionné a des poignées : les coins pour l'échelle, le rond au-dessus pour le faire tourner (par 15°, **Alt** pour une rotation libre). Un mur sélectionné montre ses nœuds et poignées : glisse-les pour le déformer (**Alt** : poignées indépendantes). Double-clic sur un nœud : coin ↔ courbe. Double-clic sur le mur : nouveau nœud, sans changer la forme. **Suppr** efface, **Ctrl+D** duplique. |
 | Pinceau de sol | 2 | Peint une zone à main levée. Le nouveau sol remplace les autres là où il passe. **Alt** : efface le sol. `[` et `]` changent la taille. |
 | Remplir une pièce | 3 | Clic dans une pièce : le sol est posé jusqu'aux murs, portes fermées comprises. Clic dehors : tout ce qui n'est pas enclos (pratique pour l'herbe autour d'un bâtiment). Le survol montre la zone avant de cliquer. |
 | Forme | 4 | Rectangle, ellipse (**Maj** : carré, cercle) ou plume. Crée une **pièce** (sol + mur tout autour) ou **le sol seul**. Deux pièces qui se chevauchent n'en font qu'une : les murs à l'intérieur disparaissent, les courbes restent des courbes. |
+| Chemin | 9 | Route, quai, rivière : une courbe tracée à la plume ou à main levée devient une bande de sol, avec une bordure optionnelle de chaque côté (un quai pavé bordé de planches, un chemin de terre sans bord). Largeur, sol et bordure se règlent dans le panneau, puis sur le chemin sélectionné. Avec la sélection, ses points et poignées se déplacent comme ceux d'un mur. |
 | Mur | 5 | **Plume** : clic pour un coin, clic-glisser pour une courbe, **Entrée** ou double-clic pour finir, clic sur le premier point pour fermer. **Main levée** : le tracé est lissé en courbe retouchable. |
 | Porte | 6 | Clic sur un mur, droit ou courbe : porte, ou porte secrète, de la largeur choisie. Avec la sélection, une porte glisse le long de son mur. |
 | Objet | 7 | Tonneau, caisse, coffre, table, chaise, lit, pilier, escalier. Angle et échelle libres : **R** et **Maj+R** tournent de 15°. |

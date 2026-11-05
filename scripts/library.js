@@ -205,13 +205,23 @@ export function usedAssetSources(map) {
     const a = mapAsset(map, p.type);
     if (a) used.add(a.src);
   }
+  for (const q of map.paths ?? []) {
+    for (const key of [q.terrain, q.edge]) {
+      const a = mapAsset(map, key);
+      if (a) used.add(a.src);
+    }
+  }
   return [...used];
 }
 
 /** Retire de la carte les copies d'assets qu'elle n'utilise plus. */
 export function pruneAssets(map) {
   if (!map.assets) return false;
-  const used = new Set([...Object.keys(map.terrains ?? {}), ...(map.props ?? []).map((p) => p.type)]
+  const used = new Set([
+    ...Object.keys(map.terrains ?? {}),
+    ...(map.props ?? []).map((p) => p.type),
+    ...(map.paths ?? []).flatMap((q) => [q.terrain, q.edge])
+  ]
     .map(assetIdOf).filter(Boolean));
   let changed = false;
   for (const id of Object.keys(map.assets)) {

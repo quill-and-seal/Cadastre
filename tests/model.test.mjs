@@ -250,3 +250,27 @@ test("une porte fermée sépare deux pièces", async () => {
   fillAt(map, 4, 5, "wood");
   assert.ok(!pointInRings(map.terrains.wood, 9, 5));
 });
+
+test("chemins : création, retouche des nœuds, gomme, sauvegarde", async () => {
+  const { addPath, updatePath, nearestPath, moveNode, insertNode, removeWall, duplicateWall } = await import("../scripts/model.js");
+  const map = createMap({ width: 20, height: 20 });
+  assert.equal(addPath(map, [{ x: 1, y: 1 }, { x: 5, y: 1 }], { terrain: "lave" }), null);
+  const q = addPath(map, [{ x: 2, y: 10 }, { x: 18, y: 10 }], { width: 3, terrain: "cobble", edge: "wood" });
+  assert.ok(nearestPath(map, 10, 11.4, 0), "un point sur la bande touche le chemin");
+  assert.equal(nearestPath(map, 10, 13, 0.1), null);
+  assert.ok(updatePath(map, q.id, { width: 50, edge: null }));
+  assert.equal(q.width, 20);
+  assert.equal(q.edge, null);
+  moveNode(map, q.id, 1, 18, 14);
+  assert.deepEqual([q.nodes[1].x, q.nodes[1].y], [18, 14]);
+  assert.equal(insertNode(map, q.id, 10, 12), 1);
+  const copy = duplicateWall(map, q.id);
+  assert.equal(map.paths.length, 2);
+  assert.equal(copy.terrain, "cobble");
+  eraseArea(map, strokeRings([[10, 12]], 1), { walls: false, props: false });
+  assert.equal(map.paths.length, 4, "la gomme coupe en deux le chemin et sa copie, qui passent sous elle");
+  const back = normalizeMap(JSON.parse(JSON.stringify(map)));
+  assert.equal(back.paths.length, 4);
+  assert.ok(removeWall(map, map.paths[0].id));
+  assert.equal(map.paths.length, 3);
+});

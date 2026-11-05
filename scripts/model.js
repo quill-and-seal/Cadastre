@@ -5,6 +5,9 @@
  *   terrains : { idDeSol: anneaux }   zones de sol, sans recouvrement entre sols
  *   rooms    : anneaux                emprise des pièces (non dessinée, sert à fusionner les pièces)
  *   walls    : [{ id, closed, nodes:[{x,y,i?,o?}] }]
+ *   paths    : [{ id, closed, nodes, width, terrain, edge, edgeWidth }]
+ *              chemin : bande de sol le long d'une courbe (route, quai, rivière), avec une bordure
+ *              optionnelle (edge : un sol, edgeWidth : largeur de chaque bord) ; purement visuel
  *   doors    : [{ id, wall, s, w, kind:"door"|"secret" }]   s : position du centre le long du mur
  *   props    : [{ id, type, x, y, a, k }]                   centre, angle en degrés, échelle
  *   assets   : { id: asset }       copie des assets de bibliothèque utilisés (voir library.js)
@@ -48,6 +51,7 @@ export function createMap({ name = "", width = 30, height = 20, gridSize = DEFAU
     terrains: {},
     rooms: [],
     walls: [],
+    paths: [],
     doors: [],
     props: [],
     assets: {},
@@ -57,6 +61,14 @@ export function createMap({ name = "", width = 30, height = 20, gridSize = DEFAU
 }
 
 const nextId = (map, prefix) => `${prefix}${++map.seq}`;
+
+export const PATH_MIN_WIDTH = 0.2;
+export const PATH_MAX_WIDTH = 20;
+
+/** Mur ou chemin : les deux sont des courbes à nœuds, retouchées de la même façon. */
+export function curveById(map, id) {
+  return map.walls.find((w) => w.id === id) ?? map.paths?.find((q) => q.id === id) ?? null;
+}
 
 /** Sol connu de la carte : catalogue intégré ou texture de bibliothèque copiée dans la carte. */
 export function isTerrain(map, id) {
@@ -116,6 +128,17 @@ export function normalizeMap(raw) {
     if (nodes.length < 2) continue;
     map.walls.push({ id: uid(w.id, "w"), closed: !!w.closed && nodes.length > 2, nodes });
   }
+  for (const q of Array.isArray(src.paths) ? src.paths : []) {
+    const nodes = cleanNodes(q?.nodes);
+    if (nodes.length < 2 || !isTerrain(map, q.terrain)) continue;
+    map.paths.push({
+      id: uid(q.id, "c"), closed: !!q.closed && nodes.length > 2, nodes,
+      width: round3(clamp(q.width, PATH_MIN_WIDTH, PATH_MAX_WIDTH, 2)),
+      terrain: q.terrain,
+      edge: q.edge && isTerrain(map, q.edge) ? q.edge : null,
+      edgeWidth: round3(clamp(q.edgeWidth, 0.05, 3, 0.35))
+    });
+  }
   const wallIds = new Set(map.walls.map((w) => w.id));
   for (const d of Array.isArray(src.doors) ? src.doors : []) {
     if (!d || !wallIds.has(d.wall) || !Number.isFinite(d.s)) continue;
@@ -138,7 +161,7 @@ export function normalizeMap(raw) {
 export const cloneMap = (map) => JSON.parse(JSON.stringify(map));
 
 export function isEmpty(map) {
-  return !Object.keys(map.terrains).length && !map.walls.length && !map.props.length;
+  return !Object.keys(map.terrains).length && !map.walls.length && !map.props.length && !map.paths?.length;
 }
 
 /* -------------------------------------------- */
@@ -237,6 +260,7 @@ export function eraseArea(map, rings, { floor = true, walls = true, props = true
       else delete map.terrains[id];
     }
     map.rooms = poly.difference(map.rooms, rings);
+    changed = clipPaths(map, rings) || changed;
   }
   if (walls) changed = clipWalls(map, rings) || changed;
   if (props) {
@@ -293,15 +317,72 @@ function clipNodes(nodes, closed, rings, keepInside = false) {
     .filter((n) => n.length >= 2);
 }
 
+/* -------------------------------------------- */
+/*  Chemins                                     */
+/* -------------------------------------------- */
+
+export function addPath(map, nodes, { closed = false, width = 2, terrain = "cobble", edge = null, edgeWidth = 0.35 } = {}) {
+  const clean = cleanNodes(nodes);
+  if (clean.length < 2 || !isTerrain(map, terrain)) return null;
+  const path = {
+    id: nextId(map, "c"), closed: !!closed && clean.length > 2, nodes: clean,
+    width: round3(clamp(width, PATH_MIN_WIDTH, PATH_MAX_WIDTH, 2)), terrain,
+    edge: edge && isTerrain(map, edge) ? edge : null, edgeWidth: round3(clamp(edgeWidth, 0.05, 3, 0.35))
+  };
+  map.paths.push(path);
+  return path;
+}
+
+export function updatePath(map, id, changes) {
+  const q = map.paths?.find((x) => x.id === id);
+  if (!q) return false;
+  const before = JSON.stringify(q);
+  if (changes.width != null) q.width = round3(clamp(changes.width, PATH_MIN_WIDTH, PATH_MAX_WIDTH, q.width));
+  if (changes.edgeWidth != null) q.edgeWidth = round3(clamp(changes.edgeWidth, 0.05, 3, q.edgeWidth));
+  if (changes.terrain && isTerrain(map, changes.terrain)) q.terrain = changes.terrain;
+  if ("edge" in changes) q.edge = changes.edge && isTerrain(map, changes.edge) ? changes.edge : null;
+  if (changes.closed != null) q.closed = !!changes.closed && q.nodes.length > 2;
+  return JSON.stringify(q) !== before;
+}
+
+/** Chemin le plus proche d'un point, en tenant compte de sa largeur. */
+export function nearestPath(map, x, y, maxDist = 0) {
+  let best = null;
+  for (const q of map.paths ?? []) {
+    const pts = flattenNodes(q.nodes, q.closed, WALL_TOLERANCE);
+    const hit = project(pts, q.closed, x, y);
+    const d = Math.max(0, hit.d - q.width / 2 - (q.edge ? q.edgeWidth : 0));
+    if (d <= maxDist && (!best || d < best.d)) best = { path: q, d, s: hit.s };
+  }
+  return best;
+}
+
+/** Gomme : un chemin coupé garde son style, ses morceaux restent retouchables. */
+function clipPaths(map, rings) {
+  if (!map.paths?.length) return false;
+  let changed = false;
+  const next = [];
+  for (const q of map.paths) {
+    const pieces = clipNodes(q.nodes, q.closed, rings);
+    if (pieces === null) { next.push(q); continue; }
+    changed = true;
+    for (const nodes of pieces) next.push({ ...q, id: nextId(map, "c"), closed: false, nodes });
+  }
+  if (changed) map.paths = next;
+  return changed;
+}
+
+/** Supprime un mur (et ses portes) ou un chemin. */
 export function removeWall(map, id) {
-  const n = map.walls.length;
+  const n = map.walls.length + (map.paths?.length ?? 0);
   map.walls = map.walls.filter((w) => w.id !== id);
   map.doors = map.doors.filter((d) => d.wall !== id);
-  return map.walls.length !== n;
+  if (map.paths) map.paths = map.paths.filter((q) => q.id !== id);
+  return map.walls.length + (map.paths?.length ?? 0) !== n;
 }
 
 export function moveWall(map, id, dx, dy) {
-  const wall = map.walls.find((w) => w.id === id);
+  const wall = curveById(map, id);
   if (!wall || (!dx && !dy)) return false;
   for (const n of wall.nodes) { n.x = round3(n.x + dx); n.y = round3(n.y + dy); }
   return true;
@@ -309,7 +390,7 @@ export function moveWall(map, id, dx, dy) {
 
 /** Déplace un nœud ; les portes gardent leur position relative le long du mur. */
 export function moveNode(map, id, index, x, y) {
-  const wall = map.walls.find((w) => w.id === id);
+  const wall = curveById(map, id);
   const node = wall?.nodes[index];
   if (!node) return false;
   const before = polylineLength(wallPoints(wall), wall.closed);
@@ -320,7 +401,7 @@ export function moveNode(map, id, index, x, y) {
 
 /** Change une poignée (`which` : "i" ou "o") ; `mirror` garde la poignée opposée alignée. */
 export function moveHandle(map, id, index, which, dx, dy, mirror = true) {
-  const wall = map.walls.find((w) => w.id === id);
+  const wall = curveById(map, id);
   const node = wall?.nodes[index];
   if (!node || (which !== "i" && which !== "o")) return false;
   const before = polylineLength(wallPoints(wall), wall.closed);
@@ -340,7 +421,7 @@ export function moveHandle(map, id, index, which, dx, dy, mirror = true) {
 
 /** Coin ↔ courbe : un coin reçoit des poignées tangentes à ses voisins, une courbe les perd. */
 export function toggleNodeSmooth(map, id, index) {
-  const wall = map.walls.find((w) => w.id === id);
+  const wall = curveById(map, id);
   const node = wall?.nodes[index];
   if (!node) return false;
   if (node.i || node.o) {
@@ -357,7 +438,7 @@ export function toggleNodeSmooth(map, id, index) {
 }
 
 export function removeNode(map, id, index) {
-  const wall = map.walls.find((w) => w.id === id);
+  const wall = curveById(map, id);
   if (!wall) return false;
   if (wall.nodes.length <= 2) return removeWall(map, id);
   wall.nodes.splice(index, 1);
@@ -522,7 +603,7 @@ function bezierPoint([p0, p1, p2, p3], t) {
  * (la courbe est coupée en deux par l'algorithme de De Casteljau).
  */
 export function insertNode(map, id, x, y) {
-  const wall = map.walls.find((w) => w.id === id);
+  const wall = curveById(map, id);
   if (!wall) return -1;
   const segs = wall.closed ? wall.nodes.length : wall.nodes.length - 1;
   let best = { d: Infinity, k: 0, t: 0.5 };
@@ -556,7 +637,7 @@ export function insertNode(map, id, x, y) {
 
 /** Ouvre ou ferme un mur. */
 export function setWallClosed(map, id, closed) {
-  const wall = map.walls.find((w) => w.id === id);
+  const wall = curveById(map, id);
   if (!wall || wall.closed === !!closed || (closed && wall.nodes.length < 3)) return false;
   wall.closed = !!closed;
   return true;
@@ -577,10 +658,11 @@ export function slideDoor(map, id, x, y) {
 }
 
 export function duplicateWall(map, id, dx = 1, dy = 1) {
-  const wall = map.walls.find((w) => w.id === id);
+  const wall = curveById(map, id);
   if (!wall) return null;
-  const copy = { id: nextId(map, "w"), closed: wall.closed, nodes: wall.nodes.map((n) => cleanNode({ ...n, x: n.x + dx, y: n.y + dy })) };
-  map.walls.push(copy);
+  const isPath = map.paths?.includes(wall);
+  const copy = { ...structuredClone(wall), id: nextId(map, isPath ? "c" : "w"), nodes: wall.nodes.map((n) => cleanNode({ ...n, x: n.x + dx, y: n.y + dy })) };
+  (isPath ? map.paths : map.walls).push(copy);
   for (const d of map.doors.filter((q) => q.wall === id)) map.doors.push({ ...d, id: nextId(map, "d"), wall: copy.id });
   return copy;
 }

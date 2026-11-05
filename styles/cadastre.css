@@ -286,3 +286,7 @@
 .cadastre-library .cad-empty { opacity: 0.75; font-style: italic; }
 .cadastre-manager .cad-manager-bar { display: flex; gap: 6px; }
 .cadastre-manager .cad-manager-bar button { flex: 1; }
+
+/* Chemins et poignées d'objets */
+.cad-thumb.cad-none { aspect-ratio: 2 / 1; background: repeating-linear-gradient(45deg, #2a2622 0 6px, #34302b 6px 12px); }
+.cad-overlay .cad-rot { fill: var(--cad-accent); stroke: #1a1408; }
