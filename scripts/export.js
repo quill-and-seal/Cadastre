@@ -3,7 +3,8 @@
  * envoyée dans les données du monde, puis scène et murs natifs.
  */
 import { MODULE_ID, MAX_TEXTURE, log } from "./constants.js";
-import { renderSVG } from "./render.js";
+import { renderSVG, defaultResolve } from "./render.js";
+import { usedAssetSources } from "./library.js";
 import { buildWallData, textureScale } from "./walls.js";
 import { isEmpty } from "./model.js";
 
@@ -28,6 +29,39 @@ export async function rasterize(svg) {
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/** Lit une image et la renvoie en data URI. */
+async function toDataURI(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${res.status} ${url}`);
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Un SVG transformé en image par le navigateur ne charge aucune ressource externe :
+ * les images d'assets utilisées sont donc intégrées au SVG avant le rendu.
+ * Une image introuvable est laissée vide (et signalée) plutôt que de bloquer l'export.
+ * @returns {Promise<{resolve:(src:string)=>string, missing:string[]}>}
+ */
+export async function inlineAssets(map) {
+  const table = new Map();
+  const missing = [];
+  await Promise.all(usedAssetSources(map).map(async (src) => {
+    try {
+      table.set(src, await toDataURI(defaultResolve(src)));
+    } catch (error) {
+      log("Image d'asset introuvable", src, error);
+      missing.push(src);
+    }
+  }));
+  return { resolve: (src) => table.get(src) ?? "", missing };
 }
 
 const slug = (s) => (s || "carte").normalize("NFD").replace(/[̀-ͯ]/g, "")
@@ -75,13 +109,14 @@ async function refreshThumbnail(scene) {
 /**
  * @param {object} map
  * @param {{scene?:Scene|null, sourceId?:string}} [options]  scene : scène à mettre à jour, sinon une nouvelle est créée
- * @returns {Promise<{scene:Scene, created:boolean, reduced:boolean}>}
+ * @returns {Promise<{scene:Scene, created:boolean, reduced:boolean, missing:string[]}>}
  */
 export async function exportMap(map, { scene = null, sourceId = null } = {}) {
   if (isEmpty(map)) throw new Error(game.i18n.localize("CADASTRE.Export.Empty"));
 
   const { sceneWidth, sceneHeight, scale, reduced } = textureScale(map, MAX_TEXTURE);
-  const { blob, ext } = await rasterize(renderSVG(map, { scale }));
+  const { resolve, missing } = await inlineAssets(map);
+  const { blob, ext } = await rasterize(renderSVG(map, { scale, resolve }));
   const src = await uploadImage(blob, ext, map.name);
 
   const sceneData = {
@@ -111,5 +146,5 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
   const walls = buildWallData(map);
   if (walls.length) await scene.createEmbeddedDocuments("Wall", walls);
   await refreshThumbnail(scene);
-  return { scene, created, reduced };
+  return { scene, created, reduced, missing };
 }

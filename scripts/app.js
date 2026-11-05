@@ -6,6 +6,7 @@ import { MapEditor } from "./editor.js";
 import { createMap, cloneMap } from "./model.js";
 import { listMapEntries, readMap, createMapEntry, saveMap } from "./storage.js";
 import { exportMap } from "./export.js";
+import { getLibrary, CadastreLibraryApp, LIBRARY_HOOK } from "./library-app.js";
 
 const { ApplicationV2, DialogV2 } = foundry.applications.api;
 
@@ -62,8 +63,11 @@ export class CadastreEditorApp extends ApplicationV2 {
       t,
       onSave: (map) => this.save(map),
       onExport: (map) => this.export(map),
-      onDirty: () => {}
+      onDirty: () => {},
+      library: getLibrary(),
+      onOpenLibrary: () => CadastreLibraryApp.open()
     });
+    this._libraryHook = Hooks.on(LIBRARY_HOOK, (library) => this.editor?.setLibrary(library));
   }
 
   _refreshTitle() {
@@ -106,8 +110,9 @@ export class CadastreEditorApp extends ApplicationV2 {
     this.busy = true;
     ui.notifications.info(t("CADASTRE.Export.Working"));
     try {
-      const { scene, created, reduced } = await exportMap(map, { scene: target, sourceId: this.entry.id });
+      const { scene, created, reduced, missing } = await exportMap(map, { scene: target, sourceId: this.entry.id });
       if (reduced) ui.notifications.warn(t("CADASTRE.Export.Reduced", { size: MAX_TEXTURE }));
+      if (missing?.length) ui.notifications.warn(t("CADASTRE.Export.Missing", { list: missing.map(esc).join(", ") }), { permanent: true });
       // Le lien vers la scène est enregistré avec la carte (et les modifications en cours avec lui).
       this.editor.map.sceneId = scene.id;
       const saved = this.editor.getMap();
@@ -138,6 +143,7 @@ export class CadastreEditorApp extends ApplicationV2 {
       if (!choice || choice === "cancel") return this;
       if (choice === "save") await this.save();
     }
+    Hooks.off(LIBRARY_HOOK, this._libraryHook);
     this.editor?.destroy();
     this.editor = null;
     CadastreEditorApp.instances.delete(this.entry.id);
@@ -161,7 +167,8 @@ export class CadastreManagerApp extends ApplicationV2 {
       newMap: CadastreManagerApp.#onNew,
       openMap: CadastreManagerApp.#onOpen,
       duplicateMap: CadastreManagerApp.#onDuplicate,
-      deleteMap: CadastreManagerApp.#onDelete
+      deleteMap: CadastreManagerApp.#onDelete,
+      openLibrary: () => CadastreLibraryApp.open()
     }
   };
 
@@ -198,7 +205,10 @@ export class CadastreManagerApp extends ApplicationV2 {
     root.className = "cad-manager-body";
     root.style.display = "contents";
     root.innerHTML = `
-      <button type="button" data-action="newMap"><i class="fa-solid fa-plus"></i> ${esc(t("CADASTRE.Manager.New"))}</button>
+      <div class="cad-manager-bar">
+        <button type="button" data-action="newMap"><i class="fa-solid fa-plus"></i> ${esc(t("CADASTRE.Manager.New"))}</button>
+        <button type="button" data-action="openLibrary"><i class="fa-solid fa-book-atlas"></i> ${esc(t("CADASTRE.Panel.Library"))}</button>
+      </div>
       ${items ? `<ul class="cad-list">${items}</ul>` : `<p class="cad-empty">${esc(t("CADASTRE.Manager.Empty"))}</p>`}`;
     return root;
   }

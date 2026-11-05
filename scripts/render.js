@@ -4,6 +4,7 @@
  */
 import { TERRAINS, PROP_BY_ID } from "./catalog.js";
 import { wallPoints, doorEnds } from "./model.js";
+import { isAssetKey } from "./library.js";
 import { cutIntervals } from "./curves.js";
 
 const COLORS = {
@@ -38,15 +39,47 @@ export const polylinePath = (pts) => pts.length
   ? `M${f3(pts[0][0])} ${f3(pts[0][1])}` + pts.slice(1).map(([x, y]) => `L${f3(x)} ${f3(y)}`).join("")
   : "";
 
+const attr = (s) => String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+
+/**
+ * URL d'une image d'asset, par défaut : le chemin tel quel, encodé une seule fois
+ * (les packs ont souvent des espaces dans leurs noms de fichiers).
+ */
+export function defaultResolve(src) {
+  if (/^(data:|blob:)/i.test(src)) return src;
+  try { return encodeURI(decodeURI(src)); } catch { return encodeURI(src); }
+}
+
+/** Identifiant SVG sûr d'un motif de sol (les clés d'assets contiennent « : »). */
+const safeKey = (key) => String(key).replace(/[^\w-]/g, "_");
+export const terrainPatternId = (prefix, key) => `${prefix}-t-${safeKey(key)}`;
+export const terrainFill = (prefix, key) => `url(#${terrainPatternId(prefix, key)})`;
+
+/** Sols de la carte dans l'ordre de dessin : catalogue intégré, puis textures de bibliothèque. */
+export function terrainList(map) {
+  const out = TERRAINS.map((t) => ({ key: t.id, def: t }));
+  for (const [id, a] of Object.entries(map.assets ?? {})) {
+    if (a.kind === "texture") out.push({ key: `asset:${id}`, def: a });
+  }
+  return out;
+}
+
 const region = (map) => `x="-2" y="-2" width="${map.width + 4}" height="${map.height + 4}"`;
 
-/** <defs> : motifs de sol et filtres. */
-export function renderDefs(map, prefix = "cad") {
+/**
+ * <defs> : motifs de sol et filtres.
+ * @param {(src:string)=>string} [resolve]  URL d'une image d'asset
+ */
+export function renderDefs(map, prefix = "cad", resolve = defaultResolve) {
   const r = `filterUnits="userSpaceOnUse" ${region(map)}`;
   let out = "<defs>";
-  for (const t of TERRAINS) {
-    out += `<pattern id="${prefix}-t-${t.id}" patternUnits="userSpaceOnUse" width="${t.w}" height="${t.h}">`
-      + `<rect width="${t.w}" height="${t.h}" fill="${t.base}"/>${t.pattern}</pattern>`;
+  for (const { key, def: t } of terrainList(map)) {
+    const id = terrainPatternId(prefix, key);
+    out += isAssetKey(key)
+      ? `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${t.w}" height="${t.h}">`
+        + `<image href="${attr(resolve(t.src))}" width="${t.w}" height="${t.h}" preserveAspectRatio="none"/></pattern>`
+      : `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${t.w}" height="${t.h}">`
+        + `<rect width="${t.w}" height="${t.h}" fill="${t.base}"/>${t.pattern}</pattern>`;
   }
   out += `<filter id="${prefix}-blur" ${r}><feGaussianBlur stdDeviation="0.13"/></filter>`;
   out += `<filter id="${prefix}-feather" ${r}><feGaussianBlur stdDeviation="${f3(FEATHER / 2.5)}"/></filter>`;
@@ -63,13 +96,13 @@ export function renderDefs(map, prefix = "cad") {
  */
 export function renderTerrains(map, prefix = "cad", { feather = true } = {}) {
   let base = "", soft = "";
-  for (const t of TERRAINS) {
-    const d = ringsPath(map.terrains[t.id]);
+  for (const { key, def: t } of terrainList(map)) {
+    const d = ringsPath(map.terrains[key]);
     if (!d) continue;
-    const fill = `url(#${prefix}-t-${t.id})`;
+    const fill = terrainFill(prefix, key);
     base += `<path d="${d}" fill="${fill}"/>`;
     if (!feather || !t.soft) continue;
-    const mask = `${prefix}-m-${t.id}`;
+    const mask = `${prefix}-m-${safeKey(key)}`;
     soft += `<mask id="${mask}" maskUnits="userSpaceOnUse" ${region(map)}>`
       + `<path d="${d}" fill="#fff" stroke="#fff" stroke-width="${FEATHER}" stroke-linejoin="round" filter="url(#${prefix}-feather)"/></mask>`
       + `<path d="${d}" fill="${fill}" stroke="${fill}" stroke-width="${FEATHER * 2}" stroke-linejoin="round" mask="url(#${mask})"/>`;
@@ -78,13 +111,20 @@ export function renderTerrains(map, prefix = "cad", { feather = true } = {}) {
   return base || soft ? `<g clip-path="url(#${prefix}-clip)">${base}${soft}</g>` : "";
 }
 
+/** Dessin d'un type d'objet dans son rectangle w×h (catalogue : SVG, bibliothèque : image). */
+export function propArt(def, resolve = defaultResolve) {
+  return def.src
+    ? `<image href="${attr(resolve(def.src))}" width="${def.w}" height="${def.h}" preserveAspectRatio="xMidYMid meet"/>`
+    : def.svg;
+}
+
 /** Objets posés, avec une ombre portée. */
-export function renderProps(map, prefix = "cad") {
+export function renderProps(map, prefix = "cad", resolve = defaultResolve) {
   let out = "";
   for (const p of map.props) {
-    const def = PROP_BY_ID.get(p.type);
+    const def = PROP_BY_ID.get(p.type) ?? (isAssetKey(p.type) ? map.assets?.[p.type.slice(6)] : null);
     if (!def) continue;
-    out += `<g data-prop="${p.id}" transform="translate(${p.x} ${p.y}) rotate(${p.a}) scale(${p.k}) translate(${-def.w / 2} ${-def.h / 2})">${def.svg}</g>`;
+    out += `<g data-prop="${p.id}" transform="translate(${p.x} ${p.y}) rotate(${p.a}) scale(${p.k}) translate(${-def.w / 2} ${-def.h / 2})">${propArt(def, resolve)}</g>`;
   }
   return out ? `<g filter="url(#${prefix}-drop)">${out}</g>` : "";
 }
@@ -157,22 +197,23 @@ export function renderGrid(map, opacity = 0.12) {
 }
 
 /** Contenu complet (sans la balise <svg>). */
-export function renderContent(map, { mode = "export", grid = false, prefix = "cad" } = {}) {
-  return renderDefs(map, prefix)
+export function renderContent(map, { mode = "export", grid = false, prefix = "cad", resolve = defaultResolve } = {}) {
+  return renderDefs(map, prefix, resolve)
     + `<rect x="0" y="0" width="${map.width}" height="${map.height}" fill="${map.background}"/>`
     + renderTerrains(map, prefix)
-    + renderProps(map, prefix)
+    + renderProps(map, prefix, resolve)
     + renderWalls(map, mode, prefix)
     + (grid ? renderGrid(map) : "");
 }
 
 /**
  * Document SVG autonome, à la taille voulue en pixels.
- * @param {{scale?:number, grid?:boolean, mode?:"editor"|"export"}} [options]  scale = pixels par case
+ * @param {{scale?:number, grid?:boolean, mode?:"editor"|"export", resolve?:(src:string)=>string}} [options]
+ *   scale = pixels par case ; resolve = URL de chaque image d'asset (à l'export : images intégrées)
  */
-export function renderSVG(map, { scale = map.gridSize, grid = false, mode = "export" } = {}) {
+export function renderSVG(map, { scale = map.gridSize, grid = false, mode = "export", resolve = defaultResolve } = {}) {
   const w = Math.round(map.width * scale), h = Math.round(map.height * scale);
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${map.width} ${map.height}" shape-rendering="geometricPrecision">`
-    + renderContent(map, { mode, grid })
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${w}" height="${h}" viewBox="0 0 ${map.width} ${map.height}" shape-rendering="geometricPrecision">`
+    + renderContent(map, { mode, grid, resolve })
     + "</svg>";
 }

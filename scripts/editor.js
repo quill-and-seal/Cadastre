@@ -2,11 +2,12 @@
  * Éditeur de carte vectoriel : interface DOM autonome, sans dépendance à Foundry.
  * La fenêtre Foundry (app.js) l'héberge ; le banc d'essai (tools/editor-lab.html) aussi.
  */
-import { TERRAINS, PROPS, PROP_BY_ID } from "./catalog.js";
+import { TERRAINS, PROPS } from "./catalog.js";
 import * as M from "./model.js";
 import * as P from "./poly.js";
 import { flattenNodes, rectNodes, ellipseNodes, smoothNodes, rdp, cleanNode, polylineLength } from "./curves.js";
-import { renderDefs, renderTerrains, renderProps, renderWalls, renderGrid, polylinePath } from "./render.js";
+import { renderDefs, renderTerrains, renderProps, renderWalls, renderGrid, polylinePath, terrainFill, terrainPatternId, propArt, defaultResolve } from "./render.js";
+import { isAssetKey, assetIdOf, assetKey, embedAsset, refreshMapAssets, filterAssets, normalizeLibrary, pruneAssets } from "./library.js";
 import { HISTORY_LIMIT, MIN_CELLS, MAX_CELLS, MIN_GRID_SIZE, MAX_GRID_SIZE } from "./constants.js";
 
 export const TOOLS = [
@@ -23,6 +24,8 @@ const MIN_SCALE = 4, MAX_SCALE = 260;
 const SNAP_STEP = 0.5;
 const HIT_PX = 8;
 const SVG_NS = "http://www.w3.org/2000/svg";
+/** Nombre maximal d'assets de bibliothèque affichés dans une palette (la recherche affine). */
+const PALETTE_LIMIT = 90;
 
 let instances = 0;
 
@@ -34,15 +37,22 @@ export class MapEditor {
   /**
    * @param {HTMLElement} root
    * @param {object} map
-   * @param {{t?:(key:string, data?:object)=>string, onSave?:(map)=>any, onExport?:(map)=>any, onDirty?:(dirty:boolean)=>void}} [options]
+   * @param {{t?:(key:string, data?:object)=>string, onSave?:(map)=>any, onExport?:(map)=>any, onDirty?:(dirty:boolean)=>void,
+   *   library?:object[], onOpenLibrary?:()=>any, resolve?:(src:string)=>string}} [options]
+   *   library : assets de la bibliothèque ; onOpenLibrary : ouvre la gestion de la bibliothèque ;
+   *   resolve : URL d'affichage d'une image d'asset
    */
-  constructor(root, map, { t = (k) => k, onSave = null, onExport = null, onDirty = null } = {}) {
+  constructor(root, map, { t = (k) => k, onSave = null, onExport = null, onDirty = null, library = [], onOpenLibrary = null, resolve = defaultResolve } = {}) {
     this.root = root;
     this.map = M.normalizeMap(map);
     this.t = t;
     this.onSave = onSave;
     this.onExport = onExport;
     this.onDirty = onDirty;
+    this.onOpenLibrary = onOpenLibrary;
+    this.resolve = resolve;
+    this.library = normalizeLibrary(library);
+    this.search = { terrain: "", prop: "" };
     this.prefix = `cad${++instances}`;
 
     this.opts = {
@@ -77,12 +87,14 @@ export class MapEditor {
     this.spaceHeld = false;
     this._frame = null;
     this._dirtyParts = { terrain: false, map: false, overlay: false };
+    const refreshed = refreshMapAssets(this.map, this.library);
 
     this._build();
     this.renderMap(true);
     this._renderPanel();
     this._syncMapFields();
     this._applyView();
+    if (refreshed) this._setDirty(true);
     requestAnimationFrame(() => this.fit());
   }
 
@@ -125,6 +137,7 @@ export class MapEditor {
               <g class="cad-grid"></g>
               <rect class="cad-border" fill="none"></rect>
               <g class="cad-overlay"></g>
+              <defs class="cad-extra-defs"></defs>
             </g>
           </svg>
         </div>
@@ -151,7 +164,7 @@ export class MapEditor {
     this.el = {
       viewport: $(".cad-viewport"), svg: $(".cad-svg"), defs: $(".cad-defs"), world: $(".cad-world"),
       bg: $(".cad-bg"), terrain: $(".cad-terrain"), props: $(".cad-props"), walls: $(".cad-walls"),
-      grid: $(".cad-grid"), border: $(".cad-border"), overlay: $(".cad-overlay"),
+      grid: $(".cad-grid"), border: $(".cad-border"), overlay: $(".cad-overlay"), extraDefs: $(".cad-extra-defs"),
       toolOptions: $(".cad-tool-options"), mapOptions: $(".cad-map-options"),
       coords: $(".cad-coords"), hint: $(".cad-hint"), dirty: $(".cad-dirty")
     };
@@ -174,6 +187,7 @@ export class MapEditor {
     on(this.el.viewport, "contextmenu", (e) => e.preventDefault());
     on(this.el.mapOptions, "change", (e) => this._onMapField(e));
     on(this.el.toolOptions, "input", (e) => this._onOptionInput(e, false));
+    on(this.el.toolOptions, "input", (e) => this._onSearch(e));
     on(this.el.toolOptions, "change", (e) => this._onOptionInput(e, true));
     on(window, "blur", () => { this.spaceHeld = false; this.mods = { alt: false, ctrl: false, shift: false }; });
 
@@ -207,8 +221,10 @@ export class MapEditor {
   /** Redessine la carte ; `full` refait motifs et dimensions, `terrain` les sols. */
   renderMap(full = false, terrain = true) {
     const { map, prefix } = this;
+    const assetSig = Object.entries(map.assets ?? {}).map(([id, a]) => `${id}:${a.src}:${a.w}:${a.h}`).join("|");
+    if (assetSig !== this._assetSig) { this._assetSig = assetSig; full = true; }
     if (full) {
-      this.el.defs.innerHTML = renderDefs(map, prefix);
+      this.el.defs.innerHTML = renderDefs(map, prefix, this.resolve);
       for (const el of [this.el.bg, this.el.border]) {
         el.setAttribute("width", map.width);
         el.setAttribute("height", map.height);
@@ -217,7 +233,7 @@ export class MapEditor {
     }
     this.el.bg.setAttribute("fill", map.background);
     if (full || terrain) this.el.terrain.innerHTML = renderTerrains(map, prefix);
-    this.el.props.innerHTML = renderProps(map, prefix);
+    this.el.props.innerHTML = renderProps(map, prefix, this.resolve);
     this.el.walls.innerHTML = renderWalls(map, "editor", prefix);
     this.el.grid.style.display = this.showGrid ? "" : "none";
     this._renderOverlay();
@@ -265,7 +281,7 @@ export class MapEditor {
           const d = polylinePath(drag.points.length > 1 ? drag.points : [drag.points[0], [drag.points[0][0] + 0.001, drag.points[0][1]]]);
           out += erase
             ? `<path d="${d}" class="cad-stroke-erase" stroke-width="${2 * r}"/>`
-            : `<path d="${d}" fill="none" stroke="url(#${this.prefix}-t-${o.terrain})" stroke-opacity="0.9" stroke-width="${2 * r}" stroke-linecap="round" stroke-linejoin="round"/>`;
+            : `<path d="${d}" fill="none" stroke="${this._fill(o.terrain)}" stroke-opacity="0.9" stroke-width="${2 * r}" stroke-linecap="round" stroke-linejoin="round"/>`;
         }
         if (p) out += disc(p, r, erase ? "cad-brush-erase" : "cad-brush");
         break;
@@ -292,9 +308,9 @@ export class MapEditor {
       }
       case "prop": {
         if (!p) break;
-        const def = PROP_BY_ID.get(o.propType);
+        const def = this._propDef(o.propType);
         const [x, y] = this._snap(p);
-        if (def) out += `<g opacity="0.75" transform="translate(${x} ${y}) rotate(${o.propAngle}) scale(${o.propScale}) translate(${-def.w / 2} ${-def.h / 2})">${def.svg}</g>`;
+        if (def) out += `<g opacity="0.75" transform="translate(${x} ${y}) rotate(${o.propAngle}) scale(${o.propScale}) translate(${-def.w / 2} ${-def.h / 2})">${propArt(def, this.resolve)}</g>`;
         break;
       }
     }
@@ -328,7 +344,7 @@ export class MapEditor {
     }
     if (target.type === "prop") {
       const prop = map.props.find((q) => q.id === target.id);
-      const def = prop && PROP_BY_ID.get(prop.type);
+      const def = prop && M.propDef(map, prop.type);
       if (!def) return "";
       return `<rect class="${cls}" transform="translate(${prop.x} ${prop.y}) rotate(${prop.a}) scale(${prop.k})" x="${-def.w / 2}" y="${-def.h / 2}" width="${def.w}" height="${def.h}" stroke-width="${(2 * px) / prop.k}" fill="none"/>`;
     }
@@ -339,7 +355,7 @@ export class MapEditor {
     const pts = flattenNodes(nodes, closed, 0.01);
     const d = polylinePath(closed ? [...pts, pts[0]] : pts);
     const o = this.opts;
-    const fill = this.tool === "shape" ? `url(#${this.prefix}-t-${o.terrain})` : "none";
+    const fill = this.tool === "shape" ? this._fill(o.terrain) : "none";
     return `<path d="${d}" fill="${fill}" fill-opacity="0.55" class="cad-preview" stroke-width="${2 * px}"/>`;
   }
 
@@ -398,7 +414,7 @@ export class MapEditor {
         <button type="button" data-opt="terrain" data-val="${x.id}" class="${x.id === o.terrain ? "active" : ""}" title="${esc(t(`CADASTRE.Terrains.${x.id}`))}">
           <svg viewBox="0 0 1 1"><rect width="1" height="1" fill="url(#${this.prefix}-t-${x.id})"/></svg>
           <span>${esc(t(`CADASTRE.Terrains.${x.id}`))}</span>
-        </button>`).join("")}</div>`;
+        </button>`).join("")}</div>` + this._libraryPalette("texture", "terrain");
 
     let html = "";
     switch (this.tool) {
@@ -426,7 +442,7 @@ export class MapEditor {
           return `<button type="button" data-opt="propType" data-val="${p.id}" class="${p.id === o.propType ? "active" : ""}" title="${esc(t(`CADASTRE.Props.${p.id}`))}">
             <svg viewBox="0 0 ${side} ${side}"><g transform="translate(${(side - p.w) / 2} ${(side - p.h) / 2})">${p.svg}</g></svg>
             <span>${esc(t(`CADASTRE.Props.${p.id}`))}</span></button>`;
-        }).join("")}</div>
+        }).join("")}</div>${this._libraryPalette("prop", "propType")}
           <div class="cad-row">${number("propAngle", "CADASTRE.Panel.Angle", o.propAngle, -360, 360, 15)}${number("propScale", "CADASTRE.Panel.Scale", o.propScale, 0.25, 4, 0.05)}</div>`;
         break;
       case "eraser":
@@ -463,7 +479,7 @@ export class MapEditor {
     if (sel.type === "prop") {
       const prop = this.map.props.find((q) => q.id === sel.id);
       if (!prop) return "";
-      return `<p class="cad-note"><strong>${esc(t(`CADASTRE.Props.${prop.type}`))}</strong></p>
+      return `<p class="cad-note"><strong>${esc(this._propName(prop.type))}</strong></p>
         <div class="cad-row">
           <label>${esc(t("CADASTRE.Panel.Angle"))}<input type="number" data-field="selPropAngle" min="-360" max="360" step="15" value="${prop.a}"></label>
           <label>${esc(t("CADASTRE.Panel.Scale"))}<input type="number" data-field="selPropScale" min="0.25" max="4" step="0.05" value="${prop.k}"></label>
@@ -573,7 +589,11 @@ export class MapEditor {
   /*  Accès                                       */
   /* -------------------------------------------- */
 
-  getMap() { return M.cloneMap(this.map); }
+  getMap() {
+    const map = M.cloneMap(this.map);
+    pruneAssets(map);
+    return map;
+  }
 
   /** Appelé par l'hôte une fois l'enregistrement fait. */
   markSaved(map) {
@@ -710,6 +730,7 @@ export class MapEditor {
       case "apply-size": return this._applySize();
       case "delete": return this._deleteSelection();
       case "duplicate": return this._duplicateSelection();
+      case "open-library": return this.onOpenLibrary?.();
     }
   }
 
@@ -913,7 +934,7 @@ export class MapEditor {
       case "prop": {
         const [x, y] = this._snap(p);
         this._begin();
-        this._commit(!!M.addProp(this.map, o.propType, x, y, o.propAngle, o.propScale), { terrain: false });
+        this._commit(this._useAsset(o.propType) && !!M.addProp(this.map, o.propType, x, y, o.propAngle, o.propScale), { terrain: false });
         break;
       }
     }
@@ -1015,7 +1036,7 @@ export class MapEditor {
         } else if (drag.erase) {
           changed = M.eraseArea(this.map, rings, { floor: true, walls: false, props: false });
         } else {
-          changed = M.paintArea(this.map, rings, o.terrain);
+          changed = this._useAsset(o.terrain) && M.paintArea(this.map, rings, o.terrain);
         }
         this._commit(changed);
         break;
@@ -1106,10 +1127,117 @@ export class MapEditor {
     this._renderOverlay();
   }
 
+  /* -------------------------------------------- */
+  /*  Bibliothèque                                */
+  /* -------------------------------------------- */
+
+  /** Nouvelle liste d'assets (bibliothèque modifiée ailleurs) : la palette et les copies de la carte suivent. */
+  setLibrary(library) {
+    this.library = normalizeLibrary(library);
+    if (refreshMapAssets(this.map, this.library)) {
+      this._setDirty(true);
+      this.renderMap(true);
+    }
+    for (const [opt, kind] of [["terrain", "texture"], ["propType", "prop"]]) {
+      const key = this.opts[opt];
+      if (isAssetKey(key) && !this._libraryAsset(key, kind) && !this.map.assets?.[assetIdOf(key)]) {
+        this.opts[opt] = opt === "terrain" ? "stone" : PROPS[0].id;
+      }
+    }
+    this._renderPanel();
+    this._renderOverlay();
+  }
+
+  _libraryAsset(key, kind = null) {
+    const id = assetIdOf(key);
+    const a = id && this.library.find((x) => x.id === id);
+    return a && (!kind || a.kind === kind) ? a : null;
+  }
+
+  /**
+   * Copie dans la carte l'asset de bibliothèque choisi, juste avant de l'utiliser.
+   * Renvoie false si la clé ne désigne rien d'utilisable.
+   */
+  _useAsset(key) {
+    if (!isAssetKey(key)) return true;
+    if (this.map.assets?.[assetIdOf(key)]) return true;
+    const asset = this._libraryAsset(key);
+    return !!(asset && embedAsset(this.map, asset));
+  }
+
+  _propDef(type) {
+    return M.propDef(this.map, type) ?? this._libraryAsset(type, "prop");
+  }
+
+  _propName(type) {
+    if (!isAssetKey(type)) return this.t(`CADASTRE.Props.${type}`);
+    return (this.map.assets?.[assetIdOf(type)] ?? this._libraryAsset(type))?.name ?? type;
+  }
+
+  /**
+   * Remplissage d'un sol pour les aperçus. Une texture de bibliothèque pas encore
+   * utilisée dans la carte n'a pas de motif : on en ajoute un à part.
+   */
+  _fill(key) {
+    if (isAssetKey(key) && !this.map.assets?.[assetIdOf(key)]) {
+      const a = this._libraryAsset(key, "texture");
+      if (a) {
+        const id = terrainPatternId(`${this.prefix}-x`, key);
+        if (this.el.extraDefs.dataset.key !== key) {
+          this.el.extraDefs.dataset.key = key;
+          this.el.extraDefs.innerHTML = `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${a.w}" height="${a.h}">`
+            + `<image href="${esc(this.resolve(a.src))}" width="${a.w}" height="${a.h}" preserveAspectRatio="none"/></pattern>`;
+        }
+        return `url(#${id})`;
+      }
+    }
+    return terrainFill(this.prefix, key);
+  }
+
+  /** Assets de la bibliothèque dans la palette d'un outil, avec recherche et accès à la gestion. */
+  _libraryPalette(kind, opt) {
+    const t = this.t;
+    const field = kind === "texture" ? "terrain" : "prop";
+    const all = this.library.filter((a) => a.kind === kind);
+    const found = filterAssets(all, { query: this.search[field] });
+    const current = this.opts[opt];
+    const shown = found.slice(0, PALETTE_LIMIT);
+    // L'asset choisi reste visible même s'il sort de la recherche.
+    const chosen = this._libraryAsset(current, kind);
+    if (chosen && !shown.includes(chosen)) shown.unshift(chosen);
+
+    let html = `<div class="cad-lib-head"><h3>${esc(t("CADASTRE.Panel.Library"))}</h3>`
+      + (this.onOpenLibrary ? `<button type="button" data-action="open-library" title="${esc(t("CADASTRE.Panel.ManageLibrary"))}"><i class="fa-solid fa-book-atlas"></i></button>` : "")
+      + `</div>`;
+    if (!all.length) return html + `<p class="cad-note">${esc(t(kind === "texture" ? "CADASTRE.Panel.NoTextures" : "CADASTRE.Panel.NoProps"))}</p>`;
+    html += `<input type="search" class="cad-search" data-search="${field}" placeholder="${esc(t("CADASTRE.Panel.Search"))}" value="${esc(this.search[field])}">`;
+    html += `<div class="cad-swatches cad-lib ${kind === "texture" ? "" : "cad-props"}">${shown.map((a) => {
+      const key = assetKey(a.id);
+      return `<button type="button" data-opt="${opt}" data-val="${key}" class="${key === current ? "active" : ""}" title="${esc(`${a.name} · ${a.w} × ${a.h}`)}">
+        <span class="cad-thumb${kind === "texture" ? " tile" : ""}" style="background-image:url(&quot;${esc(this.resolve(a.src))}&quot;)"></span>
+        <span>${esc(a.name)}</span></button>`;
+    }).join("")}</div>`;
+    if (found.length > PALETTE_LIMIT) html += `<p class="cad-note">${esc(t("CADASTRE.Panel.MoreResults", { n: found.length - PALETTE_LIMIT }))}</p>`;
+    if (!found.length) html += `<p class="cad-note">${esc(t("CADASTRE.Panel.NoResults"))}</p>`;
+    return html;
+  }
+
+  _onSearch(event) {
+    const field = event.target.dataset?.search;
+    if (!field) return;
+    this.search[field] = event.target.value;
+    const pos = event.target.selectionStart;
+    this._renderPanel();
+    const input = this.el.toolOptions.querySelector(`[data-search="${field}"]`);
+    input?.focus();
+    input?.setSelectionRange(pos, pos);
+  }
+
   _createShape(nodes) {
     const o = this.opts;
     this._begin();
     let changed;
+    if (!this._useAsset(o.terrain)) return this._commit(false);
     if (o.shapeTarget === "room") {
       changed = M.addRoom(this.map, nodes, o.terrain);
     } else {

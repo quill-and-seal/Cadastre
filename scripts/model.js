@@ -7,6 +7,10 @@
  *   walls    : [{ id, closed, nodes:[{x,y,i?,o?}] }]
  *   doors    : [{ id, wall, s, w, kind:"door"|"secret" }]   s : position du centre le long du mur
  *   props    : [{ id, type, x, y, a, k }]                   centre, angle en degrés, échelle
+ *   assets   : { id: asset }       copie des assets de bibliothèque utilisés (voir library.js)
+ *
+ * Un sol ou un type d'objet est soit un élément du catalogue intégré (« stone », « barrel »),
+ * soit un asset de bibliothèque (« asset:<id> »).
  *
  * Les fonctions de modification changent la carte sur place et renvoient true si
  * quelque chose a changé (pour ne pas encombrer l'historique).
@@ -15,6 +19,7 @@ import {
   FORMAT_VERSION, MIN_CELLS, MAX_CELLS, DEFAULT_GRID_SIZE, MIN_GRID_SIZE, MAX_GRID_SIZE
 } from "./constants.js";
 import { TERRAIN_IDS, PROP_BY_ID } from "./catalog.js";
+import { normalizeAsset, mapAsset, pruneAssets } from "./library.js";
 import { flattenNodes, flattenWithParams, subNodes, cleanNode, project, polylineLength, round3 } from "./curves.js";
 import * as poly from "./poly.js";
 
@@ -45,12 +50,25 @@ export function createMap({ name = "", width = 30, height = 20, gridSize = DEFAU
     walls: [],
     doors: [],
     props: [],
+    assets: {},
     seq: 0,
     sceneId: null
   };
 }
 
 const nextId = (map, prefix) => `${prefix}${++map.seq}`;
+
+/** Sol connu de la carte : catalogue intégré ou texture de bibliothèque copiée dans la carte. */
+export function isTerrain(map, id) {
+  return TERRAIN_IDS.has(id) || mapAsset(map, id)?.kind === "texture";
+}
+
+/** Définition d'un type d'objet ({ w, h, svg } ou asset image), ou null. */
+export function propDef(map, type) {
+  if (PROP_BY_ID.has(type)) return PROP_BY_ID.get(type);
+  const a = mapAsset(map, type);
+  return a?.kind === "prop" ? a : null;
+}
 
 function cleanRings(rings) {
   return (Array.isArray(rings) ? rings : [])
@@ -81,8 +99,13 @@ export function normalizeMap(raw) {
     return out;
   };
 
+  for (const [id, asset] of Object.entries(src.assets ?? {})) {
+    const a = normalizeAsset({ ...asset, id });
+    if (a) { delete a.tags; map.assets[a.id] = a; }
+  }
+
   for (const [terrain, rings] of Object.entries(src.terrains ?? {})) {
-    if (!TERRAIN_IDS.has(terrain)) continue;
+    if (!isTerrain(map, terrain)) continue;
     const clean = cleanRings(rings);
     if (clean.length) map.terrains[terrain] = clean;
   }
@@ -102,12 +125,13 @@ export function normalizeMap(raw) {
     });
   }
   for (const p of Array.isArray(src.props) ? src.props : []) {
-    if (!p || !PROP_BY_ID.has(p.type) || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+    if (!p || !propDef(map, p.type) || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
     map.props.push({
       id: uid(p.id, "p"), type: p.type, x: round3(p.x), y: round3(p.y),
       a: round3(((Number(p.a) || 0) % 360 + 360) % 360), k: round3(clamp(p.k, 0.25, 4, 1))
     });
   }
+  pruneAssets(map);
   return map;
 }
 
@@ -183,7 +207,7 @@ function rebindDoors(map, anchors) {
 
 /** Peint une zone avec un sol : elle remplace les autres sols à cet endroit. */
 export function paintArea(map, rings, terrain) {
-  if (!TERRAIN_IDS.has(terrain) || !rings?.length) return false;
+  if (!isTerrain(map, terrain) || !rings?.length) return false;
   const clipped = poly.intersection(rings, poly.rectRings(0, 0, map.width, map.height));
   if (!clipped.length) return false;
   const before = JSON.stringify(map.terrains);
@@ -412,7 +436,7 @@ export function doorEnds(map, door) {
 /* -------------------------------------------- */
 
 export function addProp(map, type, x, y, a = 0, k = 1) {
-  if (!PROP_BY_ID.has(type) || x < 0 || y < 0 || x > map.width || y > map.height) return null;
+  if (!propDef(map, type) || x < 0 || y < 0 || x > map.width || y > map.height) return null;
   const prop = { id: nextId(map, "p"), type, x: round3(x), y: round3(y), a: round3(((a % 360) + 360) % 360), k: round3(clamp(k, 0.25, 4, 1)) };
   map.props.push(prop);
   return prop;
@@ -438,7 +462,8 @@ export function removeProp(map, id) {
 export function propAt(map, x, y) {
   for (let i = map.props.length - 1; i >= 0; i--) {
     const p = map.props[i];
-    const def = PROP_BY_ID.get(p.type);
+    const def = propDef(map, p.type);
+    if (!def) continue;
     const r = (-p.a * Math.PI) / 180;
     const dx = x - p.x, dy = y - p.y;
     const lx = (dx * Math.cos(r) - dy * Math.sin(r)) / p.k, ly = (dx * Math.sin(r) + dy * Math.cos(r)) / p.k;
