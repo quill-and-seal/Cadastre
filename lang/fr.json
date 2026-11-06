@@ -29,7 +29,8 @@
       "Unsaved": "modifications non enregistrées",
       "Saved": "Carte enregistrée.",
       "Coords": "{x} ; {y}",
-      "Snap": "Aimanter à la grille (Ctrl inverse)"
+      "Snap": "Aimanter à la grille (Ctrl inverse)",
+      "AnimateWater": "Animer le courant des rivières"
     },
     "Tools": {
       "select": "Sélection (1)",
@@ -126,7 +127,14 @@
       },
       "TreeRadius": "Zone semée (rayon)",
       "TreeDensity": "Densité",
-      "TreeSize": "Taille"
+      "TreeSize": "Taille",
+      "Flow": "Courant",
+      "FlowModes": {
+        "1": "Sens du tracé",
+        "-1": "Inverse",
+        "0": "Eau calme"
+      },
+      "FlowSpeed": "Vitesse du courant"
     },
     "Terrains": {
       "stone": "Dalles",
@@ -213,6 +221,10 @@
       "Truncated": "Dossier très grand : seules les {n} premières images ont été lues.",
       "Uploading": "Cadastre : envoi de {n} image(s)…",
       "BadJson": "Fichier de liste illisible."
+    },
+    "Settings": {
+      "AnimateWater": "Animer le courant des rivières",
+      "AnimateWaterHint": "Dans les scènes exportées par Cadastre, le courant glisse le long des rivières. Réglage propre à chaque joueur : à couper sur un ordinateur peu puissant."
     }
   }
 }
