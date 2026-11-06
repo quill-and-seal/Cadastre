@@ -2,10 +2,12 @@
  * Rendu SVG d'une carte. Le même rendu sert à l'éditeur et à l'image exportée.
  * Coordonnées SVG en cases : une case = 1 unité.
  */
-import { TERRAINS, PROP_BY_ID } from "./catalog.js";
+import { TERRAINS, PROP_BY_ID, mulberry32 } from "./catalog.js";
 import { wallPoints, doorEnds } from "./model.js";
 import { flattenNodes } from "./curves.js";
+import * as poly from "./poly.js";
 import { isAssetKey } from "./library.js";
+import { TREE_BY_TYPE } from "./trees.js";
 import { cutIntervals } from "./curves.js";
 
 const COLORS = {
@@ -112,6 +114,100 @@ export function renderTerrains(map, prefix = "cad", { feather = true } = {}) {
   return base || soft ? `<g clip-path="url(#${prefix}-clip)">${base}${soft}</g>` : "";
 }
 
+/* -------------------------------------------- */
+/*  Eau                                         */
+/* -------------------------------------------- */
+
+const WATER = {
+  deep: "#1d6f7c",
+  shallow: "#36b8b0",
+  rim: "#8fe6d8",
+  bank: "#7a4a35",
+  bankDark: "#5a3426",
+  ink: "#1a1411"
+};
+
+/** Zone d'eau de la carte : sol « eau » et chemins d'eau (rivières tracées). */
+export function waterRings(map) {
+  let rings = map.terrains?.water ?? [];
+  for (const q of map.paths ?? []) {
+    if (q.terrain !== "water") continue;
+    const pts = flattenNodes(q.nodes, q.closed, 0.02);
+    rings = poly.union(rings, poly.strokeRings(q.closed ? [...pts, pts[0]] : pts, q.width / 2));
+  }
+  return rings;
+}
+
+/** Fond de rivière : galets aux contours arrondis, motif qui se raccorde (4 × 4 cases). */
+function riverbedPattern(id) {
+  const n = 5, size = 4, cell = size / n;
+  const rand = mulberry32(1234);
+  const jit = [];
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) jit.push([(rand() - 0.5) * cell * 0.55, (rand() - 0.5) * cell * 0.55]);
+  const pt = (i, j) => {
+    const [dx, dy] = jit[((j % n + n) % n) * n + ((i % n + n) % n)];
+    return [f3(i * cell + dx), f3(j * cell + dy)];
+  };
+  let d = "";
+  // Une rangée de plus de chaque côté : les galets coupés par le bord du motif se raccordent.
+  for (let j = -1; j <= n; j++) for (let i = -1; i <= n; i++) {
+    const a = pt(i, j), b = pt(i + 1, j), c = pt(i + 1, j + 1), e = pt(i, j + 1);
+    // Galet : quadrilatère irrégulier un peu rétréci, coins arrondis par le trait.
+    const cx = (a[0] + b[0] + c[0] + e[0]) / 4, cy = (a[1] + b[1] + c[1] + e[1]) / 4;
+    const k = 0.84;
+    const q = [a, b, c, e].map(([x, y]) => [cx + (x - cx) * k, cy + (y - cy) * k]);
+    // Galet arrondi : courbes qui passent par le milieu des côtés, coins comme points de contrôle.
+    const mid = (u, v) => [f3((u[0] + v[0]) / 2), f3((u[1] + v[1]) / 2)];
+    const m = [mid(q[0], q[1]), mid(q[1], q[2]), mid(q[2], q[3]), mid(q[3], q[0])];
+    d += `M${m[3][0]} ${m[3][1]}`;
+    for (let t = 0; t < 4; t++) d += `Q${f3(q[t][0])} ${f3(q[t][1])} ${m[t][0]} ${m[t][1]}`;
+    d += "Z";
+  }
+  let sparkles = "";
+  for (let i = 0; i < 10; i++) sparkles += `<circle cx="${f3(rand() * size)}" cy="${f3(rand() * size)}" r="${f3(0.015 + rand() * 0.02)}" fill="#e8fffb"/>`;
+  return `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${size}" height="${size}">`
+    + `<path d="${d}" fill="#000" fill-opacity="0.06" stroke="#9be8df" stroke-opacity="0.1" stroke-width="0.03"/>`
+    + `<g opacity="0.55">${sparkles}</g></pattern>`;
+}
+
+/**
+ * Eau peinte : fond profond, eau claire le long des rives (dégradé flou), galets du fond,
+ * reflet sur le bord, berge de terre et trait d'encre autour.
+ */
+export function renderWater(map, prefix = "cad") {
+  const rings = waterRings(map);
+  const d = ringsPath(rings);
+  if (!d) return "";
+  const r = `filterUnits="userSpaceOnUse" ${region(map)}`;
+  const id = (k) => `${prefix}-w${k}`;
+  const round = `stroke-linejoin="round" stroke-linecap="round" fill="none"`;
+  return `<defs>`
+      + `<clipPath id="${id("clip")}"><path d="${d}"/></clipPath>`
+      + `<filter id="${id("soft")}" ${r}><feGaussianBlur stdDeviation="0.3"/></filter>`
+      + `<filter id="${id("rimblur")}" ${r}><feGaussianBlur stdDeviation="0.05"/></filter>`
+      // Berge irrégulière : le bord est déplacé par un bruit fin, comme tracé à la main.
+      + `<filter id="${id("rough")}" ${r} primitiveUnits="userSpaceOnUse">`
+        + `<feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="2" seed="7"/>`
+        + `<feDisplacementMap in="SourceGraphic" scale="0.22" xChannelSelector="R" yChannelSelector="G"/></filter>`
+      + riverbedPattern(id("bed"))
+    + `</defs>`
+    + `<g clip-path="url(#${prefix}-clip)">`
+    // Berge : bande de terre cerclée d'encre côté rive, plus sombre près de l'eau.
+    + `<g filter="url(#${id("rough")})">`
+      + `<path d="${d}" stroke="${WATER.ink}" stroke-width="0.66" ${round}/>`
+      + `<path d="${d}" stroke="${WATER.bank}" stroke-width="0.56" ${round}/>`
+      + `<path d="${d}" stroke="${WATER.bankDark}" stroke-width="0.22" ${round}/>`
+    + `</g>`
+    + `<g clip-path="url(#${id("clip")})">`
+      + `<path d="${d}" fill="${WATER.deep}"/>`
+      + `<path d="${d}" fill="url(#${id("bed")})"/>`
+      + `<path d="${d}" stroke="${WATER.shallow}" stroke-width="1.5" stroke-opacity="0.9" ${round} filter="url(#${id("soft")})"/>`
+      + `<path d="${d}" stroke="${WATER.rim}" stroke-width="0.32" stroke-opacity="0.75" ${round} filter="url(#${id("rimblur")})"/>`
+    + `</g>`
+    + `<path d="${d}" stroke="${WATER.ink}" stroke-width="0.04" stroke-opacity="0.7" ${round}/>`
+    + `</g>`;
+}
+
 /**
  * Chemins : bande texturée le long de la courbe, bordure de chaque côté (un trait plus
  * large dessous), ombre douce. Les textures restent fixes sur la carte : elles ne suivent
@@ -120,6 +216,7 @@ export function renderTerrains(map, prefix = "cad", { feather = true } = {}) {
 export function renderPaths(map, prefix = "cad") {
   let shadow = "", body = "";
   for (const q of map.paths ?? []) {
+    if (q.terrain === "water") continue; // dessiné avec l'eau
     const pts = flattenNodes(q.nodes, q.closed, 0.01);
     if (pts.length < 2) continue;
     const d = polylinePath(q.closed ? [...pts, pts[0]] : pts) + (q.closed ? "Z" : "");
@@ -136,7 +233,8 @@ export function renderPaths(map, prefix = "cad") {
 }
 
 /** Dessin d'un type d'objet dans son rectangle w×h (catalogue : SVG, bibliothèque : image). */
-export function propArt(def, resolve = defaultResolve) {
+export function propArt(def, resolve = defaultResolve, seed = 0) {
+  if (def.make) return def.make(seed ?? 0);
   return def.src
     ? `<image href="${attr(resolve(def.src))}" width="${def.w}" height="${def.h}" preserveAspectRatio="xMidYMid meet"/>`
     : def.svg;
@@ -144,13 +242,22 @@ export function propArt(def, resolve = defaultResolve) {
 
 /** Objets posés, avec une ombre portée. */
 export function renderProps(map, prefix = "cad", resolve = defaultResolve) {
-  let out = "";
+  // Les arbres portent leur propre ombre : ils restent hors du filtre (coûteux) des autres objets.
+  // L'ordre de pose est conservé : chaque suite d'objets ou d'arbres forme son propre groupe.
+  let out = "", run = "", runIsTree = null;
+  const flush = () => {
+    if (run) out += runIsTree ? `<g>${run}</g>` : `<g filter="url(#${prefix}-drop)">${run}</g>`;
+    run = "";
+  };
   for (const p of map.props) {
-    const def = PROP_BY_ID.get(p.type) ?? (isAssetKey(p.type) ? map.assets?.[p.type.slice(6)] : null);
+    const def = PROP_BY_ID.get(p.type) ?? TREE_BY_TYPE.get(p.type) ?? (isAssetKey(p.type) ? map.assets?.[p.type.slice(6)] : null);
     if (!def) continue;
-    out += `<g data-prop="${p.id}" transform="translate(${p.x} ${p.y}) rotate(${p.a}) scale(${p.k}) translate(${-def.w / 2} ${-def.h / 2})">${propArt(def, resolve)}</g>`;
+    const isTree = !!def.tree;
+    if (isTree !== runIsTree) { flush(); runIsTree = isTree; }
+    run += `<g data-prop="${p.id}" transform="translate(${p.x} ${p.y}) rotate(${p.a}) scale(${p.k}) translate(${-def.w / 2} ${-def.h / 2})">${propArt(def, resolve, p.s)}</g>`;
   }
-  return out ? `<g filter="url(#${prefix}-drop)">${out}</g>` : "";
+  flush();
+  return out;
 }
 
 /**
@@ -225,6 +332,7 @@ export function renderContent(map, { mode = "export", grid = false, prefix = "ca
   return renderDefs(map, prefix, resolve)
     + `<rect x="0" y="0" width="${map.width}" height="${map.height}" fill="${map.background}"/>`
     + renderTerrains(map, prefix)
+    + renderWater(map, prefix)
     + renderPaths(map, prefix)
     + renderProps(map, prefix, resolve)
     + renderWalls(map, mode, prefix)

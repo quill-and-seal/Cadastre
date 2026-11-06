@@ -76,3 +76,21 @@ test("un chemin se dessine avec sa bordure, sous les objets", async () => {
   assert.match(svg, new RegExp(`data-path="${q.id}"[^>]*stroke="url\\(#cad-t-cobble\\)" stroke-width="2"`));
   assert.ok(svg.indexOf(`data-path="${q.id}"`) < svg.indexOf('data-prop="p'), "le chemin passe sous les objets");
 });
+
+test("l'eau : sol et rivières tracées forment une seule zone, rendue avec sa berge", async () => {
+  const { addPath, paintArea } = await import("../scripts/model.js");
+  const { waterRings, renderWater, renderPaths } = await import("../scripts/render.js");
+  const { totalArea, rectRings } = await import("../scripts/poly.js");
+  const map = createMap({ width: 20, height: 10 });
+  assert.equal(renderWater(map), "", "pas d'eau, rien à dessiner");
+  paintArea(map, rectRings(0, 0, 4, 10), "water");
+  const river = addPath(map, [{ x: 4, y: 5 }, { x: 20, y: 5 }], { width: 2, terrain: "water" });
+  assert.ok(river);
+  const area = totalArea(waterRings(map));
+  // Étang 4 × 10, rivière 16 × 2, et le demi-disque du bout arrondi (coupé au rendu par le bord de la carte).
+  assert.ok(Math.abs(area - (40 + 16 * 2 + Math.PI / 2)) < 0.1, `étang + rivière : ${area}`);
+  const svg = renderWater(map);
+  assert.match(svg, /clipPath id="cad-wclip"/);
+  assert.match(svg, /feDisplacementMap/, "berge irrégulière");
+  assert.doesNotMatch(renderPaths(map), new RegExp(`data-path="${river.id}"`), "la rivière n'est pas redessinée en chemin");
+});

@@ -2,12 +2,13 @@
  * Éditeur de carte vectoriel : interface DOM autonome, sans dépendance à Foundry.
  * La fenêtre Foundry (app.js) l'héberge ; le banc d'essai (tools/editor-lab.html) aussi.
  */
-import { TERRAINS, PROPS } from "./catalog.js";
+import { TERRAINS, PROPS, mulberry32 } from "./catalog.js";
+import { TREES, TREE_PREFIX, TREE_BY_TYPE, pickTreeKind } from "./trees.js";
 import * as M from "./model.js";
 import * as P from "./poly.js";
 import { flattenNodes, rectNodes, ellipseNodes, smoothNodes, rdp, cleanNode, polylineLength } from "./curves.js";
 import { ringsPath as ringsPathD } from "./render.js";
-import { renderPaths } from "./render.js";
+import { renderPaths, renderWater } from "./render.js";
 import { renderDefs, renderTerrains, renderProps, renderWalls, renderGrid, polylinePath, terrainFill, terrainPatternId, propArt, defaultResolve } from "./render.js";
 import { isAssetKey, assetIdOf, assetKey, embedAsset, refreshMapAssets, filterAssets, normalizeLibrary, pruneAssets } from "./library.js";
 import { HISTORY_LIMIT, MIN_CELLS, MAX_CELLS, MIN_GRID_SIZE, MAX_GRID_SIZE } from "./constants.js";
@@ -22,6 +23,7 @@ export const TOOLS = [
   { id: "wall", icon: "fa-pen-nib", key: "5" },
   { id: "door", icon: "fa-door-open", key: "6" },
   { id: "prop", icon: "fa-chair", key: "7" },
+  { id: "trees", icon: "fa-tree", key: "0" },
   { id: "eraser", icon: "fa-eraser", key: "8" }
 ];
 const isCurve = (sel) => sel?.type === "wall" || sel?.type === "path";
@@ -74,6 +76,10 @@ export class MapEditor {
       pathTerrain: "cobble",
       pathEdge: "wood",
       pathEdgeWidth: 0.35,
+      treeKind: "mix",
+      treeRadius: 2,
+      treeSize: 1,
+      treeDensity: 1,
       doorWidth: 1,
       doorKind: "door",
       propType: PROPS[0].id,
@@ -245,7 +251,7 @@ export class MapEditor {
     }
     this.el.bg.setAttribute("fill", map.background);
     if (full || terrain) this.el.terrain.innerHTML = renderTerrains(map, prefix);
-    this.el.paths.innerHTML = renderPaths(map, prefix);
+    this.el.paths.innerHTML = renderWater(map, prefix) + renderPaths(map, prefix);
     this.el.props.innerHTML = renderProps(map, prefix, this.resolve);
     this.el.walls.innerHTML = renderWalls(map, "editor", prefix);
     this.el.grid.style.display = this.showGrid ? "" : "none";
@@ -334,6 +340,16 @@ export class MapEditor {
       case "door": {
         const target = p && this._doorTarget(p);
         if (target) out += pathEl(polylinePath([target.a, target.b]), "cad-door-preview", 6);
+        break;
+      }
+      case "trees": {
+        if (!p) break;
+        out += disc(p, o.treeRadius, "cad-brush");
+        if (!drag) {
+          const kind = o.treeKind === "mix" ? "oak" : o.treeKind;
+          const def = TREE_BY_TYPE.get(`${TREE_PREFIX}${kind}`);
+          out += `<g opacity="0.55" transform="translate(${p[0]} ${p[1]}) scale(${o.treeSize}) translate(${-def.w / 2} ${-def.h / 2})">${def.make(this._treeSeed ?? 1)}</g>`;
+        }
         break;
       }
       case "prop": {
@@ -501,6 +517,23 @@ export class MapEditor {
         }).join("")}</div>${this._libraryPalette("prop", "propType")}
           <div class="cad-row">${number("propAngle", "CADASTRE.Panel.Angle", o.propAngle, -360, 360, 15)}${number("propScale", "CADASTRE.Panel.Scale", o.propScale, 0.25, 4, 0.05)}</div>`;
         break;
+      case "trees": {
+        const kinds = ["mix", ...TREES.map((x) => x.id)];
+        html = title("CADASTRE.Panel.TreeKind") + `<div class="cad-swatches cad-props">${kinds.map((k) => {
+          const def = k === "mix" ? TREE_BY_TYPE.get(`${TREE_PREFIX}oak`) : TREE_BY_TYPE.get(`${TREE_PREFIX}${k}`);
+          const art = k === "mix"
+            ? `<g transform="translate(0.1 0.2) scale(0.55)">${TREE_BY_TYPE.get(`${TREE_PREFIX}oak`).make(3)}</g><g transform="translate(1.2 1.1) scale(0.5)">${TREE_BY_TYPE.get(`${TREE_PREFIX}palm`).make(5)}</g><g transform="translate(1.6 0) scale(0.5)">${TREE_BY_TYPE.get(`${TREE_PREFIX}pine`).make(2)}</g>`
+            : def.make(7);
+          const side = k === "mix" ? 3 : def.w;
+          return `<button type="button" data-opt="treeKind" data-val="${k}" class="${o.treeKind === k ? "active" : ""}">
+            <svg viewBox="0 0 ${side} ${side}" style="background:#4f9739">${art}</svg>
+            <span>${esc(t(`CADASTRE.Panel.TreeKinds.${k}`))}</span></button>`;
+        }).join("")}</div>`
+          + title("CADASTRE.Panel.TreeRadius") + slider("treeRadius", o.treeRadius, 0.5, 8, 0.25)
+          + title("CADASTRE.Panel.TreeDensity") + slider("treeDensity", o.treeDensity, 0.4, 2, 0.1)
+          + title("CADASTRE.Panel.TreeSize") + slider("treeSize", o.treeSize, 0.4, 2.5, 0.05);
+        break;
+      }
       case "eraser":
         html = title("CADASTRE.Panel.BrushSize") + slider("eraserRadius", o.eraserRadius, 0.1, 5, 0.05)
           + title("CADASTRE.Panel.Eraser") + segmented("eraseMode", ERASE_MODES, "CADASTRE.EraseModes");
@@ -1048,6 +1081,10 @@ export class MapEditor {
         this._commit(!!door, { terrain: false });
         break;
       }
+      case "trees":
+        this._begin();
+        this.drag = { kind: "trees", start: p, last: p, travel: 0, moved: false, changed: false, rand: mulberry32((Date.now() ^ (Math.random() * 2 ** 32)) >>> 0) };
+        break;
       case "prop": {
         const [x, y] = this._snap(p);
         this._begin();
@@ -1087,6 +1124,17 @@ export class MapEditor {
       case "freewall":
       case "freepath": {
         if (dist(drag.points.at(-1), p) > 0.08) drag.points.push(p);
+        break;
+      }
+      case "trees": {
+        const step = Math.max(0.35, this.opts.treeRadius * 0.5);
+        drag.travel += dist(drag.last, p);
+        drag.last = p;
+        if (!drag.moved && dist(drag.start, p) > 0.3) drag.moved = true;
+        if (drag.moved && drag.travel >= step) {
+          drag.travel = 0;
+          if (this._scatterTrees(p, drag.rand, 4)) { drag.changed = true; this._schedule("map"); }
+        }
         break;
       }
       case "rotate": {
@@ -1192,6 +1240,12 @@ export class MapEditor {
         this._commit(!!M.addWall(this.map, smoothNodes(pts, closed), closed), { terrain: false });
         break;
       }
+      case "trees": {
+        if (!drag.moved) drag.changed = this._placeTree(drag.start, drag.rand, false) || drag.changed;
+        this._treeSeed = Math.floor(drag.rand() * 1000);
+        this._commit(drag.changed, { terrain: false });
+        break;
+      }
       case "freepath": {
         const pts = rdp(drag.points, 0.05);
         if (pts.length < 2 || polylineLength(pts) < 0.3) break;
@@ -1240,7 +1294,7 @@ export class MapEditor {
   _cancelDrag() {
     const drag = this.drag;
     this.drag = null;
-    if (drag && ["node", "handle", "move"].includes(drag.kind)) this._rollback();
+    if (drag && ["node", "handle", "move", "rotate", "scale", "trees"].includes(drag.kind)) this._rollback();
     this._renderOverlay();
   }
 
@@ -1274,6 +1328,43 @@ export class MapEditor {
       this._commit(!!M.addWall(this.map, nodes, closed && nodes.length >= 3), { terrain: false });
     }
     this._renderOverlay();
+  }
+
+  /* -------------------------------------------- */
+  /*  Arbres                                      */
+  /* -------------------------------------------- */
+
+  /**
+   * Pose un arbre en (x, y) avec une essence, une taille et une orientation tirées au hasard.
+   * `spaced` : refusé s'il est trop près d'un autre arbre (le pinceau ne les entasse pas).
+   */
+  _placeTree([x, y], rand, spaced = true) {
+    const o = this.opts;
+    if (x < 0 || y < 0 || x > this.map.width || y > this.map.height) return false;
+    const kind = pickTreeKind(o.treeKind, rand);
+    const type = `${TREE_PREFIX}${kind}`;
+    const def = TREE_BY_TYPE.get(type);
+    const k = o.treeSize * (0.82 + rand() * 0.36);
+    if (spaced) {
+      const r = (def.w * k) / 2;
+      for (const q of this.map.props) {
+        const other = TREE_BY_TYPE.get(q.type);
+        if (!other) continue;
+        const min = ((r + (other.w * q.k) / 2) * 0.62) / o.treeDensity;
+        if (Math.hypot(q.x - x, q.y - y) < min) return false;
+      }
+    }
+    return !!M.addProp(this.map, type, x, y, Math.round(rand() * 360), k, Math.floor(rand() * 2 ** 32));
+  }
+
+  /** Sème quelques arbres au hasard dans le disque du pinceau. */
+  _scatterTrees(center, rand, attempts) {
+    let placed = false;
+    for (let i = 0; i < attempts; i++) {
+      const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * this.opts.treeRadius;
+      placed = this._placeTree([center[0] + Math.cos(a) * d, center[1] + Math.sin(a) * d], rand) || placed;
+    }
+    return placed;
   }
 
   /* -------------------------------------------- */
@@ -1354,6 +1445,7 @@ export class MapEditor {
   }
 
   _propName(type) {
+    if (TREE_BY_TYPE.has(type)) return this.t(`CADASTRE.Panel.TreeKinds.${type.slice(TREE_PREFIX.length)}`);
     if (!isAssetKey(type)) return this.t(`CADASTRE.Props.${type}`);
     return (this.map.assets?.[assetIdOf(type)] ?? this._libraryAsset(type))?.name ?? type;
   }

@@ -23,6 +23,7 @@ import {
 } from "./constants.js";
 import { TERRAIN_IDS, PROP_BY_ID } from "./catalog.js";
 import { normalizeAsset, mapAsset, pruneAssets } from "./library.js";
+import { TREE_BY_TYPE } from "./trees.js";
 import { flattenNodes, flattenWithParams, subNodes, cleanNode, project, polylineLength, round3 } from "./curves.js";
 import * as poly from "./poly.js";
 
@@ -78,6 +79,7 @@ export function isTerrain(map, id) {
 /** Définition d'un type d'objet ({ w, h, svg } ou asset image), ou null. */
 export function propDef(map, type) {
   if (PROP_BY_ID.has(type)) return PROP_BY_ID.get(type);
+  if (TREE_BY_TYPE.has(type)) return TREE_BY_TYPE.get(type);
   const a = mapAsset(map, type);
   return a?.kind === "prop" ? a : null;
 }
@@ -151,7 +153,8 @@ export function normalizeMap(raw) {
     if (!p || !propDef(map, p.type) || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
     map.props.push({
       id: uid(p.id, "p"), type: p.type, x: round3(p.x), y: round3(p.y),
-      a: round3(((Number(p.a) || 0) % 360 + 360) % 360), k: round3(clamp(p.k, 0.25, 4, 1))
+      a: round3(((Number(p.a) || 0) % 360 + 360) % 360), k: round3(clamp(p.k, 0.25, 4, 1)),
+      ...(Number.isInteger(p.s) ? { s: p.s >>> 0 } : {})
     });
   }
   pruneAssets(map);
@@ -516,9 +519,11 @@ export function doorEnds(map, door) {
 /*  Objets                                      */
 /* -------------------------------------------- */
 
-export function addProp(map, type, x, y, a = 0, k = 1) {
+/** Pose un objet ; `s` : graine d'un objet procédural (arbre). */
+export function addProp(map, type, x, y, a = 0, k = 1, s = null) {
   if (!propDef(map, type) || x < 0 || y < 0 || x > map.width || y > map.height) return null;
   const prop = { id: nextId(map, "p"), type, x: round3(x), y: round3(y), a: round3(((a % 360) + 360) % 360), k: round3(clamp(k, 0.25, 4, 1)) };
+  if (Number.isInteger(s)) prop.s = s >>> 0;
   map.props.push(prop);
   return prop;
 }
@@ -669,7 +674,9 @@ export function duplicateWall(map, id, dx = 1, dy = 1) {
 
 export function duplicateProp(map, id, dx = 0.5, dy = 0.5) {
   const p = map.props.find((q) => q.id === id);
-  return p ? addProp(map, p.type, p.x + dx, p.y + dy, p.a, p.k) : null;
+  // Une copie d'arbre reçoit une autre graine : deux arbres côte à côte ne sont pas jumeaux.
+  const seed = Number.isInteger(p?.s) ? (Math.imul(p.s, 2654435761) + map.seq) >>> 0 : null;
+  return p ? addProp(map, p.type, p.x + dx, p.y + dy, p.a, p.k, seed) : null;
 }
 
 /* -------------------------------------------- */

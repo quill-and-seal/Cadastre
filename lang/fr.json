@@ -40,7 +40,8 @@
       "door": "Porte (6)",
       "prop": "Objet (7)",
       "eraser": "Gomme (8)",
-      "path": "Chemin (9)"
+      "path": "Chemin (9)",
+      "trees": "Arbres (0)"
     },
     "Hints": {
       "select": "Clic : sélectionner, glisser : déplacer. Mur sélectionné : glisse nœuds et poignées (Alt : poignées indépendantes), double-clic sur un nœud : coin ↔ courbe, double-clic sur le mur : nouveau nœud. Suppr : effacer, Ctrl+D : dupliquer. Objet sélectionné : coins pour l'échelle, rond pour tourner (par 15°, Alt : libre).",
@@ -52,7 +53,8 @@
       "eraser": "Glisse pour effacer.",
       "pan": "Clic droit, molette enfoncée ou Espace + clic : déplacer la vue. Molette : zoom. Échap : annuler le tracé.",
       "fill": "Clic dans une pièce : pose le sol jusqu'aux murs (portes fermées comprises). Dehors, remplit tout ce qui n'est pas enclos.",
-      "path": "Route, quai, rivière : trace la courbe à la plume (clic : coin, clic-glisser : courbe, Entrée : finir) ou à main levée. Largeur, sol et bordure dans le panneau. Avec la sélection, glisse ses points pour le redessiner."
+      "path": "Route, quai, rivière : trace la courbe à la plume (clic : coin, clic-glisser : courbe, Entrée : finir) ou à main levée. Largeur, sol et bordure dans le panneau. Avec la sélection, glisse ses points pour le redessiner.",
+      "trees": "Clic : un arbre. Glisser : sème des arbres dans la zone du pinceau, espacés selon la densité. Chaque arbre est unique ; la sélection permet ensuite de le déplacer, le tourner, le redimensionner."
     },
     "Panel": {
       "Terrain": "Sol",
@@ -113,7 +115,18 @@
       "EdgeWidth": "Largeur de la bordure",
       "NoEdge": "Aucune",
       "SelPath": "Chemin",
-      "PathClosed": "Chemin fermé (boucle)"
+      "PathClosed": "Chemin fermé (boucle)",
+      "TreeKind": "Essence",
+      "TreeKinds": {
+        "mix": "Mélange",
+        "oak": "Feuillu",
+        "palm": "Palmier",
+        "pine": "Conifère",
+        "bush": "Buisson"
+      },
+      "TreeRadius": "Zone semée (rayon)",
+      "TreeDensity": "Densité",
+      "TreeSize": "Taille"
     },
     "Terrains": {
       "stone": "Dalles",

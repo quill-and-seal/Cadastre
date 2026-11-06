@@ -12,6 +12,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - Bibliothèque d'assets : objets et textures venus de l'extérieur.
 - 0.1.1 : remplissage d'une pièce d'un clic, cloisons accrochées aux murs.
 - 0.1.2 : chemins (routes, quais, rivières) avec bordure, poignées de rotation et d'échelle sur les objets.
+- 0.1.3 : style peint (herbe, terre, eau avec berges), arbres procéduraux.
 
 ## 0.2 — Palisade, Vellum, étages, zones retouchables
 
@@ -22,6 +23,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - Zones de sol sélectionnables et déformables comme les murs ; un sol qui suit le mur de sa pièce.
 - Calques : masquer, verrouiller, réordonner.
 - Sélection de plusieurs objets au rectangle, déplacés et tournés ensemble.
+- Falaises et dénivelés ; écume et rapides sur les rivières.
 
 ## 0.3 — Générateur de donjons et grottes
 
