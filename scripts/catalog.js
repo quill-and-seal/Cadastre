@@ -80,6 +80,39 @@ function planks() {
   return out;
 }
 
+const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16) / 255);
+
+/**
+ * Texture peinte : bruit fractal (feTurbulence) transformé en dégradé entre deux couleurs.
+ * Le motif fait `size` cases et se raccorde sans couture (stitchTiles), donc pas de
+ * répétition visible à petite échelle, comme un fond peint à la main.
+ */
+function painted(id, size, dark, light, freq, seed) {
+  const d = hex(dark), l = hex(light);
+  // Le canal rouge du bruit varie surtout entre 0,3 et 0,7 : on l'étire vers dark → light.
+  const row = (i) => {
+    const k = (l[i] - d[i]) / 0.4;
+    return `${r3(k)} 0 0 0 ${r3(d[i] - 0.3 * k)}`;
+  };
+  return `<filter id="cadf-${id}" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" x="0" y="0" width="${size}" height="${size}" color-interpolation-filters="sRGB">`
+    + `<feTurbulence type="fractalNoise" baseFrequency="${freq}" numOctaves="4" seed="${seed}" stitchTiles="stitch"/>`
+    + `<feColorMatrix type="matrix" values="${row(0)} ${row(1)} ${row(2)} 0 0 0 0 1"/></filter>`
+    + `<rect width="${size}" height="${size}" filter="url(#cadf-${id})"/>`;
+}
+
+/** Herbe : petites touches claires et sombres, quelques taches de terre rougeâtre. */
+function grassDetail(size) {
+  const rand = mulberry32(97);
+  let out = speckles(41, Math.round(size * size * 3), ["#78b955", "#3a7a2a", "#5aa03e"], 0.012, 0.035, size, size);
+  for (let i = 0; i < Math.round(size * size / 25); i++) {
+    const x = r3(rand() * size), y = r3(rand() * size);
+    for (let j = 0; j < 7; j++) {
+      out += `<circle cx="${r3(x + (rand() - 0.5) * 0.9)}" cy="${r3(y + (rand() - 0.5) * 0.6)}" r="${r3(0.03 + rand() * 0.05)}" fill="#8a5a43" fill-opacity="0.3"/>`;
+    }
+  }
+  return out;
+}
+
 function waves() {
   let out = "";
   for (const [x, y] of [[0.1, 0.25], [1.1, 0.25], [0.6, 0.75], [1.6, 0.75], [-0.4, 0.75]]) {
@@ -96,9 +129,9 @@ export const TERRAINS = [
   { id: "stone", swatch: "#7a746b", w: 2, h: 2, base: "#4a463f", pattern: flagstones() },
   { id: "wood", swatch: "#8a5a33", w: 2, h: 1, base: "#4e3119", pattern: planks() },
   { id: "cobble", swatch: "#837d73", w: 1, h: 1, base: "#4f4b45", pattern: cobbles() },
-  { id: "dirt", soft: true, swatch: "#6b5236", w: 1, h: 1, base: "#6b5236", pattern: speckles(11, 16, ["#5d4630", "#7a5f40", "#56412b"], 0.015, 0.05) },
-  { id: "grass", soft: true, swatch: "#4d6b33", w: 1, h: 1, base: "#4d6b33", pattern: speckles(23, 6, ["#45602e"], 0.05, 0.12) + blades(7, 26, ["#6a8c48", "#3f5a2a", "#5f8040"]) },
-  { id: "water", soft: true, swatch: "#2e5a78", w: 2, h: 1, base: "#2e5a78", pattern: waves() }
+  { id: "dirt", soft: true, swatch: "#83604c", w: 6, h: 6, base: "#7d5a47", pattern: painted("dirt", 6, "#5f4234", "#a07a63", 0.42, 5) + speckles(31, 90, ["#5a3e30", "#b08b72", "#6e4b3a"], 0.01, 0.035, 6, 6) },
+  { id: "grass", soft: true, swatch: "#4f9a3a", w: 14, h: 14, base: "#4f9739", pattern: painted("grass", 14, "#428a31", "#62a646", 0.14, 11) + grassDetail(14) },
+  { id: "water", water: true, swatch: "#2a8a92", w: 2, h: 1, base: "#1f6f7d", pattern: waves() }
 ];
 
 export const TERRAIN_IDS = new Set(TERRAINS.map((t) => t.id));

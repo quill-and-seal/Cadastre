@@ -40,7 +40,8 @@
       "door": "Door (6)",
       "prop": "Object (7)",
       "eraser": "Eraser (8)",
-      "path": "Path (9)"
+      "path": "Path (9)",
+      "trees": "Trees (0)"
     },
     "Hints": {
       "select": "Click: select, drag: move. Selected wall: drag nodes and handles (Alt: independent handles), double-click a node: corner ↔ curve, double-click the wall: new node. Del: delete, Ctrl+D: duplicate. Selected object: corners to scale, circle to rotate (by 15°, Alt: free).",
@@ -52,7 +53,8 @@
       "eraser": "Drag to erase.",
       "pan": "Right click, middle button or Space + click: pan. Wheel: zoom. Esc: cancel the path.",
       "fill": "Click inside a room: lays the floor up to the walls (closed doors included). Outside, fills everything not enclosed.",
-      "path": "Road, quay, river: draw the curve with the pen (click: corner, click-drag: curve, Enter: finish) or freehand. Width, floor and edge in the panel. With the select tool, drag its points to reshape it."
+      "path": "Road, quay, river: draw the curve with the pen (click: corner, click-drag: curve, Enter: finish) or freehand. Width, floor and edge in the panel. With the select tool, drag its points to reshape it.",
+      "trees": "Click: one tree. Drag: scatters trees within the brush, spaced by density. Every tree is unique; select one afterwards to move, rotate or resize it."
     },
     "Panel": {
       "Terrain": "Floor",
@@ -113,7 +115,18 @@
       "EdgeWidth": "Edge width",
       "NoEdge": "None",
       "SelPath": "Path",
-      "PathClosed": "Closed path (loop)"
+      "PathClosed": "Closed path (loop)",
+      "TreeKind": "Kind",
+      "TreeKinds": {
+        "mix": "Mix",
+        "oak": "Broadleaf",
+        "palm": "Palm",
+        "pine": "Conifer",
+        "bush": "Bush"
+      },
+      "TreeRadius": "Scatter area (radius)",
+      "TreeDensity": "Density",
+      "TreeSize": "Size"
     },
     "Terrains": {
       "stone": "Flagstones",

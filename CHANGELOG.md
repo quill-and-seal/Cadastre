@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3
+
+- **Style peint** : l'herbe et la terre sont peintes (bruit fractal, sans répétition visible), avec touches de couleur.
+- **Eau** : eau profonde au centre, claire le long des rives, fond de galets, reflet sur le bord, berge de terre irrégulière cerclée d'encre. Eau peinte au pinceau et rivières tracées avec l'outil Chemin (sol « eau ») ne forment qu'une seule eau.
+- **Arbres procéduraux** (outil Arbres, touche 0) : feuillu, palmier, conifère, buisson, ou un mélange. Clic pour un arbre, glisser pour en semer ; chaque arbre est unique et se retouche comme un objet.
+
 ## 0.1.2
 
 - Outil **Chemin** (touche 9) : une courbe à la plume ou à main levée devient une bande de sol (route, quai, rivière), avec une bordure optionnelle de chaque côté. Largeur, sol et bordure réglables, puis modifiables sur le chemin sélectionné ; points et poignées retouchables comme un mur ; la gomme coupe les chemins.
