@@ -8,7 +8,7 @@ import * as M from "./model.js";
 import * as P from "./poly.js";
 import { flattenNodes, rectNodes, ellipseNodes, smoothNodes, rdp, cleanNode, polylineLength } from "./curves.js";
 import { ringsPath as ringsPathD } from "./render.js";
-import { renderPaths, renderWater } from "./render.js";
+import { renderPaths, renderWater, renderCurrents } from "./render.js";
 import { renderDefs, renderTerrains, renderProps, renderWalls, renderGrid, polylinePath, terrainFill, terrainPatternId, propArt, defaultResolve } from "./render.js";
 import { isAssetKey, assetIdOf, assetKey, embedAsset, refreshMapAssets, filterAssets, normalizeLibrary, pruneAssets } from "./library.js";
 import { HISTORY_LIMIT, MIN_CELLS, MAX_CELLS, MIN_GRID_SIZE, MAX_GRID_SIZE } from "./constants.js";
@@ -76,6 +76,8 @@ export class MapEditor {
       pathTerrain: "cobble",
       pathEdge: "wood",
       pathEdgeWidth: 0.35,
+      pathFlow: 1,
+      pathSpeed: 1,
       treeKind: "mix",
       treeRadius: 2,
       treeSize: 1,
@@ -88,6 +90,7 @@ export class MapEditor {
     };
     this.tool = "shape";
     this.showGrid = true;
+    this.animateWater = true;
     this.snap = true;
 
     this.undoStack = [];
@@ -134,6 +137,7 @@ export class MapEditor {
         ${btn("grid", "fa-border-all", t("CADASTRE.Editor.Grid"))}
         ${btn("snap", "fa-magnet", t("CADASTRE.Editor.Snap"))}
         ${btn("fit", "fa-expand", t("CADASTRE.Editor.Fit"))}
+        ${btn("water", "fa-water", t("CADASTRE.Editor.AnimateWater"))}
         <span class="cad-dirty" hidden>${esc(t("CADASTRE.Editor.Unsaved"))}</span>
         <span class="cad-spacer"></span>
         ${this.onSave ? btn("save", "fa-floppy-disk", t("CADASTRE.Editor.SaveHint"), t("CADASTRE.Editor.Save")) : ""}
@@ -251,7 +255,8 @@ export class MapEditor {
     }
     this.el.bg.setAttribute("fill", map.background);
     if (full || terrain) this.el.terrain.innerHTML = renderTerrains(map, prefix);
-    this.el.paths.innerHTML = renderWater(map, prefix) + renderPaths(map, prefix);
+    this.el.paths.innerHTML = renderWater(map, prefix) + renderPaths(map, prefix) + renderCurrents(map, prefix);
+    if (!this.animateWater) this.el.svg.pauseAnimations?.();
     this.el.props.innerHTML = renderProps(map, prefix, this.resolve);
     this.el.walls.innerHTML = renderWalls(map, "editor", prefix);
     this.el.grid.style.display = this.showGrid ? "" : "none";
@@ -501,6 +506,11 @@ export class MapEditor {
         html = title("CADASTRE.Panel.WallMode") + segmented("pathMode", ["pen", "free"], "CADASTRE.Panel.WallModes")
           + title("CADASTRE.Panel.PathWidth") + slider("pathWidth", o.pathWidth, 0.2, 12, 0.1)
           + terrains("pathTerrain", "CADASTRE.Panel.PathTerrain")
+          + (o.pathTerrain === "water"
+            ? title("CADASTRE.Panel.Flow") + `<div class="cad-segmented">${[1, -1, 0].map((v) =>
+                `<button type="button" data-opt="pathFlow" data-val="${v}" class="${o.pathFlow === v ? "active" : ""}">${esc(t(`CADASTRE.Panel.FlowModes.${v}`))}</button>`).join("")}</div>`
+              + title("CADASTRE.Panel.FlowSpeed") + slider("pathSpeed", o.pathSpeed, 0.2, 3, 0.1)
+            : "")
           + title("CADASTRE.Panel.EdgeWidth") + slider("pathEdgeWidth", o.pathEdgeWidth, 0.05, 2, 0.05)
           + terrains("pathEdge", "CADASTRE.Panel.PathEdge", true);
         break;
@@ -568,6 +578,11 @@ export class MapEditor {
         </div>
         <label>${esc(t("CADASTRE.Panel.PathTerrain"))}<select data-field="selPathTerrain">${options(q.terrain, false)}</select></label>
         <label>${esc(t("CADASTRE.Panel.PathEdge"))}<select data-field="selPathEdge">${options(q.edge, true)}</select></label>
+        ${q.terrain === "water" ? `<div class="cad-row">
+          <label>${esc(t("CADASTRE.Panel.Flow"))}<select data-field="selPathFlow">${[1, -1, 0].map((v) =>
+            `<option value="${v}" ${q.flow === v ? "selected" : ""}>${esc(t(`CADASTRE.Panel.FlowModes.${v}`))}</option>`).join("")}</select></label>
+          <label>${esc(t("CADASTRE.Panel.FlowSpeed"))}<input type="number" data-field="selPathSpeed" min="0.2" max="3" step="0.1" value="${q.speed}"></label>
+        </div>` : ""}
         <label class="cad-check"><input type="checkbox" data-field="selPathClosed" ${q.closed ? "checked" : ""} ${q.nodes.length < 3 ? "disabled" : ""}> ${esc(t("CADASTRE.Panel.PathClosed"))}</label>
         ${actions()}`;
     }
@@ -609,6 +624,7 @@ export class MapEditor {
     if (redo) redo.disabled = !this.redoStack.length;
     this.root.querySelector('[data-action="grid"]')?.classList.toggle("active", this.showGrid);
     this.root.querySelector('[data-action="snap"]')?.classList.toggle("active", this.snap);
+    this.root.querySelector('[data-action="water"]')?.classList.toggle("active", this.animateWater);
     this.el.dirty.hidden = !this.dirty;
   }
 
@@ -842,7 +858,7 @@ export class MapEditor {
     if (!b.closest(".cad-map-options")) queueMicrotask(() => this.root.focus({ preventScroll: true }));
     if (b.dataset.tool) return this._setTool(b.dataset.tool);
     if (b.dataset.opt) {
-      this.opts[b.dataset.opt] = b.dataset.val;
+      this.opts[b.dataset.opt] = b.dataset.opt === "pathFlow" ? Number(b.dataset.val) : b.dataset.val;
       if (["wallMode", "shapeMode", "pathMode"].includes(b.dataset.opt)) this.pen = null;
       this._renderPanel();
       return this._renderOverlay();
@@ -857,6 +873,10 @@ export class MapEditor {
       case "grid": this.showGrid = !this.showGrid; this._updateTopbar(); return this.renderMap(false, false);
       case "snap": this.snap = !this.snap; return this._updateTopbar();
       case "fit": return this.fit();
+      case "water":
+        this.animateWater = !this.animateWater;
+        if (this.animateWater) this.el.svg.unpauseAnimations?.(); else this.el.svg.pauseAnimations?.();
+        return this._updateTopbar();
       case "save": return this.save();
       case "export": return this.onExport?.(this.getMap());
       case "apply-size": return this._applySize();
@@ -887,6 +907,8 @@ export class MapEditor {
     else if (field === "selPathWidth") changed = M.updatePath(this.map, id, { width: value });
     else if (field === "selPathEdgeWidth") changed = M.updatePath(this.map, id, { edgeWidth: value });
     else if (field === "selPathClosed") changed = M.updatePath(this.map, id, { closed: value });
+    else if (field === "selPathFlow") changed = M.updatePath(this.map, id, { flow: Number(value) });
+    else if (field === "selPathSpeed") changed = M.updatePath(this.map, id, { speed: value });
     else if (field === "selPathTerrain" || field === "selPathEdge") {
       const key = value || null;
       if (!key || this._useAsset(key)) changed = M.updatePath(this.map, id, field === "selPathTerrain" ? { terrain: key } : { edge: key });
@@ -1514,7 +1536,7 @@ export class MapEditor {
     const edge = o.pathEdge || null;
     this._begin();
     const ok = this._useAsset(o.pathTerrain) && (!edge || this._useAsset(edge));
-    const path = ok && M.addPath(this.map, nodes, { closed, width: o.pathWidth, terrain: o.pathTerrain, edge, edgeWidth: o.pathEdgeWidth });
+    const path = ok && M.addPath(this.map, nodes, { closed, width: o.pathWidth, terrain: o.pathTerrain, edge, edgeWidth: o.pathEdgeWidth, flow: o.pathFlow, speed: o.pathSpeed });
     this._commit(!!path, { terrain: false });
   }
 

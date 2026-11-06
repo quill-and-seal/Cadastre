@@ -5,6 +5,7 @@
 import { MODULE_ID, MAX_TEXTURE, log } from "./constants.js";
 import { renderSVG, defaultResolve } from "./render.js";
 import { usedAssetSources } from "./library.js";
+import { currentsFlag } from "./currents.js";
 import { buildWallData, textureScale } from "./walls.js";
 import { isEmpty } from "./model.js";
 
@@ -145,6 +146,10 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
   await setBackground(scene, src);
   const walls = buildWallData(map);
   if (walls.length) await scene.createEmbeddedDocuments("Wall", walls);
+  // Courant des rivières : animé dans la scène par le calque du module (currents-layer.js).
+  const currents = currentsFlag(map);
+  if (currents) await scene.setFlag(MODULE_ID, "currents", currents);
+  else if (scene.getFlag(MODULE_ID, "currents")) await scene.unsetFlag(MODULE_ID, "currents");
   await refreshThumbnail(scene);
   return { scene, created, reduced, missing };
 }

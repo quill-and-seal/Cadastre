@@ -49,6 +49,12 @@ Le panneau de droite règle l'outil en cours et la carte : nom, largeur et haute
 
 Sols disponibles : dalles, plancher, pavés, terre, herbe, eau. L'herbe et la terre sont peintes (texture de bruit, sans répétition visible) et se fondent dans leurs voisins ; les sols construits gardent un bord net. L'eau a son propre rendu : eau profonde au centre, claire le long des rives, fond de galets, berge de terre irrégulière cerclée d'encre. Une rivière se peint au pinceau ou se trace avec l'outil Chemin et le sol « eau » : les deux se rejoignent en une seule eau. Tout est dessiné en vectoriel par le module : aucune image à fournir.
 
+## Courant des rivières
+
+Une rivière tracée avec l'outil **Chemin** et le sol **eau** a un courant : des filets blancs qui glissent le long de l'eau, plus vite au milieu que près des berges. Le courant suit le sens du tracé ; sur le chemin sélectionné (ou avant de tracer), tu peux l'inverser, régler sa vitesse ou le couper pour une eau calme. L'eau peinte au pinceau (étangs, lacs) reste calme.
+
+Dans l'éditeur, le courant bouge déjà (bouton vague de la barre du haut pour le mettre en pause). Dans Foundry, la scène exportée l'anime par-dessus son fond, sous les jetons ; chaque joueur peut le couper dans les réglages du module (**Animer le courant des rivières**) si son ordinateur peine.
+
 ## Bibliothèque d'assets
 
 Les sols et objets intégrés ne suffisent pas : la bibliothèque ajoute tes propres images, ou celles d'un pack d'assets (Forgotten Adventures, 2-Minute Tabletop…), comme **objets** ou comme **textures de sol** qui se répètent.

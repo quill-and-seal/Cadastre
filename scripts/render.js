@@ -8,6 +8,7 @@ import { flattenNodes } from "./curves.js";
 import * as poly from "./poly.js";
 import { isAssetKey } from "./library.js";
 import { TREE_BY_TYPE } from "./trees.js";
+import { currentLines } from "./currents.js";
 import { cutIntervals } from "./curves.js";
 
 const COLORS = {
@@ -206,6 +207,21 @@ export function renderWater(map, prefix = "cad") {
     + `</g>`
     + `<path d="${d}" stroke="${WATER.ink}" stroke-width="0.04" stroke-opacity="0.7" ${round}/>`
     + `</g>`;
+}
+
+/**
+ * Courant des rivières pour l'éditeur : traits blancs animés (SMIL) qui glissent dans le sens
+ * du courant. Pas dans l'image exportée : dans Foundry, le module les anime par-dessus.
+ */
+export function renderCurrents(map, prefix = "cad") {
+  let out = "";
+  for (const l of currentLines(map)) {
+    const period = l.dash + l.gap;
+    out += `<path d="${polylinePath(l.points)}" fill="none" stroke="#e9fffb" stroke-opacity="${l.alpha}" stroke-width="${l.width}"`
+      + ` stroke-linecap="round" stroke-dasharray="${l.dash} ${l.gap}" stroke-dashoffset="${f3(-l.phase)}">`
+      + `<animate attributeName="stroke-dashoffset" from="${f3(-l.phase)}" to="${f3(-l.phase - period)}" dur="${f3(period / l.speed)}s" repeatCount="indefinite"/></path>`;
+  }
+  return out ? `<g class="cad-currents" clip-path="url(#${prefix}-wclip)">${out}</g>` : "";
 }
 
 /**

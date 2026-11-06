@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4
+
+- **Courant des rivières** : une rivière tracée avec l'outil Chemin et le sol « eau » a des filets de courant qui glissent dans le sens du tracé, plus vite au milieu. Sens, vitesse ou eau calme réglables par rivière.
+- Dans Foundry, le courant est animé sur la scène exportée, au-dessus du fond et sous les jetons ; réglage par joueur pour le couper.
+- Dans l'éditeur, le courant est animé ; bouton pour le mettre en pause.
+
 ## 0.1.3
 
 - **Style peint** : l'herbe et la terre sont peintes (bruit fractal, sans répétition visible), avec touches de couleur.

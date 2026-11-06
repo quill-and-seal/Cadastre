@@ -29,7 +29,8 @@
       "Unsaved": "unsaved changes",
       "Saved": "Map saved.",
       "Coords": "{x}, {y}",
-      "Snap": "Snap to grid (Ctrl inverts)"
+      "Snap": "Snap to grid (Ctrl inverts)",
+      "AnimateWater": "Animate river currents"
     },
     "Tools": {
       "select": "Select (1)",
@@ -126,7 +127,14 @@
       },
       "TreeRadius": "Scatter area (radius)",
       "TreeDensity": "Density",
-      "TreeSize": "Size"
+      "TreeSize": "Size",
+      "Flow": "Current",
+      "FlowModes": {
+        "1": "Drawing direction",
+        "-1": "Reversed",
+        "0": "Still water"
+      },
+      "FlowSpeed": "Current speed"
     },
     "Terrains": {
       "stone": "Flagstones",
@@ -213,6 +221,10 @@
       "Truncated": "Very large folder: only the first {n} images were read.",
       "Uploading": "Cadastre: uploading {n} image(s)…",
       "BadJson": "Unreadable list file."
+    },
+    "Settings": {
+      "AnimateWater": "Animate river currents",
+      "AnimateWaterHint": "In scenes exported by Cadastre, the current glides along rivers. Per-player setting: turn it off on a low-end computer."
     }
   }
 }

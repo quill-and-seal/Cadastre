@@ -5,7 +5,9 @@
  *   terrains : { idDeSol: anneaux }   zones de sol, sans recouvrement entre sols
  *   rooms    : anneaux                emprise des pièces (non dessinée, sert à fusionner les pièces)
  *   walls    : [{ id, closed, nodes:[{x,y,i?,o?}] }]
- *   paths    : [{ id, closed, nodes, width, terrain, edge, edgeWidth }]
+ *   paths    : [{ id, closed, nodes, width, terrain, edge, edgeWidth, flow, speed }]
+ *              flow : sens du courant d'une rivière (1 : sens du tracé, -1 : inverse, 0 : eau calme),
+ *              speed : vitesse du courant (1 = normale)
  *              chemin : bande de sol le long d'une courbe (route, quai, rivière), avec une bordure
  *              optionnelle (edge : un sol, edgeWidth : largeur de chaque bord) ; purement visuel
  *   doors    : [{ id, wall, s, w, kind:"door"|"secret" }]   s : position du centre le long du mur
@@ -64,6 +66,8 @@ export function createMap({ name = "", width = 30, height = 20, gridSize = DEFAU
 const nextId = (map, prefix) => `${prefix}${++map.seq}`;
 
 export const PATH_MIN_WIDTH = 0.2;
+export const FLOW_MIN_SPEED = 0.2;
+export const FLOW_MAX_SPEED = 3;
 export const PATH_MAX_WIDTH = 20;
 
 /** Mur ou chemin : les deux sont des courbes à nœuds, retouchées de la même façon. */
@@ -138,7 +142,9 @@ export function normalizeMap(raw) {
       width: round3(clamp(q.width, PATH_MIN_WIDTH, PATH_MAX_WIDTH, 2)),
       terrain: q.terrain,
       edge: q.edge && isTerrain(map, q.edge) ? q.edge : null,
-      edgeWidth: round3(clamp(q.edgeWidth, 0.05, 3, 0.35))
+      edgeWidth: round3(clamp(q.edgeWidth, 0.05, 3, 0.35)),
+      flow: [1, -1, 0].includes(q.flow) ? q.flow : 1,
+      speed: round3(clamp(q.speed, FLOW_MIN_SPEED, FLOW_MAX_SPEED, 1))
     });
   }
   const wallIds = new Set(map.walls.map((w) => w.id));
@@ -324,13 +330,14 @@ function clipNodes(nodes, closed, rings, keepInside = false) {
 /*  Chemins                                     */
 /* -------------------------------------------- */
 
-export function addPath(map, nodes, { closed = false, width = 2, terrain = "cobble", edge = null, edgeWidth = 0.35 } = {}) {
+export function addPath(map, nodes, { closed = false, width = 2, terrain = "cobble", edge = null, edgeWidth = 0.35, flow = 1, speed = 1 } = {}) {
   const clean = cleanNodes(nodes);
   if (clean.length < 2 || !isTerrain(map, terrain)) return null;
   const path = {
     id: nextId(map, "c"), closed: !!closed && clean.length > 2, nodes: clean,
     width: round3(clamp(width, PATH_MIN_WIDTH, PATH_MAX_WIDTH, 2)), terrain,
-    edge: edge && isTerrain(map, edge) ? edge : null, edgeWidth: round3(clamp(edgeWidth, 0.05, 3, 0.35))
+    edge: edge && isTerrain(map, edge) ? edge : null, edgeWidth: round3(clamp(edgeWidth, 0.05, 3, 0.35)),
+    flow: [1, -1, 0].includes(flow) ? flow : 1, speed: round3(clamp(speed, FLOW_MIN_SPEED, FLOW_MAX_SPEED, 1))
   };
   map.paths.push(path);
   return path;
@@ -345,6 +352,8 @@ export function updatePath(map, id, changes) {
   if (changes.terrain && isTerrain(map, changes.terrain)) q.terrain = changes.terrain;
   if ("edge" in changes) q.edge = changes.edge && isTerrain(map, changes.edge) ? changes.edge : null;
   if (changes.closed != null) q.closed = !!changes.closed && q.nodes.length > 2;
+  if (changes.flow != null && [1, -1, 0].includes(Number(changes.flow))) q.flow = Number(changes.flow);
+  if (changes.speed != null) q.speed = round3(clamp(changes.speed, FLOW_MIN_SPEED, FLOW_MAX_SPEED, q.speed));
   return JSON.stringify(q) !== before;
 }
 

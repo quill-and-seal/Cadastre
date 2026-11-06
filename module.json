@@ -2,7 +2,7 @@
   "id": "cadastre",
   "title": "Cadastre",
   "description": "Éditeur de cartes dans Foundry VTT : on peint les sols, on trace pièces, murs et portes, on pose le mobilier, puis la carte devient une scène prête à jouer, murs compris.",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "compatibility": {
     "minimum": "14",
     "verified": "14"
@@ -47,7 +47,7 @@
   },
   "url": "https://github.com/quill-and-seal/Cadastre",
   "manifest": "https://github.com/quill-and-seal/Cadastre/releases/latest/download/module.json",
-  "download": "https://github.com/quill-and-seal/Cadastre/releases/download/v0.1.3/module.zip",
+  "download": "https://github.com/quill-and-seal/Cadastre/releases/download/v0.1.4/module.zip",
   "bugs": "https://github.com/quill-and-seal/Cadastre/issues",
   "license": "LICENSE",
   "readme": "README.md"
