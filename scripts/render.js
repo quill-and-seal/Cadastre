@@ -84,6 +84,10 @@ export function renderDefs(map, prefix = "cad", resolve = defaultResolve) {
         + `<image href="${attr(resolve(t.src))}" width="${t.w}" height="${t.h}" preserveAspectRatio="none"/></pattern>`
       : `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${t.w}" height="${t.h}">`
         + `<rect width="${t.w}" height="${t.h}" fill="${t.base}"/>${t.pattern}</pattern>`;
+    // Seconde couche d'un sol (les brins de l'herbe), avec son propre motif, posée sur la première.
+    if (t.overlay) {
+      out += `<pattern id="${id}-o" patternUnits="userSpaceOnUse" width="${t.overlay.w}" height="${t.overlay.h}">${t.overlay.pattern}</pattern>`;
+    }
   }
   out += `<filter id="${prefix}-blur" ${r}><feGaussianBlur stdDeviation="0.13"/></filter>`;
   out += `<filter id="${prefix}-feather" ${r}><feGaussianBlur stdDeviation="${f3(FEATHER / 2.5)}"/></filter>`;
@@ -104,12 +108,16 @@ export function renderTerrains(map, prefix = "cad", { feather = true } = {}) {
     const d = ringsPath(map.terrains[key]);
     if (!d) continue;
     const fill = terrainFill(prefix, key);
+    const over = t.overlay ? `url(#${terrainPatternId(prefix, key)}-o)` : null;
     base += `<path d="${d}" fill="${fill}"/>`;
+    if (over) base += `<path d="${d}" fill="${over}"/>`;
     if (!feather || !t.soft) continue;
     const mask = `${prefix}-m-${safeKey(key)}`;
     soft += `<mask id="${mask}" maskUnits="userSpaceOnUse" ${region(map)}>`
       + `<path d="${d}" fill="#fff" stroke="#fff" stroke-width="${FEATHER}" stroke-linejoin="round" filter="url(#${prefix}-feather)"/></mask>`
-      + `<path d="${d}" fill="${fill}" stroke="${fill}" stroke-width="${FEATHER * 2}" stroke-linejoin="round" mask="url(#${mask})"/>`;
+      + `<g mask="url(#${mask})"><path d="${d}" fill="${fill}" stroke="${fill}" stroke-width="${FEATHER * 2}" stroke-linejoin="round"/>`
+      + (over ? `<path d="${d}" fill="${over}" stroke="${over}" stroke-width="${FEATHER * 2}" stroke-linejoin="round"/>` : "")
+      + `</g>`;
   }
   // Les bords fondus ne débordent pas hors de la carte.
   return base || soft ? `<g clip-path="url(#${prefix}-clip)">${base}${soft}</g>` : "";

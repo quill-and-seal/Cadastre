@@ -47,7 +47,7 @@ Navigation : clic droit, molette enfoncée ou **Espace** + clic pour déplacer l
 
 Le panneau de droite règle l'outil en cours et la carte : nom, largeur et hauteur en cases, pixels par case dans la scène, couleur de fond.
 
-Sols disponibles : dalles, plancher, pavés, terre, herbe, eau. L'herbe est un tapis serré de brins, la terre est peinte, et toutes deux se fondent dans leurs voisins ; les sols construits gardent un bord net. L'eau a son propre rendu : eau profonde au centre, claire le long des rives, fond de galets, berge de terre irrégulière cerclée d'encre. Une rivière se peint au pinceau ou se trace avec l'outil Chemin et le sol « eau » : les deux se rejoignent en une seule eau. Tout est dessiné en vectoriel par le module : aucune image à fournir.
+Sols disponibles : dalles, plancher, pavés, terre, herbe, eau. L'herbe est un tapis serré de brins peignés sur de grandes nappes de couleur, la terre est peinte, et toutes deux se fondent dans leurs voisins ; les sols construits gardent un bord net. L'eau a son propre rendu : eau profonde au centre, claire le long des rives, fond de galets, berge de terre irrégulière cerclée d'encre. Une rivière se peint au pinceau ou se trace avec l'outil Chemin et le sol « eau » : les deux se rejoignent en une seule eau. Tout est dessiné en vectoriel par le module : aucune image à fournir.
 
 ## Courant des rivières
 
