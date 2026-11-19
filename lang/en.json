@@ -30,7 +30,8 @@
       "Saved": "Map saved.",
       "Coords": "{x}, {y}",
       "Snap": "Snap to grid (Ctrl inverts)",
-      "AnimateWater": "Animate river currents"
+      "AnimateWater": "Animate river currents",
+      "WindPreview": "Preview the wind in the grass (the mouse parts the grass like a token)"
     },
     "Tools": {
       "select": "Select (1)",
@@ -134,7 +135,22 @@
         "-1": "Reversed",
         "0": "Still water"
       },
-      "FlowSpeed": "Current speed"
+      "FlowSpeed": "Current speed",
+      "Wind": "Wind in the grass",
+      "WindDir": "Blows towards",
+      "WindDirs": {
+        "N": "North",
+        "NE": "North-east",
+        "E": "East",
+        "SE": "South-east",
+        "S": "South",
+        "SW": "South-west",
+        "W": "West",
+        "NW": "North-west"
+      },
+      "WindStrength": "Strength",
+      "WindGusts": "Gusts",
+      "WindDensity": "Tufts per cell"
     },
     "Terrains": {
       "stone": "Flagstones",
@@ -224,7 +240,15 @@
     },
     "Settings": {
       "AnimateWater": "Animate river currents",
-      "AnimateWaterHint": "In scenes exported by Cadastre, the current glides along rivers. Per-player setting: turn it off on a low-end computer."
+      "AnimateWaterHint": "In scenes exported by Cadastre, the current glides along rivers. Per-player setting: turn it off on a low-end computer.",
+      "WindLevel": "Wind in the grass",
+      "WindLevelHint": "In scenes exported by Cadastre. Per-player setting: lower it on a low-end computer.",
+      "WindLevels": {
+        "0": "None",
+        "1": "Ripple (waves of light)",
+        "2": "Tufts bending",
+        "3": "Full (grass parts around tokens)"
+      }
     }
   }
 }

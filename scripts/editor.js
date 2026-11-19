@@ -9,6 +9,8 @@ import * as P from "./poly.js";
 import { flattenNodes, rectNodes, ellipseNodes, smoothNodes, rdp, cleanNode, polylineLength } from "./curves.js";
 import { ringsPath as ringsPathD } from "./render.js";
 import { renderPaths, renderWater, renderCurrents } from "./render.js";
+import { WindPreview } from "./wind-preview.js";
+import { normalizeWind } from "./wind.js";
 import { renderDefs, renderTerrains, renderProps, renderWalls, renderGrid, polylinePath, terrainFill, terrainPatternId, propArt, defaultResolve } from "./render.js";
 import { isAssetKey, assetIdOf, assetKey, embedAsset, refreshMapAssets, filterAssets, normalizeLibrary, pruneAssets } from "./library.js";
 import { HISTORY_LIMIT, MIN_CELLS, MAX_CELLS, MIN_GRID_SIZE, MAX_GRID_SIZE } from "./constants.js";
@@ -110,6 +112,7 @@ export class MapEditor {
     const refreshed = refreshMapAssets(this.map, this.library);
 
     this._build();
+    this.windPreview = new WindPreview(this);
     this.renderMap(true);
     this._renderPanel();
     this._syncMapFields();
@@ -138,6 +141,7 @@ export class MapEditor {
         ${btn("snap", "fa-magnet", t("CADASTRE.Editor.Snap"))}
         ${btn("fit", "fa-expand", t("CADASTRE.Editor.Fit"))}
         ${btn("water", "fa-water", t("CADASTRE.Editor.AnimateWater"))}
+        ${btn("wind", "fa-wind", t("CADASTRE.Editor.WindPreview"))}
         <span class="cad-dirty" hidden>${esc(t("CADASTRE.Editor.Unsaved"))}</span>
         <span class="cad-spacer"></span>
         ${this.onSave ? btn("save", "fa-floppy-disk", t("CADASTRE.Editor.SaveHint"), t("CADASTRE.Editor.Save")) : ""}
@@ -177,6 +181,12 @@ export class MapEditor {
               <label>${esc(t("CADASTRE.Panel.Background"))}<input type="color" name="background"></label>
             </div>
             <button type="button" data-action="apply-size" title="${esc(t("CADASTRE.Panel.ApplyHint"))}">${esc(t("CADASTRE.Panel.Apply"))}</button>
+            <h3>${esc(t("CADASTRE.Panel.Wind"))}</h3>
+            <label>${esc(t("CADASTRE.Panel.WindDir"))}<select name="windDir">${[[270, "N"], [315, "NE"], [0, "E"], [45, "SE"], [90, "S"], [135, "SW"], [180, "W"], [225, "NW"]]
+              .map(([deg, k]) => `<option value="${deg}">${esc(t(`CADASTRE.Panel.WindDirs.${k}`))}</option>`).join("")}</select></label>
+            <label>${esc(t("CADASTRE.Panel.WindStrength"))}<div class="cad-slider"><input type="range" name="windStrength" min="0" max="1" step="0.05"><output></output></div></label>
+            <label>${esc(t("CADASTRE.Panel.WindGusts"))}<div class="cad-slider"><input type="range" name="windGusts" min="0" max="1" step="0.05"><output></output></div></label>
+            <label>${esc(t("CADASTRE.Panel.WindDensity"))}<div class="cad-slider"><input type="range" name="windDensity" min="0" max="4" step="0.1"><output></output></div></label>
           </section>
         </aside>
       </div>
@@ -208,6 +218,9 @@ export class MapEditor {
     on(this.el.viewport, "wheel", (e) => this._onWheel(e), { passive: false });
     on(this.el.viewport, "contextmenu", (e) => e.preventDefault());
     on(this.el.mapOptions, "change", (e) => this._onMapField(e));
+    on(this.el.mapOptions, "input", (e) => {
+      if (e.target.type === "range") e.target.nextElementSibling.textContent = e.target.value;
+    });
     on(this.el.toolOptions, "input", (e) => this._onOptionInput(e, false));
     on(this.el.toolOptions, "input", (e) => this._onSearch(e));
     on(this.el.toolOptions, "change", (e) => this._onOptionInput(e, true));
@@ -218,6 +231,7 @@ export class MapEditor {
   }
 
   destroy() {
+    this.windPreview?.destroy();
     for (const [target, type, fn, opts] of this._listeners) target.removeEventListener(type, fn, opts);
     this._listeners = [];
     if (this._frame) cancelAnimationFrame(this._frame);
@@ -257,6 +271,7 @@ export class MapEditor {
     if (full || terrain) this.el.terrain.innerHTML = renderTerrains(map, prefix);
     this.el.paths.innerHTML = renderWater(map, prefix) + renderPaths(map, prefix) + renderCurrents(map, prefix);
     if (!this.animateWater) this.el.svg.pauseAnimations?.();
+    this.windPreview?.invalidate();
     this.el.props.innerHTML = renderProps(map, prefix, this.resolve);
     this.el.walls.innerHTML = renderWalls(map, "editor", prefix);
     this.el.grid.style.display = this.showGrid ? "" : "none";
@@ -615,6 +630,15 @@ export class MapEditor {
     f.querySelector('[name="height"]').value = this.map.height;
     f.querySelector('[name="gridSize"]').value = this.map.gridSize;
     f.querySelector('[name="background"]').value = this.map.background;
+    const wind = this.map.wind;
+    const dirs = [0, 45, 90, 135, 180, 225, 270, 315];
+    const nearest = dirs.reduce((best, d) => (Math.abs(((wind.dir - d + 540) % 360) - 180) < Math.abs(((wind.dir - best + 540) % 360) - 180) ? d : best), 0);
+    f.querySelector('[name="windDir"]').value = String(nearest);
+    for (const [name, key] of [["windStrength", "strength"], ["windGusts", "gusts"], ["windDensity", "density"]]) {
+      const input = f.querySelector(`[name="${name}"]`);
+      input.value = wind[key];
+      input.nextElementSibling.textContent = wind[key];
+    }
   }
 
   _updateTopbar() {
@@ -625,6 +649,7 @@ export class MapEditor {
     this.root.querySelector('[data-action="grid"]')?.classList.toggle("active", this.showGrid);
     this.root.querySelector('[data-action="snap"]')?.classList.toggle("active", this.snap);
     this.root.querySelector('[data-action="water"]')?.classList.toggle("active", this.animateWater);
+    this.root.querySelector('[data-action="wind"]')?.classList.toggle("active", !!this.windPreview?.enabled);
     this.el.dirty.hidden = !this.dirty;
   }
 
@@ -873,6 +898,9 @@ export class MapEditor {
       case "grid": this.showGrid = !this.showGrid; this._updateTopbar(); return this.renderMap(false, false);
       case "snap": this.snap = !this.snap; return this._updateTopbar();
       case "fit": return this.fit();
+      case "wind":
+        this.windPreview.setEnabled(!this.windPreview.enabled);
+        return this._updateTopbar();
       case "water":
         this.animateWater = !this.animateWater;
         if (this.animateWater) this.el.svg.unpauseAnimations?.(); else this.el.svg.pauseAnimations?.();
@@ -921,6 +949,14 @@ export class MapEditor {
     if (input.name === "name") {
       this.map.name = input.value.trim();
       this._setDirty(true);
+    } else if (input.name?.startsWith("wind")) {
+      const key = { windDir: "dir", windStrength: "strength", windGusts: "gusts", windDensity: "density" }[input.name];
+      this._begin();
+      const next = normalizeWind({ ...this.map.wind, [key]: Number(input.value) });
+      const changed = JSON.stringify(next) !== JSON.stringify(this.map.wind);
+      this.map.wind = next;
+      this._commit(changed, { terrain: false });
+      this._syncMapFields();
     } else if (input.name === "background") {
       this._begin();
       const changed = this.map.background !== input.value;

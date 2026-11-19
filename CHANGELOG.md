@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.5
+
+- **Vent dans l'herbe**, vu de dessus : des rafales avancent dans le sens du vent et l'herbe se couche sur leur passage. Direction, force, rafales et densité des touffes réglables par carte (panneau Carte de l'éditeur).
+- Trois niveaux au choix de chaque joueur dans Foundry : ondulation (vagues de lumière), touffes qui se couchent, complet (l'herbe s'écarte au passage des jetons).
+- Aperçu animé dans l'éditeur ; la souris y écarte l'herbe comme un jeton.
+- Les touffes évitent l'eau et ses berges, les chemins, les pièces, les murs et tout ce qui est posé sur l'herbe.
+
 ## 0.1.4
 
 - **Courant des rivières** : une rivière tracée avec l'outil Chemin et le sol « eau » a des filets de courant qui glissent dans le sens du tracé, plus vite au milieu. Sens, vitesse ou eau calme réglables par rivière.

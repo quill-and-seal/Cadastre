@@ -30,7 +30,8 @@
       "Saved": "Carte enregistrée.",
       "Coords": "{x} ; {y}",
       "Snap": "Aimanter à la grille (Ctrl inverse)",
-      "AnimateWater": "Animer le courant des rivières"
+      "AnimateWater": "Animer le courant des rivières",
+      "WindPreview": "Aperçu du vent dans l'herbe (la souris écarte l'herbe comme un jeton)"
     },
     "Tools": {
       "select": "Sélection (1)",
@@ -134,7 +135,22 @@
         "-1": "Inverse",
         "0": "Eau calme"
       },
-      "FlowSpeed": "Vitesse du courant"
+      "FlowSpeed": "Vitesse du courant",
+      "Wind": "Vent dans l'herbe",
+      "WindDir": "Souffle vers",
+      "WindDirs": {
+        "N": "Nord",
+        "NE": "Nord-est",
+        "E": "Est",
+        "SE": "Sud-est",
+        "S": "Sud",
+        "SW": "Sud-ouest",
+        "W": "Ouest",
+        "NW": "Nord-ouest"
+      },
+      "WindStrength": "Force",
+      "WindGusts": "Rafales",
+      "WindDensity": "Touffes par case"
     },
     "Terrains": {
       "stone": "Dalles",
@@ -224,7 +240,15 @@
     },
     "Settings": {
       "AnimateWater": "Animer le courant des rivières",
-      "AnimateWaterHint": "Dans les scènes exportées par Cadastre, le courant glisse le long des rivières. Réglage propre à chaque joueur : à couper sur un ordinateur peu puissant."
+      "AnimateWaterHint": "Dans les scènes exportées par Cadastre, le courant glisse le long des rivières. Réglage propre à chaque joueur : à couper sur un ordinateur peu puissant.",
+      "WindLevel": "Vent dans l'herbe",
+      "WindLevelHint": "Dans les scènes exportées par Cadastre. Réglage propre à chaque joueur : baisse-le sur un ordinateur peu puissant.",
+      "WindLevels": {
+        "0": "Aucun",
+        "1": "Ondulation (vagues de lumière)",
+        "2": "Touffes qui se couchent",
+        "3": "Complet (l'herbe s'écarte au passage des jetons)"
+      }
     }
   }
 }

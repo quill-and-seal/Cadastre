@@ -6,6 +6,7 @@ import { MODULE_ID, MAX_TEXTURE, log } from "./constants.js";
 import { renderSVG, defaultResolve } from "./render.js";
 import { usedAssetSources } from "./library.js";
 import { currentsFlag } from "./currents.js";
+import { windFlag } from "./wind.js";
 import { buildWallData, textureScale } from "./walls.js";
 import { isEmpty } from "./model.js";
 
@@ -150,6 +151,10 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
   const currents = currentsFlag(map);
   if (currents) await scene.setFlag(MODULE_ID, "currents", currents);
   else if (scene.getFlag(MODULE_ID, "currents")) await scene.unsetFlag(MODULE_ID, "currents");
+  // Vent dans l'herbe : animé par le calque du module (wind-layer.js).
+  const wind = windFlag(map);
+  if (wind) await scene.setFlag(MODULE_ID, "wind", wind);
+  else if (scene.getFlag(MODULE_ID, "wind")) await scene.unsetFlag(MODULE_ID, "wind");
   await refreshThumbnail(scene);
   return { scene, created, reduced, missing };
 }
