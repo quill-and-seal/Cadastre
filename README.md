@@ -97,7 +97,7 @@ Dans Foundry, chaque joueur choisit son niveau dans les réglages du module (**V
 | Brins animés | Tous les brins bougent. |
 | Complet (par défaut) | En plus, l'herbe s'écarte au passage des jetons et se redresse derrière eux. |
 
-Vus de loin, les brins sont moins nombreux et plus larges : la prairie garde le même aspect sans ralentir la scène. Les brins ne poussent que sur le sol **herbe**, jamais sur l'eau, les chemins, les pièces ni sous ce qui est posé (arbres, objets, tentes de ta bibliothèque). Une scène prend son vent à l'export ; une scène exportée avant la 0.1.7 doit être réexportée pour avoir la nouvelle herbe.
+Vus de loin, les brins sont moins nombreux et plus larges, avec un fondu quand on zoome : la prairie garde le même aspect sans ralentir la scène. Le réglage **Compteur de l'herbe** affiche en bas à gauche le nombre de brins dessinés et le temps par image. Les brins ne poussent que sur le sol **herbe**, jamais sur l'eau, les chemins, les pièces ni sous ce qui est posé (arbres, objets, tentes de ta bibliothèque). Une scène prend son vent à l'export ; une scène exportée avant la 0.1.7 doit être réexportée pour avoir la nouvelle herbe.
 
 ## Bibliothèque d'assets
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.9
+
+- **Herbe plus légère, même rendu** :
+  - Ce qui ne bouge jamais dans un brin (écart au vent, angle, longueur, teinte) est calculé une fois pour toutes. Chaque brin tient en 8 octets.
+  - Le vent est calculé une fois par image sur une petite grille, que les brins lisent.
+  - Les jetons ne sont testés que dans les morceaux de prairie qu'ils touchent.
+  - Un brin est un triangle et non plus un rectangle.
+- **Rien n'est dessiné pour rien** : sans vent ni jetons, la scène garde simplement l'herbe de son image de fond ; l'éditeur ne dessine pas quand l'onglet est caché ou que rien ne bouge.
+- **Éditeur** : les brins sont calculés en arrière-plan, et seuls les morceaux touchés par une retouche sont recalculés, sans à-coup en peignant.
+- **Vue de loin** : les brins en trop disparaissent en fondu, sans saut quand on zoome.
+- **Compteur de l'herbe** (réglage du module, par joueur) : nombre de brins dessinés et temps par image, pour mesurer.
+- L'eau ne déborde plus de la carte quand une rivière en sort.
+
 ## 0.1.8
 
 - **Eau vivante** : l'eau est dessinée par la carte graphique, avec un fond de sable et de galets vu à travers l'eau, des reflets de lumière qui ondulent et suivent le courant, des éclats de soleil et un liseré d'écume contre la berge. Trois textures : claire, profonde, boueuse.

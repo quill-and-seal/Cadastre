@@ -6,11 +6,15 @@
  *   2 : brins animés
  *   3 : en plus, l'herbe s'écarte au passage des jetons
  * Coupé (0), l'image de fond montre l'herbe figée.
+ *
+ * Un compteur optionnel (réglage « Compteur de l'herbe ») affiche les brins dessinés et le temps
+ * par image, pour comparer d'une version à l'autre.
  */
 import { MODULE_ID, log } from "./constants.js";
 import { normalizeWind, WIND_LEVELS } from "./wind.js";
 import {
-  bladeField, lod, windUniforms, packPushers, PushTrail, GRASS_VERT, GRASS_FRAG, BLADE_CORNERS
+  bladeField, lod, windUniforms, packPushers, PushTrail, grassVert, GRASS_FRAG, BLADE_CORNERS, BLADE_BYTES,
+  drawCount, pushersFor, gustGrid, gustRect, GUST_MAX
 } from "./grass.js";
 
 /** Rang de dessin dans le groupe principal : au-dessus du fond de scène, sous les tuiles et les jetons. */
@@ -36,6 +40,15 @@ export function registerWind() {
     default: WIND_LEVELS.FULL,
     onChange: () => refresh()
   });
+  game.settings.register(MODULE_ID, "grassStats", {
+    name: "CADASTRE.Settings.GrassStats",
+    hint: "CADASTRE.Settings.GrassStatsHint",
+    scope: "client",
+    config: true,
+    type: Boolean,
+    default: false,
+    onChange: () => refresh()
+  });
   Hooks.on("canvasReady", () => refresh());
   Hooks.on("canvasTearDown", () => teardown());
   Hooks.on("updateScene", (scene, changes) => {
@@ -44,18 +57,18 @@ export function registerWind() {
 }
 
 function teardown() {
+  document.getElementById("cadastre-grass-stats")?.remove();
   if (!state) return;
   canvas.app?.ticker?.remove(state.tick);
   if (!state.root.destroyed) state.root.destroy({ children: true });
-  state.shader?.destroy?.();
+  state.gustTexture?.destroy(true);
   state = null;
 }
 
 /** Rectangle visible de la scène, en cases, et pixels d'écran par case. */
 function viewRect(size, ox, oy) {
   const r = canvas.app.renderer;
-  const wt = canvas.stage.worldTransform;
-  const inv = wt.clone().invert();
+  const inv = canvas.stage.worldTransform.clone().invert();
   const a = inv.apply(new PIXI.Point(0, 0)), b = inv.apply(new PIXI.Point(r.screen.width, r.screen.height));
   return {
     x0: (Math.min(a.x, b.x) - ox) / size, y0: (Math.min(a.y, b.y) - oy) / size,
@@ -70,10 +83,12 @@ function refresh() {
   const level = Number(game.settings.get(MODULE_ID, "windLevel"));
   // Les scènes exportées avant la 0.1.7 ont l'ancienne herbe dans leur fond : on n'y ajoute rien.
   if (!data?.zone?.length || !level || (data.v ?? 1) < 2) return;
+  const wind = normalizeWind(data.wind);
+  // Sans vent ni jetons, l'herbe ne bouge pas : l'image de fond suffit.
+  if (!wind.strength && level < WIND_LEVELS.FULL) return;
   try {
     const d = canvas.dimensions;
     const size = d.size, ox = d.sceneX ?? d.sceneRect?.x ?? 0, oy = d.sceneY ?? d.sceneRect?.y ?? 0;
-    const wind = normalizeWind(data.wind);
     const field = bladeField(data.zone, wind);
     if (!field.count) return;
 
@@ -87,19 +102,37 @@ function refresh() {
     parent.addChild(root);
     parent.sortDirty = true;
 
+    // Vent lu dans une image depuis le programme des sommets, si la carte graphique le permet.
+    const gl = canvas.app.renderer.gl;
+    const useGust = !gl || gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS) > 0;
+    let gust = null, gustTexture = null;
+    if (useGust) {
+      gust = gustGrid(0, 0, 1, 1, 0, wind);
+      gustTexture = PIXI.Texture.fromBuffer(gust.data, GUST_MAX, GUST_MAX, {
+        format: PIXI.FORMATS.LUMINANCE, type: PIXI.TYPES.UNSIGNED_BYTE,
+        alphaMode: PIXI.ALPHA_MODES?.NPM ?? 0, scaleMode: PIXI.SCALE_MODES?.LINEAR ?? 1, mipmap: PIXI.MIPMAP_MODES?.OFF ?? 0
+      });
+    }
+
     const push = packPushers([]);
-    const uniforms = { ...windUniforms(wind, field.gap), uTime: 0, uPush: push, uAlpha: 1 };
-    const shader = PIXI.Shader.from(GRASS_VERT, GRASS_FRAG, uniforms);
+    const common = PIXI.UniformGroup.from({
+      ...windUniforms(wind, field.gap), uTime: 0, uPush: push, uAlpha: 1,
+      ...(useGust ? { uGust: gustTexture, uGustRect: gust.rect } : {})
+    });
+    const program = PIXI.Program.from(grassVert(useGust), GRASS_FRAG);
     const corners = new PIXI.Buffer(BLADE_CORNERS, true, false);
     const meshes = field.chunks.map((c) => {
+      const blades = new PIXI.Buffer(c.data, true, false);
       const geometry = new PIXI.Geometry()
         .addAttribute("aVertexPosition", corners, 2)
-        .addAttribute("aRoot", new PIXI.Buffer(c.roots, true, false), 2, false, PIXI.TYPES.FLOAT, 0, 0, true);
+        .addAttribute("aPos", blades, 2, true, PIXI.TYPES.UNSIGNED_SHORT, BLADE_BYTES, 0, true)
+        .addAttribute("aStat", blades, 4, true, PIXI.TYPES.UNSIGNED_BYTE, BLADE_BYTES, 4, true);
       geometry.instanced = true;
       geometry.instanceCount = c.count;
-      const mesh = new PIXI.Mesh(geometry, shader, undefined, PIXI.DRAW_MODES.TRIANGLE_STRIP);
+      const uniforms = { common, uOrigin: new Float32Array([c.cx, c.cy]), uPushN: 0 };
+      const mesh = new PIXI.Mesh(geometry, new PIXI.Shader(program, uniforms), undefined, PIXI.DRAW_MODES.TRIANGLES);
       root.addChild(mesh);
-      return { mesh, geometry, chunk: c };
+      return { mesh, geometry, chunk: c, uniforms };
     });
 
     const cap = level === WIND_LEVELS.LIGHT ? LIGHT_CAP : 1;
@@ -115,24 +148,59 @@ function refresh() {
       return out;
     };
 
-    let time = 0;
+    // Compteur de l'herbe.
+    let stats = null;
+    if (game.settings.get(MODULE_ID, "grassStats")) {
+      stats = document.createElement("div");
+      stats.id = "cadastre-grass-stats";
+      stats.style.cssText = "position:fixed;left:8px;bottom:8px;z-index:100;padding:4px 8px;border-radius:4px;background:rgba(0,0,0,.7);color:#dfe;font:12px/1.4 monospace;pointer-events:none";
+      document.body.appendChild(stats);
+    }
+    let time = 0, frames = 0, frameMs = 0, cpuMs = 0, lastStats = performance.now(), drawn = 0, chunksDrawn = 0;
+
     const tick = () => {
+      const t0 = performance.now();
       const dt = Math.min(0.1, (canvas.app.ticker.deltaMS ?? 16) / 1000);
       time += dt;
       const view = viewRect(size, ox, oy);
-      const { fraction, widthScale } = lod(field.gap, view.ppc, cap);
-      Object.assign(uniforms, windUniforms(wind, field.gap, widthScale));
-      uniforms.uTime = time;
-      packPushers(trail.update(movers(), dt), push);
-      for (const m of meshes) {
+      const pushers = trail.update(movers(), dt);
+      const visible = meshes.filter((m) => {
         const c = m.chunk;
-        m.mesh.visible = c.x1 >= view.x0 && c.x0 <= view.x1 && c.y1 >= view.y0 && c.y0 <= view.y1;
-        m.geometry.instanceCount = Math.max(1, Math.round(c.count * fraction));
+        return (m.mesh.visible = c.x1 >= view.x0 && c.x0 <= view.x1 && c.y1 >= view.y0 && c.y0 <= view.y1);
+      });
+      root.visible = visible.length > 0;
+      drawn = 0; chunksDrawn = visible.length;
+      if (visible.length) {
+        const l = lod(field.gap, view.ppc, cap);
+        const u = windUniforms(wind, field.gap, l);
+        Object.assign(common.uniforms, u);
+        common.uniforms.uTime = time;
+        packPushers(pushers, push);
+        if (useGust) {
+          const [gx0, gy0, gx1, gy1] = gustRect(field, view.x0, view.y0, view.x1, view.y1, u.uLength * 1.5);
+          gustGrid(gx0, gy0, gx1, gy1, time, wind, gust);
+          gustTexture.baseTexture.update();
+        }
+        for (const m of visible) {
+          m.geometry.instanceCount = drawCount(m.chunk, l);
+          m.uniforms.uPushN = pushersFor(m.chunk, pushers);
+          drawn += m.geometry.instanceCount;
+        }
+      }
+      if (stats) {
+        frames++; frameMs += canvas.app.ticker.elapsedMS ?? 16; cpuMs += performance.now() - t0;
+        const now = performance.now();
+        if (now - lastStats > 500) {
+          stats.textContent = `Herbe : ${drawn.toLocaleString()} brins · ${chunksDrawn} morceaux · `
+            + `${(frameMs / frames).toFixed(1)} ms/image (${Math.round(1000 / (frameMs / frames))} img/s) · calcul ${(cpuMs / frames).toFixed(2)} ms`
+            + (useGust ? "" : " · vent calculé brin par brin");
+          frames = 0; frameMs = 0; cpuMs = 0; lastStats = now;
+        }
       }
     };
     tick();
     canvas.app.ticker.add(tick);
-    state = { root, tick, shader };
+    state = { root, tick, gustTexture };
   } catch (error) {
     log("Vent non affiché", error);
     teardown();

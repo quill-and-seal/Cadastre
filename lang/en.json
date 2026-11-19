@@ -265,7 +265,9 @@
         "0": "None (still water)",
         "1": "Animated surface",
         "2": "Full (foam, leaves, current)"
-      }
+      },
+      "GrassStats": "Grass counter",
+      "GrassStatsHint": "Shows, bottom left, the number of blades drawn and the time per frame, to measure grass performance."
     }
   }
 }

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { normalizeWind, grassZone, windFlag, WIND_DEFAULT } from "../scripts/wind.js";
-import { bladeField, lod, visibleChunks, windUniforms, packPushers, PushTrail, CHUNK, MAX_PUSHERS, GRASS_VERT } from "../scripts/grass.js";
+import { bladeField, bladeAt, bladeRank, lod, drawCount, visibleChunks, pushersFor, windUniforms, gustAt, gustGrid, packPushers, PushTrail, grassVert, CHUNK, MAX_PUSHERS, BLADE_BYTES, GUST_MAX } from "../scripts/grass.js";
 import { createMap, normalizeMap, paintArea, addPath, addProp, addRoom } from "../scripts/model.js";
 import { rectRings, pointInRings, totalArea } from "../scripts/poly.js";
 import { rectNodes } from "../scripts/curves.js";
@@ -44,28 +44,49 @@ test("brins : une grille serrée dans la zone, par morceaux, toujours la même",
   assert.equal(field.chunks.reduce((n, c) => n + c.count, 0), field.count);
   assert.equal(field.chunks.length, Math.ceil(20 / CHUNK) * Math.ceil(10 / CHUNK));
   for (const c of field.chunks) {
-    for (let i = 0; i < c.roots.length; i += 2) {
-      const x = c.roots[i], y = c.roots[i + 1];
+    assert.equal(c.data.length, c.count * BLADE_BYTES, "8 octets par brin");
+    for (let i = 0; i < c.count; i++) {
+      const [x, y] = bladeAt(c, i);
       assert.ok(x > 0 && x < 20 && y > 0 && y < 10);
-      assert.ok(x >= c.x0 && x <= c.x1 && y >= c.y0 && y <= c.y1);
+      assert.ok(x >= c.cx - 1e-3 && x <= c.cx + CHUNK && y >= c.cy - 1e-3 && y <= c.cy + CHUNK);
     }
   }
-  assert.deepEqual(bladeField(zone, wind).chunks[0].roots, field.chunks[0].roots);
+  assert.deepEqual(bladeField(zone, wind).chunks[0].data, field.chunks[0].data);
   // Un trou dans la zone reste vide.
   const holed = bladeField([...rectRings(0, 0, 10, 10), ...rectRings(3, 3, 7, 7).reverse()], wind);
   assert.ok(Math.abs(holed.count - (100 - 16) * 100) < 200, `${holed.count}`);
-  for (const c of holed.chunks) for (let i = 0; i < c.roots.length; i += 2) {
-    assert.ok(!(c.roots[i] > 3.05 && c.roots[i] < 6.95 && c.roots[i + 1] > 3.05 && c.roots[i + 1] < 6.95));
+  for (const c of holed.chunks) for (let i = 0; i < c.count; i++) {
+    const [x, y] = bladeAt(c, i);
+    assert.ok(!(x > 3.05 && x < 6.95 && y > 3.05 && y < 6.95));
   }
   assert.equal(bladeField([], wind).count, 0);
 });
 
-test("brins mélangés : les premiers d'un morceau couvrent tout le morceau", () => {
+test("brins rangés par rang : les premiers d'un morceau couvrent tout le morceau", () => {
   const field = bladeField(rectRings(0, 0, 8, 8), normalizeWind({ gap: 5 }));
   const c = field.chunks[0];
   const quarters = [0, 0, 0, 0];
-  for (let i = 0; i < 400; i++) quarters[(c.roots[i * 2] < 4 ? 0 : 1) + (c.roots[i * 2 + 1] < 4 ? 0 : 2)]++;
+  let last = -1;
+  for (let i = 0; i < c.count; i++) {
+    const o = i * BLADE_BYTES, r = bladeRank(c.data[o + 4], c.data[o + 5], c.data[o + 6]);
+    assert.ok(r >= last - 1e-9, "rangés par rang");
+    last = r;
+    if (i < 400) { const [x, y] = bladeAt(c, i); quarters[(x < 4 ? 0 : 1) + (y < 4 ? 0 : 2)]++; }
+  }
   assert.ok(quarters.every((q) => q > 60), quarters.join(" "));
+});
+
+test("retouche : seuls les morceaux touchés sont recalculés", () => {
+  const wind = normalizeWind({ gap: 10 });
+  const before = bladeField(rectRings(0, 0, 32, 16), wind);
+  const previous = new Map(before.chunks.map((c) => [c.key, c]));
+  // On grignote un coin : seul le morceau de ce coin change.
+  const after = bladeField([...rectRings(0, 0, 32, 16), ...rectRings(1, 1, 3, 3).reverse()], wind, { previous });
+  const changed = after.chunks.filter((c) => !c.reused);
+  assert.equal(changed.length, 1, after.chunks.map((c) => `${c.cx},${c.cy}:${c.reused}`).join(" "));
+  assert.equal(changed[0].cx, 0);
+  assert.equal(changed[0].cy, 0);
+  for (const c of after.chunks.filter((k) => k.reused)) assert.equal(c.data, previous.get(c.key).data);
 });
 
 test("très grande carte : la grille se desserre", () => {
@@ -74,14 +95,32 @@ test("très grande carte : la grille se desserre", () => {
   assert.ok(field.gap > 0.025);
 });
 
-test("vu de loin, moins de brins mais plus larges", () => {
-  assert.deepEqual(lod(0.025, 100), { fraction: 1, widthScale: 1 });
+test("vu de loin, moins de brins mais plus larges, en fondu", () => {
+  assert.deepEqual(lod(0.025, 100), { fraction: 1, widthScale: 1, fadeLo: 1.01, fadeHi: 1.02 });
   const far = lod(0.025, 20);
   assert.ok(far.fraction < 0.1 && far.widthScale > 3);
+  assert.ok(far.fadeLo < far.fraction && far.fadeHi > far.fraction, "fondu autour de la part dessinée");
   assert.equal(lod(0.025, 100, 0.35).fraction, 0.35, "réglage léger");
   const field = bladeField(rectRings(0, 0, 30, 30), normalizeWind({ gap: 10 }));
   assert.equal(visibleChunks(field, 0, 0, 5, 5).length, 1);
   assert.equal(visibleChunks(field, -100, -100, 100, 100).length, field.chunks.length);
+  const c = field.chunks[0];
+  assert.equal(drawCount(c, lod(0.025, 100)), c.count);
+  assert.ok(drawCount(c, far) < c.count * 0.2);
+});
+
+test("vent : grille lue par les brins, jetons seulement là où ils sont", () => {
+  const wind = normalizeWind(null);
+  const g = gustGrid(0, 0, 10, 6, 1.5, wind);
+  assert.equal(g.data.length, GUST_MAX * GUST_MAX);
+  assert.ok(g.w >= 40 && g.h >= 24, "au moins 4 points par case");
+  const step = g.rect[2] / GUST_MAX;
+  assert.ok(Math.abs(g.data[3 * GUST_MAX + 5] / 255 - gustAt(5 * step, 3 * step, 1.5, wind)) < 0.01);
+  assert.ok(gustGrid(0, 0, 1000, 1000, 0, wind).w <= GUST_MAX, "jamais plus grande que l'image");
+  const field = bladeField(rectRings(0, 0, 30, 30), normalizeWind({ gap: 10 }));
+  const pushers = [{ x: 2, y: 2, r: 0.8 }];
+  assert.equal(pushersFor(field.chunks[0], pushers), 1);
+  assert.equal(pushersFor(field.chunks.at(-1), pushers), 0);
 });
 
 test("uniformes du vent et poussées des jetons", () => {
@@ -93,7 +132,9 @@ test("uniformes du vent et poussées des jetons", () => {
   const p = packPushers([{ x: 1, y: 2, r: 0.5 }]);
   assert.equal(p.length, MAX_PUSHERS * 4);
   assert.deepEqual([...p.slice(0, 5)], [1, 2, 0.5, 1, 0]);
-  assert.match(GRASS_VERT, new RegExp(`uPush\\[${MAX_PUSHERS}\\]`));
+  assert.match(grassVert(true), /#define GUST_TEXTURE/);
+  assert.doesNotMatch(grassVert(false), /#define GUST_TEXTURE/);
+  assert.match(grassVert(), new RegExp(`uPush\\[${MAX_PUSHERS}\\]`));
 });
 
 test("un jeton laisse une trace où l'herbe se redresse", () => {

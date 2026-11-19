@@ -467,6 +467,8 @@ export class WaterSim {
   }
 
   _inRock(x, y) {
+    // Hors de la carte aussi : une rivière qui en sort emporte ses particules.
+    if (x < 0 || y < 0 || x > this.f.width || y > this.f.height) return true;
     for (const r of this.f.rocks) if ((x - r.x) ** 2 + (y - r.y) ** 2 < r.r * r.r) return true;
     return false;
   }

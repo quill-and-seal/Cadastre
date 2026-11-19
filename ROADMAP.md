@@ -18,6 +18,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - 0.1.6 : herbe faite de brins, brins animés par le vent.
 - 0.1.7 : herbe en grille de traits dessinée par la carte graphique, vagues de vent, jetons qui écartent l'herbe.
 - 0.1.8 : eau vivante (texture, courant réaliste, obstacles et tourbillons, écume et feuilles).
+- 0.1.9 : herbe optimisée (même rendu), calcul en arrière-plan dans l'éditeur, compteur de performances.
 
 ## 0.2 — Palisade, Vellum, étages, zones retouchables
 
