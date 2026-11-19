@@ -101,18 +101,21 @@ function painted(id, size, dark, light, freq, seed) {
 }
 
 /**
- * Herbe vue de dessus : un tapis serré de gerbes de brins. Chaque gerbe part d'un pied et
- * s'étale en étoile ; chaque brin a un pied sombre et une pointe claire, et tous penchent un
- * peu du même côté, comme une pelouse peinte. Les brins sont regroupés par teinte (un chemin
- * SVG par teinte) pour rester légers à afficher. Le motif fait `size` cases et se raccorde.
+ * Herbe vue de dessus : un tapis serré de gerbes de brins « peignés ». Chaque gerbe part d'un
+ * pied et s'ouvre en éventail, mais tous les brins penchent à peu près du même côté (`lean`,
+ * à ± `spread` près), comme une pelouse peinte. Palette resserrée et brins un peu transparents :
+ * la couleur varie en grandes nappes, données par le fond peint sous les brins.
+ * Les brins sont regroupés par teinte (un chemin SVG par teinte). Le motif fait `size` cases
+ * et se raccorde.
  *
  * @param {number} clumps  gerbes par case
  */
 export function grassBlades(size, clumps, seed, {
-  blades = [7, 13], length = [0.12, 0.26], width = 0.02, lean = [-0.6, -0.9], colors = GRASS_BLADE_COLORS
+  blades = [6, 10], length = [0.14, 0.3], width = 0.02, lean = GRASS_LEAN, spread = 1.1,
+  colors = GRASS_BLADE_COLORS, opacity = 0.78
 } = {}) {
   const rand = mulberry32(seed);
-  const roots = colors.slice(0, 3), tips = colors.slice(3);
+  const roots = colors.slice(0, 2), tips = colors.slice(2);
   const groups = new Map(colors.map((c) => [c, []]));
   const push = (color, d) => groups.get(color).push(d);
   const seg = (ax, ay, cx, cy, bx, by) => `M${r3(ax)} ${r3(ay)}Q${r3(cx)} ${r3(cy)} ${r3(bx)} ${r3(by)}`;
@@ -120,30 +123,35 @@ export function grassBlades(size, clumps, seed, {
   for (let c = 0; c < n; c++) {
     const x0 = rand() * size, y0 = rand() * size;
     const count = blades[0] + Math.floor(rand() * (blades[1] - blades[0] + 1));
-    const shade = rand();
+    const tone = rand();
     for (let i = 0; i < count; i++) {
-      const a = rand() * Math.PI * 2;
+      const a = lean + (rand() - 0.5) * 2 * spread;
       const len = length[0] + rand() * (length[1] - length[0]);
-      // Le brin part du pied, s'étale, puis penche du côté commun.
-      const ex = Math.cos(a) * len * 0.75 + lean[0] * len * 0.35, ey = Math.sin(a) * len * 0.75 + lean[1] * len * 0.35;
-      const curl = (rand() - 0.5) * len * 0.5;
+      const ex = Math.cos(a) * len, ey = Math.sin(a) * len;
+      // Courbure douce, toujours du même côté : les brins semblent tous suivre le même mouvement.
+      const curl = len * (0.12 + rand() * 0.12);
       const mx = ex * 0.5 - Math.sin(a) * curl, my = ey * 0.5 + Math.cos(a) * curl;
-      // Pied : moitié basse sombre ; pointe : moitié haute claire.
-      const root = roots[Math.min(roots.length - 1, Math.floor((shade * 0.6 + rand() * 0.4) * roots.length))];
-      const tip = tips[Math.min(tips.length - 1, Math.floor((shade * 0.6 + rand() * 0.4) * tips.length))];
+      const k = (tone * 0.7 + rand() * 0.3);
+      const root = roots[Math.min(roots.length - 1, Math.floor(k * roots.length))];
+      const tip = tips[Math.min(tips.length - 1, Math.floor(k * tips.length))];
+      // Pieds un peu décalés dans la gerbe : pas d'éventail trop régulier.
+      const jx = (rand() - 0.5) * 0.12, jy = (rand() - 0.5) * 0.12;
       for (const [ox, oy] of copies(x0, y0, size)) {
-        const x = x0 + ox, y = y0 + oy;
-        push(root, seg(x, y, x + mx * 0.5, y + my * 0.5, x + mx, y + my));
-        push(tip, seg(x + mx, y + my, x + (mx + ex) / 2 + (ex - mx) * 0.1, y + (my + ey) / 2 + (ey - my) * 0.1, x + ex, y + ey));
+        const x = x0 + ox + jx, y = y0 + oy + jy;
+        push(root, seg(x, y, x + mx * 0.45, y + my * 0.45, x + mx, y + my));
+        push(tip, seg(x + mx, y + my, x + (mx + ex) / 2 + Math.cos(a) * len * 0.05, y + (my + ey) / 2 + Math.sin(a) * len * 0.05, x + ex, y + ey));
       }
     }
   }
   return [...groups].map(([color, segs]) => {
     if (!segs.length) return "";
-    const w = roots.includes(color) ? width * 1.35 : width;
-    return `<path d="${segs.join("")}" fill="none" stroke="${color}" stroke-width="${r3(w)}" stroke-linecap="round"/>`;
+    const w = roots.includes(color) ? width * 1.3 : width;
+    return `<path d="${segs.join("")}" fill="none" stroke="${color}" stroke-opacity="${opacity}" stroke-width="${r3(w)}" stroke-linecap="round"/>`;
   }).join("");
 }
+
+/** Inclinaison commune des brins (radians) : vers le haut et un peu à gauche, côté lumière. */
+export const GRASS_LEAN = -1.95;
 
 /** Une gerbe près d'un bord du motif est redessinée de l'autre côté : le motif se raccorde sans couture. */
 function copies(x, y, size, margin = 0.35) {
@@ -156,7 +164,8 @@ function copies(x, y, size, margin = 0.35) {
 }
 
 /** Verts des brins, du plus sombre (au ras du sol) au plus clair (pointes au soleil). */
-export const GRASS_BLADE_COLORS = ["#244f1b", "#2e6323", "#38752a", "#4f9437", "#64a945", "#7fc055"];
+/** Verts des brins : deux pour les pieds, trois pour les pointes, proches les uns des autres. */
+export const GRASS_BLADE_COLORS = ["#2f6626", "#356f2a", "#4a8a36", "#53953c", "#5e9f43"];
 
 function waves() {
   let out = "";
@@ -175,7 +184,9 @@ export const TERRAINS = [
   { id: "wood", swatch: "#8a5a33", w: 2, h: 1, base: "#4e3119", pattern: planks() },
   { id: "cobble", swatch: "#837d73", w: 1, h: 1, base: "#4f4b45", pattern: cobbles() },
   { id: "dirt", soft: true, swatch: "#83604c", w: 6, h: 6, base: "#7d5a47", pattern: painted("dirt", 6, "#5f4234", "#a07a63", 0.42, 5) + speckles(31, 90, ["#5a3e30", "#b08b72", "#6e4b3a"], 0.01, 0.035, 6, 6) },
-  { id: "grass", soft: true, swatch: "#4f9a3a", w: 3, h: 3, base: "#3f7f2f", pattern: painted("grass", 3, "#2c5f22", "#3e7f2e", 0.45, 11) + grassBlades(3, 24, 11, { blades: [6, 10], length: [0.14, 0.3] }) },
+  // Herbe : grandes nappes de couleur peintes (motif de 12 cases), puis le tapis de brins par-dessus (motif de 4 cases).
+  { id: "grass", soft: true, swatch: "#4a8a36", w: 12, h: 12, base: "#3d7a2e", pattern: painted("grass", 12, "#2f6a26", "#5a9a40", 0.11, 11),
+    overlay: { w: 4, h: 4, pattern: grassBlades(4, 34, 11, { blades: [3, 6], spread: 0.85 }) } },
   { id: "water", water: true, swatch: "#2a8a92", w: 2, h: 1, base: "#1f6f7d", pattern: waves() }
 ];
 

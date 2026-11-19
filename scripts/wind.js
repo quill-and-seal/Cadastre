@@ -14,7 +14,7 @@
  *   density  : brins animés par case (0 : pas de brins animés, seulement l'ondulation)
  */
 import * as poly from "./poly.js";
-import { mulberry32 } from "./catalog.js";
+import { mulberry32, GRASS_LEAN } from "./catalog.js";
 import { waterRings } from "./render.js";
 import { propDef } from "./model.js";
 import { flattenNodes } from "./curves.js";
@@ -174,8 +174,9 @@ export function patchPositions(zone, { seed = 1, maxCount = MAX_PATCHES } = {}) 
   return out;
 }
 
-const BLADE_ROOTS = ["#2e6323", "#38752a", "#427f30"];
-const BLADE_TIPS = ["#5a9f3f", "#6db04a", "#84c45a", "#9bd36a"];
+/** Mêmes verts que le tapis de brins du sol, à peine plus clairs : la couche animée s'y fond. */
+const BLADE_ROOTS = ["#336b28", "#3a752d"];
+const BLADE_TIPS = ["#4f9039", "#599a3f", "#64a446"];
 
 /**
  * Dessine un carré de brins vus de dessus, centré en (cx, cy), dans un contexte 2D.
@@ -191,27 +192,30 @@ export function drawBladePatch(ctx, cx, cy, ppc, variant, count, bend, bendAngle
   const blades = [];
   for (let i = 0; i < count; i++) {
     const x = cx + (rand() - 0.5) * ppc, y = cy + (rand() - 0.5) * ppc;
-    const a = rand() * Math.PI * 2;
-    const len = ppc * (0.18 + rand() * 0.2);
+    // Peignés comme le sol : tous penchent à peu près du même côté au repos.
+    const a = GRASS_LEAN + (rand() - 0.5) * 2.2;
+    const len = ppc * (0.18 + rand() * 0.18);
     const stiff = 0.7 + rand() * 0.6;          // chaque brin plie un peu différemment
     const b = Math.min(1, bend * stiff);
     // Debout, le brin ne montre qu'un bout court ; couché, il file dans le sens du vent.
     const up = len * 0.55 * (1 - 0.6 * b);
     const lay = len * 1.05 * b;
-    const ex = Math.cos(a) * up + bx * lay - 0.25 * len * (1 - b) * 0.6;
-    const ey = Math.sin(a) * up + by * lay - 0.35 * len * (1 - b) * 0.6;
-    const curl = (rand() - 0.5) * len * 0.35;
+    const ex = Math.cos(a) * up + bx * lay;
+    const ey = Math.sin(a) * up + by * lay;
+    const curl = len * (0.08 + rand() * 0.1);
     const mx = ex * 0.5 - Math.sin(a) * curl * (1 - b), my = ey * 0.5 + Math.cos(a) * curl * (1 - b);
     const shade = rand();
     blades.push({
       x, y, ex, ey, mx, my,
       root: BLADE_ROOTS[Math.floor(shade * BLADE_ROOTS.length)],
-      tip: BLADE_TIPS[Math.min(BLADE_TIPS.length - 1, Math.floor((shade * 0.5 + rand() * 0.5 + b * 0.3) * BLADE_TIPS.length))],
+      // Les brins couchés montrent un peu plus leur dessus, plus clair.
+      tip: BLADE_TIPS[Math.min(BLADE_TIPS.length - 1, Math.floor((shade * 0.6 + rand() * 0.25 + b * 0.35) * BLADE_TIPS.length))],
       w: ppc * (0.018 + rand() * 0.01)
     });
   }
   blades.sort((p, q) => p.y - q.y);
   ctx.lineCap = "round";
+  ctx.globalAlpha = 0.85;
   for (const bl of blades) {
     ctx.strokeStyle = bl.root;
     ctx.lineWidth = bl.w * 1.4;
