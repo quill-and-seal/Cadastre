@@ -47,7 +47,7 @@ Navigation : clic droit, molette enfoncée ou **Espace** + clic pour déplacer l
 
 Le panneau de droite règle l'outil en cours et la carte : nom, largeur et hauteur en cases, pixels par case dans la scène, couleur de fond.
 
-Sols disponibles : dalles, plancher, pavés, terre, herbe, eau. L'herbe et la terre sont peintes (texture de bruit, sans répétition visible) et se fondent dans leurs voisins ; les sols construits gardent un bord net. L'eau a son propre rendu : eau profonde au centre, claire le long des rives, fond de galets, berge de terre irrégulière cerclée d'encre. Une rivière se peint au pinceau ou se trace avec l'outil Chemin et le sol « eau » : les deux se rejoignent en une seule eau. Tout est dessiné en vectoriel par le module : aucune image à fournir.
+Sols disponibles : dalles, plancher, pavés, terre, herbe, eau. L'herbe est un tapis serré de brins, la terre est peinte, et toutes deux se fondent dans leurs voisins ; les sols construits gardent un bord net. L'eau a son propre rendu : eau profonde au centre, claire le long des rives, fond de galets, berge de terre irrégulière cerclée d'encre. Une rivière se peint au pinceau ou se trace avec l'outil Chemin et le sol « eau » : les deux se rejoignent en une seule eau. Tout est dessiné en vectoriel par le module : aucune image à fournir.
 
 ## Courant des rivières
 
@@ -57,7 +57,7 @@ Dans l'éditeur, le courant bouge déjà (bouton vague de la barre du haut pour 
 
 ## Vent dans l'herbe
 
-Le vent passe sur les prairies, vu de dessus : des rafales avancent dans le sens du vent, et l'herbe se couche sur leur passage. Il se règle par carte, dans le panneau **Carte** de l'éditeur (**Vent dans l'herbe**) : direction, force, fréquence des rafales et nombre de touffes par case. Le bouton vent de la barre du haut montre l'animation dans l'éditeur ; la souris y écarte l'herbe comme le ferait un jeton.
+Le vent passe sur les prairies, vu de dessus : des rafales avancent dans le sens du vent, et l'herbe se couche sur leur passage. Il se règle par carte, dans le panneau **Carte** de l'éditeur (**Vent dans l'herbe**) : direction, force, fréquence des rafales et nombre de brins animés par case. Le bouton vent de la barre du haut montre l'animation dans l'éditeur ; la souris y écarte l'herbe comme le ferait un jeton.
 
 Dans Foundry, chaque joueur choisit son niveau dans les réglages du module (**Vent dans l'herbe**) :
 
@@ -65,10 +65,10 @@ Dans Foundry, chaque joueur choisit son niveau dans les réglages du module (**V
 |---|---|
 | Aucun | L'herbe reste immobile. |
 | Ondulation | Des vagues de lumière parcourent les prairies au passage des rafales. |
-| Touffes (par défaut) | En plus, des touffes semées sur l'herbe se couchent sous les rafales. |
+| Brins (par défaut) | En plus, des dizaines de brins par case se couchent sous les rafales. |
 | Complet | En plus, l'herbe s'écarte au passage des jetons, puis se redresse. |
 
-Les touffes ne poussent que sur le sol **herbe**, jamais sur l'eau, les chemins, les pièces ni sous ce qui est posé (arbres, objets, tentes de ta bibliothèque). Une scène prend son vent à l'export.
+Les brins animés ne poussent que sur le sol **herbe**, jamais sur l'eau, les chemins, les pièces ni sous ce qui est posé (arbres, objets, tentes de ta bibliothèque). Une scène prend son vent à l'export.
 
 ## Bibliothèque d'assets
 

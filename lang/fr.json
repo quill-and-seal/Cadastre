@@ -150,7 +150,7 @@
       },
       "WindStrength": "Force",
       "WindGusts": "Rafales",
-      "WindDensity": "Touffes par case"
+      "WindDensity": "Brins animés par case (0 : aucun)"
     },
     "Terrains": {
       "stone": "Dalles",
@@ -246,7 +246,7 @@
       "WindLevels": {
         "0": "Aucun",
         "1": "Ondulation (vagues de lumière)",
-        "2": "Touffes qui se couchent",
+        "2": "Brins qui se couchent",
         "3": "Complet (l'herbe s'écarte au passage des jetons)"
       }
     }

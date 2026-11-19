@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.6
+
+- **Herbe en brins** : le sol herbe est un tapis serré de gerbes de brins (pied sombre, pointe claire), y compris dans l'image de la scène.
+- **Vent** : les touffes laissent place à des dizaines de brins animés par case qui se couchent ensemble sous les rafales et s'écartent autour des jetons. Réglage « Brins animés par case » (0 à 120) dans le panneau Carte.
+
 ## 0.1.5
 
 - **Vent dans l'herbe**, vu de dessus : des rafales avancent dans le sens du vent et l'herbe se couche sur leur passage. Direction, force, rafales et densité des touffes réglables par carte (panneau Carte de l'éditeur).

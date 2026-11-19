@@ -150,7 +150,7 @@
       },
       "WindStrength": "Strength",
       "WindGusts": "Gusts",
-      "WindDensity": "Tufts per cell"
+      "WindDensity": "Animated blades per cell (0: none)"
     },
     "Terrains": {
       "stone": "Flagstones",
@@ -246,7 +246,7 @@
       "WindLevels": {
         "0": "None",
         "1": "Ripple (waves of light)",
-        "2": "Tufts bending",
+        "2": "Blades bending",
         "3": "Full (grass parts around tokens)"
       }
     }

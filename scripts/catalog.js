@@ -100,18 +100,63 @@ function painted(id, size, dark, light, freq, seed) {
     + `<rect width="${size}" height="${size}" filter="url(#cadf-${id})"/>`;
 }
 
-/** Herbe : petites touches claires et sombres, quelques taches de terre rougeâtre. */
-function grassDetail(size) {
-  const rand = mulberry32(97);
-  let out = speckles(41, Math.round(size * size * 3), ["#78b955", "#3a7a2a", "#5aa03e"], 0.012, 0.035, size, size);
-  for (let i = 0; i < Math.round(size * size / 25); i++) {
-    const x = r3(rand() * size), y = r3(rand() * size);
-    for (let j = 0; j < 7; j++) {
-      out += `<circle cx="${r3(x + (rand() - 0.5) * 0.9)}" cy="${r3(y + (rand() - 0.5) * 0.6)}" r="${r3(0.03 + rand() * 0.05)}" fill="#8a5a43" fill-opacity="0.3"/>`;
+/**
+ * Herbe vue de dessus : un tapis serré de gerbes de brins. Chaque gerbe part d'un pied et
+ * s'étale en étoile ; chaque brin a un pied sombre et une pointe claire, et tous penchent un
+ * peu du même côté, comme une pelouse peinte. Les brins sont regroupés par teinte (un chemin
+ * SVG par teinte) pour rester légers à afficher. Le motif fait `size` cases et se raccorde.
+ *
+ * @param {number} clumps  gerbes par case
+ */
+export function grassBlades(size, clumps, seed, {
+  blades = [7, 13], length = [0.12, 0.26], width = 0.02, lean = [-0.6, -0.9], colors = GRASS_BLADE_COLORS
+} = {}) {
+  const rand = mulberry32(seed);
+  const roots = colors.slice(0, 3), tips = colors.slice(3);
+  const groups = new Map(colors.map((c) => [c, []]));
+  const push = (color, d) => groups.get(color).push(d);
+  const seg = (ax, ay, cx, cy, bx, by) => `M${r3(ax)} ${r3(ay)}Q${r3(cx)} ${r3(cy)} ${r3(bx)} ${r3(by)}`;
+  const n = Math.round(size * size * clumps);
+  for (let c = 0; c < n; c++) {
+    const x0 = rand() * size, y0 = rand() * size;
+    const count = blades[0] + Math.floor(rand() * (blades[1] - blades[0] + 1));
+    const shade = rand();
+    for (let i = 0; i < count; i++) {
+      const a = rand() * Math.PI * 2;
+      const len = length[0] + rand() * (length[1] - length[0]);
+      // Le brin part du pied, s'étale, puis penche du côté commun.
+      const ex = Math.cos(a) * len * 0.75 + lean[0] * len * 0.35, ey = Math.sin(a) * len * 0.75 + lean[1] * len * 0.35;
+      const curl = (rand() - 0.5) * len * 0.5;
+      const mx = ex * 0.5 - Math.sin(a) * curl, my = ey * 0.5 + Math.cos(a) * curl;
+      // Pied : moitié basse sombre ; pointe : moitié haute claire.
+      const root = roots[Math.min(roots.length - 1, Math.floor((shade * 0.6 + rand() * 0.4) * roots.length))];
+      const tip = tips[Math.min(tips.length - 1, Math.floor((shade * 0.6 + rand() * 0.4) * tips.length))];
+      for (const [ox, oy] of copies(x0, y0, size)) {
+        const x = x0 + ox, y = y0 + oy;
+        push(root, seg(x, y, x + mx * 0.5, y + my * 0.5, x + mx, y + my));
+        push(tip, seg(x + mx, y + my, x + (mx + ex) / 2 + (ex - mx) * 0.1, y + (my + ey) / 2 + (ey - my) * 0.1, x + ex, y + ey));
+      }
     }
   }
+  return [...groups].map(([color, segs]) => {
+    if (!segs.length) return "";
+    const w = roots.includes(color) ? width * 1.35 : width;
+    return `<path d="${segs.join("")}" fill="none" stroke="${color}" stroke-width="${r3(w)}" stroke-linecap="round"/>`;
+  }).join("");
+}
+
+/** Une gerbe près d'un bord du motif est redessinée de l'autre côté : le motif se raccorde sans couture. */
+function copies(x, y, size, margin = 0.35) {
+  const out = [[0, 0]];
+  const xs = [0], ys = [0];
+  if (x < margin) xs.push(size); else if (x > size - margin) xs.push(-size);
+  if (y < margin) ys.push(size); else if (y > size - margin) ys.push(-size);
+  for (const ox of xs) for (const oy of ys) if (ox || oy) out.push([ox, oy]);
   return out;
 }
+
+/** Verts des brins, du plus sombre (au ras du sol) au plus clair (pointes au soleil). */
+export const GRASS_BLADE_COLORS = ["#244f1b", "#2e6323", "#38752a", "#4f9437", "#64a945", "#7fc055"];
 
 function waves() {
   let out = "";
@@ -130,7 +175,7 @@ export const TERRAINS = [
   { id: "wood", swatch: "#8a5a33", w: 2, h: 1, base: "#4e3119", pattern: planks() },
   { id: "cobble", swatch: "#837d73", w: 1, h: 1, base: "#4f4b45", pattern: cobbles() },
   { id: "dirt", soft: true, swatch: "#83604c", w: 6, h: 6, base: "#7d5a47", pattern: painted("dirt", 6, "#5f4234", "#a07a63", 0.42, 5) + speckles(31, 90, ["#5a3e30", "#b08b72", "#6e4b3a"], 0.01, 0.035, 6, 6) },
-  { id: "grass", soft: true, swatch: "#4f9a3a", w: 14, h: 14, base: "#4f9739", pattern: painted("grass", 14, "#428a31", "#62a646", 0.14, 11) + grassDetail(14) },
+  { id: "grass", soft: true, swatch: "#4f9a3a", w: 3, h: 3, base: "#3f7f2f", pattern: painted("grass", 3, "#2c5f22", "#3e7f2e", 0.45, 11) + grassBlades(3, 24, 11, { blades: [6, 10], length: [0.14, 0.3] }) },
   { id: "water", water: true, swatch: "#2a8a92", w: 2, h: 1, base: "#1f6f7d", pattern: waves() }
 ];
 

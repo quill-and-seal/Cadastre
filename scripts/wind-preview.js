@@ -1,17 +1,17 @@
 /**
  * Aperçu du vent dans l'éditeur : un canevas au-dessus de la carte qui montre le reflet des
- * rafales et les touffes qui se couchent ; le pointeur écarte l'herbe comme le ferait un jeton.
+ * rafales et les brins qui se couchent ; le pointeur écarte l'herbe comme le ferait un jeton.
  */
 import {
-  windField, grassZone, tuftPositions, buildTuftAtlas, bendIndex, updatePush, bucketTufts, paintSheen, TUFT_SCALE
+  windField, grassZone, patchPositions, buildBladeAtlas, bendIndex, updatePush, bucketPatches, paintSheen, PATCH_SIZE
 } from "./wind.js";
 import { ringsPath } from "./render.js";
 
 const FPS = 30;
 /** Résolution du reflet des rafales, en pixels par case (étiré à l'affichage). */
 const SHEEN_PPC = 4;
-/** Taille d'une pose de touffe dans la planche, en pixels. */
-const ATLAS_CELL = 56;
+/** Résolution des brins dans la planche, en pixels par case. */
+const ATLAS_PPC = 72;
 /** Rayon d'influence du pointeur, en cases. */
 const POINTER_RADIUS = 0.9;
 
@@ -50,8 +50,12 @@ export class WindPreview {
     const map = this.editor.map;
     const zone = grassZone(map);
     const field = windField(map.wind);
-    const tufts = tuftPositions(zone, map.wind.density, { seed: 7 });
-    if (this.state?.dir !== field.dir) this.atlas = buildTuftAtlas(this.atlasCanvas, ATLAS_CELL, field.dir);
+    const tufts = map.wind.density > 0 ? patchPositions(zone, { seed: 7 }) : [];
+    const atlasKey = `${field.dir}|${map.wind.density}`;
+    if (tufts.length && this._atlasKey !== atlasKey) {
+      this.atlas = buildBladeAtlas(this.atlasCanvas, ATLAS_PPC, field.dir, map.wind.density);
+      this._atlasKey = atlasKey;
+    }
     // Masque de la zone d'herbe à la résolution du reflet.
     for (const c of [this.sheen, this.mask]) { c.width = Math.ceil(map.width * SHEEN_PPC); c.height = Math.ceil(map.height * SHEEN_PPC); }
     const m = this.mask.getContext("2d");
@@ -62,7 +66,7 @@ export class WindPreview {
     if (path) m.fill(new Path2D(path), "nonzero");
     this.state = {
       field, tufts, dir: field.dir,
-      buckets: bucketTufts(tufts),
+      buckets: bucketPatches(tufts),
       amount: new Float32Array(tufts.length),
       sector: new Uint8Array(tufts.length),
       width: map.width, height: map.height
@@ -107,11 +111,11 @@ export class WindPreview {
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(this.sheen, 0, 0, s.width, s.height);
 
-    // Niveaux 2 et 3 : touffes couchées par le vent, écartées par le pointeur.
+    // Niveaux 2 et 3 : brins couchés par le vent, écartés par le pointeur.
     const p = this.editor.pointer;
     updatePush(s.tufts, p ? [{ x: p[0], y: p[1], r: POINTER_RADIUS }] : [], s.amount, s.sector, dt, s.buckets);
     const x0 = -tx / scale - 1, y0 = -ty / scale - 1, x1 = x0 + vp.width / scale + 2, y1 = y0 + vp.height / scale + 2;
-    const cell = this.atlas.cell;
+    const cell = this.atlas?.cell;
     for (let i = 0; i < s.tufts.length; i++) {
       const t = s.tufts[i];
       if (t.x < x0 || t.x > x1 || t.y < y0 || t.y > y1) continue;
@@ -119,8 +123,7 @@ export class WindPreview {
       const f = push > 0.15
         ? this.atlas.frame(t.v, "push", s.sector[i], push > 0.6 ? 1 : 0)
         : this.atlas.frame(t.v, "wind", bendIndex(s.field.at(t.x, t.y, this.time)));
-      const size = t.k * TUFT_SCALE;
-      ctx.drawImage(this.atlasCanvas, f.x, f.y, cell, cell, t.x - size / 2, t.y - size / 2, size, size);
+      ctx.drawImage(this.atlasCanvas, f.x, f.y, cell, cell, t.x - PATCH_SIZE / 2, t.y - PATCH_SIZE / 2, PATCH_SIZE, PATCH_SIZE);
     }
   }
 
