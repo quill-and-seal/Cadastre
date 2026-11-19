@@ -90,6 +90,7 @@
 .cad-viewport[data-tool="select"] { cursor: default; }
 .cad-viewport[data-tool="prop"], .cad-viewport[data-tool="door"] { cursor: pointer; }
 .cad-svg { display: block; width: 100%; height: 100%; }
+.cad-svg-top { position: absolute; inset: 0; }
 .cad-border { stroke: var(--cad-border); }
 
 /* Repères : sélection, survol, aperçus */

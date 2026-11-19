@@ -11,6 +11,19 @@ import { ringsPath as ringsPathD } from "./render.js";
 import { renderPaths, renderWater, renderCurrents } from "./render.js";
 import { WindPreview } from "./wind-preview.js";
 import { normalizeWind } from "./wind.js";
+
+/** Réglages du vent dans le panneau Carte : champ, clé, bornes, pas, affichage. */
+const pct = (v) => `${Math.round(v * 100)} %`;
+const WIND_FIELDS = [
+  ["windDir", "dir", 0, 355, 5, (v) => `${v}°`],
+  ["windStrength", "strength", 0, 1, 0.05, pct],
+  ["windWaves", "waves", 0, 0, 0, (v) => v],
+  ["windSpeed", "speed", 0.1, 3, 0.1, (v) => `× ${v}`],
+  ["windGap", "gap", 1.5, 12, 0.5, (v) => `${v} px`],
+  ["windLength", "length", 4, 40, 1, (v) => `${v} px`],
+  ["windAngle", "angle", 0, 70, 1, (v) => `± ${v}°`],
+  ["windJitter", "jitter", 0, 1, 0.05, pct]
+];
 import { renderDefs, renderTerrains, renderProps, renderWalls, renderGrid, polylinePath, terrainFill, terrainPatternId, propArt, defaultResolve } from "./render.js";
 import { isAssetKey, assetIdOf, assetKey, embedAsset, refreshMapAssets, filterAssets, normalizeLibrary, pruneAssets } from "./library.js";
 import { HISTORY_LIMIT, MIN_CELLS, MAX_CELLS, MIN_GRID_SIZE, MAX_GRID_SIZE } from "./constants.js";
@@ -160,10 +173,14 @@ export class MapEditor {
               <g class="cad-paths"></g>
               <g class="cad-props"></g>
               <g class="cad-walls"></g>
+              <defs class="cad-extra-defs"></defs>
+            </g>
+          </svg>
+          <svg class="cad-svg cad-svg-top" xmlns="${SVG_NS}">
+            <g class="cad-world-top">
               <g class="cad-grid"></g>
               <rect class="cad-border" fill="none"></rect>
               <g class="cad-overlay"></g>
-              <defs class="cad-extra-defs"></defs>
             </g>
           </svg>
         </div>
@@ -182,11 +199,9 @@ export class MapEditor {
             </div>
             <button type="button" data-action="apply-size" title="${esc(t("CADASTRE.Panel.ApplyHint"))}">${esc(t("CADASTRE.Panel.Apply"))}</button>
             <h3>${esc(t("CADASTRE.Panel.Wind"))}</h3>
-            <label>${esc(t("CADASTRE.Panel.WindDir"))}<select name="windDir">${[[270, "N"], [315, "NE"], [0, "E"], [45, "SE"], [90, "S"], [135, "SW"], [180, "W"], [225, "NW"]]
-              .map(([deg, k]) => `<option value="${deg}">${esc(t(`CADASTRE.Panel.WindDirs.${k}`))}</option>`).join("")}</select></label>
-            <label>${esc(t("CADASTRE.Panel.WindStrength"))}<div class="cad-slider"><input type="range" name="windStrength" min="0" max="1" step="0.05"><output></output></div></label>
-            <label>${esc(t("CADASTRE.Panel.WindGusts"))}<div class="cad-slider"><input type="range" name="windGusts" min="0" max="1" step="0.05"><output></output></div></label>
-            <label>${esc(t("CADASTRE.Panel.WindDensity"))}<div class="cad-slider"><input type="range" name="windDensity" min="0" max="120" step="5"><output></output></div></label>
+            ${WIND_FIELDS.map(([name, , min, max, step]) => name === "windWaves"
+              ? `<label>${esc(t("CADASTRE.Panel.WindWaves"))}<select name="windWaves">${["swell", "gusts", "mix"].map((w) => `<option value="${w}">${esc(t(`CADASTRE.Panel.WindWaveKinds.${w}`))}</option>`).join("")}</select></label>`
+              : `<label>${esc(t(`CADASTRE.Panel.${name[0].toUpperCase()}${name.slice(1)}`))}<div class="cad-slider"><input type="range" name="${name}" min="${min}" max="${max}" step="${step}"><output></output></div></label>`).join("")}
           </section>
         </aside>
       </div>
@@ -194,7 +209,7 @@ export class MapEditor {
 
     const $ = (sel) => this.root.querySelector(sel);
     this.el = {
-      viewport: $(".cad-viewport"), svg: $(".cad-svg"), defs: $(".cad-defs"), world: $(".cad-world"),
+      viewport: $(".cad-viewport"), svg: $(".cad-svg"), defs: $(".cad-defs"), world: $(".cad-world"), worldTop: $(".cad-world-top"), svgTop: $(".cad-svg-top"),
       bg: $(".cad-bg"), terrain: $(".cad-terrain"), paths: $(".cad-paths"), props: $(".cad-props"), walls: $(".cad-walls"),
       grid: $(".cad-grid"), border: $(".cad-border"), overlay: $(".cad-overlay"), extraDefs: $(".cad-extra-defs"),
       toolOptions: $(".cad-tool-options"), mapOptions: $(".cad-map-options"),
@@ -280,7 +295,7 @@ export class MapEditor {
 
   _applyView() {
     const { s, tx, ty } = this.view;
-    this.el.world.setAttribute("transform", `translate(${tx} ${ty}) scale(${s})`);
+    for (const g of [this.el.world, this.el.worldTop]) g.setAttribute("transform", `translate(${tx} ${ty}) scale(${s})`);
     this.el.border.setAttribute("stroke-width", String(1.5 / s));
   }
 
@@ -631,13 +646,10 @@ export class MapEditor {
     f.querySelector('[name="gridSize"]').value = this.map.gridSize;
     f.querySelector('[name="background"]').value = this.map.background;
     const wind = this.map.wind;
-    const dirs = [0, 45, 90, 135, 180, 225, 270, 315];
-    const nearest = dirs.reduce((best, d) => (Math.abs(((wind.dir - d + 540) % 360) - 180) < Math.abs(((wind.dir - best + 540) % 360) - 180) ? d : best), 0);
-    f.querySelector('[name="windDir"]').value = String(nearest);
-    for (const [name, key] of [["windStrength", "strength"], ["windGusts", "gusts"], ["windDensity", "density"]]) {
+    for (const [name, key, , , , unit] of WIND_FIELDS) {
       const input = f.querySelector(`[name="${name}"]`);
       input.value = wind[key];
-      input.nextElementSibling.textContent = wind[key];
+      if (input.nextElementSibling) input.nextElementSibling.textContent = unit(wind[key]);
     }
   }
 
@@ -950,9 +962,10 @@ export class MapEditor {
       this.map.name = input.value.trim();
       this._setDirty(true);
     } else if (input.name?.startsWith("wind")) {
-      const key = { windDir: "dir", windStrength: "strength", windGusts: "gusts", windDensity: "density" }[input.name];
+      const key = WIND_FIELDS.find(([name]) => name === input.name)?.[1];
+      if (!key) return;
       this._begin();
-      const next = normalizeWind({ ...this.map.wind, [key]: Number(input.value) });
+      const next = normalizeWind({ ...this.map.wind, [key]: key === "waves" ? input.value : Number(input.value) });
       const changed = JSON.stringify(next) !== JSON.stringify(this.map.wind);
       this.map.wind = next;
       this._commit(changed, { terrain: false });

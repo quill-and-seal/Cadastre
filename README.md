@@ -47,7 +47,7 @@ Navigation : clic droit, molette enfoncée ou **Espace** + clic pour déplacer l
 
 Le panneau de droite règle l'outil en cours et la carte : nom, largeur et hauteur en cases, pixels par case dans la scène, couleur de fond.
 
-Sols disponibles : dalles, plancher, pavés, terre, herbe, eau. L'herbe est un tapis serré de brins peignés sur de grandes nappes de couleur, la terre est peinte, et toutes deux se fondent dans leurs voisins ; les sols construits gardent un bord net. L'eau a son propre rendu : eau profonde au centre, claire le long des rives, fond de galets, berge de terre irrégulière cerclée d'encre. Une rivière se peint au pinceau ou se trace avec l'outil Chemin et le sol « eau » : les deux se rejoignent en une seule eau. Tout est dessiné en vectoriel par le module : aucune image à fournir.
+Sols disponibles : dalles, plancher, pavés, terre, herbe, eau. L'herbe est une grille serrée de brins animés par le vent (voir plus bas), la terre est peinte, et toutes deux se fondent dans leurs voisins ; les sols construits gardent un bord net. L'eau a son propre rendu : eau profonde au centre, claire le long des rives, fond de galets, berge de terre irrégulière cerclée d'encre. Une rivière se peint au pinceau ou se trace avec l'outil Chemin et le sol « eau » : les deux se rejoignent en une seule eau. Tout est dessiné en vectoriel par le module : aucune image à fournir.
 
 ## Courant des rivières
 
@@ -57,18 +57,31 @@ Dans l'éditeur, le courant bouge déjà (bouton vague de la barre du haut pour 
 
 ## Vent dans l'herbe
 
-Le vent passe sur les prairies, vu de dessus : des rafales avancent dans le sens du vent, et l'herbe se couche sur leur passage. Il se règle par carte, dans le panneau **Carte** de l'éditeur (**Vent dans l'herbe**) : direction, force, fréquence des rafales et nombre de brins animés par case. Le bouton vent de la barre du haut montre l'animation dans l'éditeur ; la souris y écarte l'herbe comme le ferait un jeton.
+L'herbe est une grille très serrée de brins, de simples traits dessinés par la carte graphique. Vus de dessus, au repos, les brins pointent au hasard ; le vent les couche dans sa direction, chacun avec un léger écart, et des vagues passent sur la prairie. Tout se règle par carte, dans le panneau **Carte** de l'éditeur (**Vent dans l'herbe**) :
+
+| Réglage | Par défaut | Rôle |
+|---|---|---|
+| Souffle vers | 40° | Direction du vent (0° : est, 90° : sud). |
+| Force | 60 % | De calme à tempête. |
+| Vagues | Houle + rafales | Houle régulière, rafales qui avancent, ou les deux. |
+| Vitesse des vagues | × 0,5 | |
+| Espacement des brins | 2,5 px | Pour une case de 100 px. Plus petit : herbe plus dense. |
+| Longueur des brins | 24 px | Pour une case de 100 px. |
+| Angle des brins | ± 25° | Écart des brins autour du sens du vent : ils se croisent et cachent le sol. |
+| Désordre de la grille | 0 % | |
+
+Dans l'éditeur, l'herbe est toujours dessinée ; le bouton vent de la barre du haut l'anime, et la souris y écarte l'herbe comme le ferait un jeton. L'image de la scène exportée contient la même herbe, figée.
 
 Dans Foundry, chaque joueur choisit son niveau dans les réglages du module (**Vent dans l'herbe**) :
 
 | Niveau | Ce qu'on voit |
 |---|---|
-| Aucun | L'herbe reste immobile. |
-| Ondulation | Des vagues de lumière parcourent les prairies au passage des rafales. |
-| Brins (par défaut) | En plus, des dizaines de brins par case se couchent sous les rafales. |
-| Complet | En plus, l'herbe s'écarte au passage des jetons, puis se redresse. |
+| Aucun | L'herbe figée de l'image de fond. |
+| Léger | Les brins bougent, un peu moins nombreux : pour un ordinateur peu puissant. |
+| Brins animés | Tous les brins bougent. |
+| Complet (par défaut) | En plus, l'herbe s'écarte au passage des jetons et se redresse derrière eux. |
 
-Les brins animés ne poussent que sur le sol **herbe**, jamais sur l'eau, les chemins, les pièces ni sous ce qui est posé (arbres, objets, tentes de ta bibliothèque). Une scène prend son vent à l'export.
+Vus de loin, les brins sont moins nombreux et plus larges : la prairie garde le même aspect sans ralentir la scène. Les brins ne poussent que sur le sol **herbe**, jamais sur l'eau, les chemins, les pièces ni sous ce qui est posé (arbres, objets, tentes de ta bibliothèque). Une scène prend son vent à l'export ; une scène exportée avant la 0.1.7 doit être réexportée pour avoir la nouvelle herbe.
 
 ## Bibliothèque d'assets
 

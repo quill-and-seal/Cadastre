@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.7
+
+- **Nouvelle herbe** : une grille très serrée de brins, de simples traits dessinés par la carte graphique (des centaines de milliers sans ralentir). Le vent les couche dans sa direction, chacun avec un léger écart pour cacher le sol, et des vagues parcourent la prairie : houle régulière, rafales qui avancent, ou les deux.
+- Réglages par carte dans le panneau Carte : direction (au degré), force, forme et vitesse des vagues, espacement, longueur et angle des brins, désordre de la grille.
+- L'éditeur montre toujours cette herbe ; le bouton vent l'anime. L'image de la scène exportée contient la même herbe, figée.
+- Dans Foundry : niveaux Aucun (herbe figée), Léger, Brins animés, Complet (l'herbe s'écarte au passage des jetons et se redresse derrière eux). Vus de loin, les brins sont moins nombreux et plus larges.
+- Réexporter les scènes créées avant cette version pour avoir la nouvelle herbe.
+
 ## 0.1.6
 
 - **Herbe en brins** : le sol herbe est un tapis serré de brins peignés, qui penchent tous à peu près du même côté, sur de grandes nappes de couleur douces ; y compris dans l'image de la scène.

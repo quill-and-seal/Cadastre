@@ -31,7 +31,7 @@
       "Coords": "{x} ; {y}",
       "Snap": "Aimanter à la grille (Ctrl inverse)",
       "AnimateWater": "Animer le courant des rivières",
-      "WindPreview": "Aperçu du vent dans l'herbe (la souris écarte l'herbe comme un jeton)"
+      "WindPreview": "Animer le vent dans l'herbe (la souris écarte l'herbe comme un jeton)"
     },
     "Tools": {
       "select": "Sélection (1)",
@@ -137,20 +137,19 @@
       },
       "FlowSpeed": "Vitesse du courant",
       "Wind": "Vent dans l'herbe",
-      "WindDir": "Souffle vers",
-      "WindDirs": {
-        "N": "Nord",
-        "NE": "Nord-est",
-        "E": "Est",
-        "SE": "Sud-est",
-        "S": "Sud",
-        "SW": "Sud-ouest",
-        "W": "Ouest",
-        "NW": "Nord-ouest"
-      },
+      "WindDir": "Souffle vers (0° : est, 90° : sud)",
       "WindStrength": "Force",
-      "WindGusts": "Rafales",
-      "WindDensity": "Brins animés par case (0 : aucun)"
+      "WindWaves": "Vagues",
+      "WindWaveKinds": {
+        "swell": "Houle régulière",
+        "gusts": "Rafales qui avancent",
+        "mix": "Houle + rafales"
+      },
+      "WindSpeed": "Vitesse des vagues",
+      "WindGap": "Espacement des brins (case de 100 px)",
+      "WindLength": "Longueur des brins (case de 100 px)",
+      "WindAngle": "Angle des brins",
+      "WindJitter": "Désordre de la grille"
     },
     "Terrains": {
       "stone": "Dalles",
@@ -244,9 +243,9 @@
       "WindLevel": "Vent dans l'herbe",
       "WindLevelHint": "Dans les scènes exportées par Cadastre. Réglage propre à chaque joueur : baisse-le sur un ordinateur peu puissant.",
       "WindLevels": {
-        "0": "Aucun",
-        "1": "Ondulation (vagues de lumière)",
-        "2": "Brins qui se couchent",
+        "0": "Aucun (herbe figée)",
+        "1": "Léger (moins de brins animés)",
+        "2": "Brins animés",
         "3": "Complet (l'herbe s'écarte au passage des jetons)"
       }
     }

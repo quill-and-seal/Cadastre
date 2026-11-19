@@ -185,8 +185,13 @@ export const TERRAINS = [
   { id: "cobble", swatch: "#837d73", w: 1, h: 1, base: "#4f4b45", pattern: cobbles() },
   { id: "dirt", soft: true, swatch: "#83604c", w: 6, h: 6, base: "#7d5a47", pattern: painted("dirt", 6, "#5f4234", "#a07a63", 0.42, 5) + speckles(31, 90, ["#5a3e30", "#b08b72", "#6e4b3a"], 0.01, 0.035, 6, 6) },
   // Herbe : grandes nappes de couleur peintes (motif de 12 cases), puis le tapis de brins par-dessus (motif de 4 cases).
-  { id: "grass", soft: true, swatch: "#4a8a36", w: 12, h: 12, base: "#3d7a2e", pattern: painted("grass", 12, "#2f6a26", "#5a9a40", 0.11, 11),
-    overlay: { w: 4, h: 4, pattern: grassBlades(4, 34, 11, { blades: [3, 6], spread: 0.85 }) } },
+  // Même herbe que les brins dessinés par la carte graphique (grass.js) : elle ne se voit qu'au
+  // bord des arbres, de l'eau et des chemins, là où ces brins s'arrêtent.
+  { id: "grass", soft: true, swatch: "#4f7e2e", w: 12, h: 12, base: "#3f6a26", pattern: painted("grass", 12, "#2c4f1b", "#527f2b", 0.11, 11),
+    overlay: { w: 2, h: 2, pattern: grassBlades(2, 520, 11, {
+      blades: [1, 2], length: [0.07, 0.17], width: 0.011, spread: Math.PI, opacity: 0.92,
+      colors: ["#2d541c", "#3a6623", "#5b892e", "#6d9a36", "#86ad45"]
+    }) } },
   { id: "water", water: true, swatch: "#2a8a92", w: 2, h: 1, base: "#1f6f7d", pattern: waves() }
 ];
 
