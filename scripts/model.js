@@ -12,6 +12,7 @@
  *              optionnelle (edge : un sol, edgeWidth : largeur de chaque bord) ; purement visuel
  *   doors    : [{ id, wall, s, w, kind:"door"|"secret" }]   s : position du centre le long du mur
  *   props    : [{ id, type, x, y, a, k }]                   centre, angle en degrés, échelle
+ *   wind     : { dir, strength, gusts, density }   vent dans l'herbe (voir wind.js)
  *   assets   : { id: asset }       copie des assets de bibliothèque utilisés (voir library.js)
  *
  * Un sol ou un type d'objet est soit un élément du catalogue intégré (« stone », « barrel »),
@@ -26,6 +27,7 @@ import {
 import { TERRAIN_IDS, PROP_BY_ID } from "./catalog.js";
 import { normalizeAsset, mapAsset, pruneAssets } from "./library.js";
 import { TREE_BY_TYPE } from "./trees.js";
+import { normalizeWind } from "./wind.js";
 import { flattenNodes, flattenWithParams, subNodes, cleanNode, project, polylineLength, round3 } from "./curves.js";
 import * as poly from "./poly.js";
 
@@ -58,6 +60,7 @@ export function createMap({ name = "", width = 30, height = 20, gridSize = DEFAU
     doors: [],
     props: [],
     assets: {},
+    wind: normalizeWind(null),
     seq: 0,
     sceneId: null
   };
@@ -108,6 +111,7 @@ export function normalizeMap(raw) {
   const src = raw && typeof raw === "object" ? raw : {};
   const map = createMap(src);
   map.sceneId = typeof src.sceneId === "string" ? src.sceneId : null;
+  map.wind = normalizeWind(src.wind);
   map.seq = clampInt(src.seq, 0, Number.MAX_SAFE_INTEGER, 0);
   const ids = new Set();
   const uid = (id, prefix) => {

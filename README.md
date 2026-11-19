@@ -55,6 +55,21 @@ Une rivière tracée avec l'outil **Chemin** et le sol **eau** a un courant : de
 
 Dans l'éditeur, le courant bouge déjà (bouton vague de la barre du haut pour le mettre en pause). Dans Foundry, la scène exportée l'anime par-dessus son fond, sous les jetons ; chaque joueur peut le couper dans les réglages du module (**Animer le courant des rivières**) si son ordinateur peine.
 
+## Vent dans l'herbe
+
+Le vent passe sur les prairies, vu de dessus : des rafales avancent dans le sens du vent, et l'herbe se couche sur leur passage. Il se règle par carte, dans le panneau **Carte** de l'éditeur (**Vent dans l'herbe**) : direction, force, fréquence des rafales et nombre de touffes par case. Le bouton vent de la barre du haut montre l'animation dans l'éditeur ; la souris y écarte l'herbe comme le ferait un jeton.
+
+Dans Foundry, chaque joueur choisit son niveau dans les réglages du module (**Vent dans l'herbe**) :
+
+| Niveau | Ce qu'on voit |
+|---|---|
+| Aucun | L'herbe reste immobile. |
+| Ondulation | Des vagues de lumière parcourent les prairies au passage des rafales. |
+| Touffes (par défaut) | En plus, des touffes semées sur l'herbe se couchent sous les rafales. |
+| Complet | En plus, l'herbe s'écarte au passage des jetons, puis se redresse. |
+
+Les touffes ne poussent que sur le sol **herbe**, jamais sur l'eau, les chemins, les pièces ni sous ce qui est posé (arbres, objets, tentes de ta bibliothèque). Une scène prend son vent à l'export.
+
 ## Bibliothèque d'assets
 
 Les sols et objets intégrés ne suffisent pas : la bibliothèque ajoute tes propres images, ou celles d'un pack d'assets (Forgotten Adventures, 2-Minute Tabletop…), comme **objets** ou comme **textures de sol** qui se répètent.
