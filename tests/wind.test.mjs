@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  normalizeWind, windField, grassZone, tuftPositions, bendIndex, pushSector, updatePush,
-  bucketTufts, windFlag, WIND_DEFAULT, BEND_STEPS, PUSH_DIRS
+  normalizeWind, windField, grassZone, patchPositions, bendIndex, pushSector, updatePush, drawBladePatch,
+  bucketPatches, windFlag, WIND_DEFAULT, BEND_STEPS, PUSH_DIRS
 } from "../scripts/wind.js";
 import { createMap, normalizeMap, paintArea, addPath, addProp, addRoom } from "../scripts/model.js";
 import { rectRings, pointInRings, totalArea } from "../scripts/poly.js";
@@ -10,7 +10,9 @@ import { rectNodes } from "../scripts/curves.js";
 
 test("réglages du vent : valeurs par défaut et bornes", () => {
   assert.deepEqual(normalizeWind(null), WIND_DEFAULT);
-  assert.deepEqual(normalizeWind({ dir: -90, strength: 3, gusts: -1, density: 99 }), { dir: 270, strength: 1, gusts: 0, density: 4 });
+  assert.deepEqual(normalizeWind({ dir: -90, strength: 3, gusts: -1, density: 999 }), { dir: 270, strength: 1, gusts: 0, density: 120 });
+  assert.equal(normalizeWind({ density: 2.5 }).density, WIND_DEFAULT.density, "ancienne densité en touffes : réglage par défaut");
+  assert.equal(normalizeWind({ density: 0 }).density, 0, "0 : pas de brins animés");
   assert.equal(normalizeWind({ dir: 0 }).dir, 0);
   assert.deepEqual(createMap().wind, WIND_DEFAULT);
   assert.equal(normalizeMap({ wind: { dir: 45 } }).wind.dir, 45);
@@ -46,14 +48,21 @@ test("la zone d'herbe exclut l'eau, les chemins, les pièces et ce qui est posé
   assert.deepEqual(grassZone(createMap()), [], "pas d'herbe, pas de zone");
 });
 
-test("touffes : dans la zone, denses comme demandé, toujours les mêmes, plafonnées", () => {
-  const zone = rectRings(0, 0, 10, 10);
-  const tufts = tuftPositions(zone, 1.5, { seed: 3 });
-  assert.ok(tufts.length > 120 && tufts.length < 170, `${tufts.length}`);
-  assert.ok(tufts.every((t) => pointInRings(zone, t.x, t.y)));
-  assert.deepEqual(tuftPositions(zone, 1.5, { seed: 3 }), tufts);
-  assert.ok(tuftPositions(rectRings(0, 0, 100, 100), 4, { maxCount: 2000 }).length <= 2100);
-  assert.deepEqual(tuftPositions(zone, 0), []);
+test("brins animés : un carré par case, loin des bords de la zone, toujours les mêmes", () => {
+  const zone = rectRings(0, 0, 10, 6);
+  const patches = patchPositions(zone, { seed: 3 });
+  assert.ok(patches.length >= 8 * 4 && patches.length <= 10 * 6, `${patches.length}`);
+  assert.ok(patches.every((p) => p.x >= 0.45 && p.y >= 0.45 && p.x <= 9.55 && p.y <= 5.55));
+  assert.deepEqual(patchPositions(zone, { seed: 3 }), patches);
+  assert.ok(patchPositions(rectRings(0, 0, 200, 200), { maxCount: 500 }).length <= 500);
+  assert.deepEqual(patchPositions([]), []);
+});
+
+test("un carré de brins se dessine, avec plus de brins couchés quand le vent forcit", () => {
+  const calls = { stroke: 0 };
+  const ctx = new Proxy({}, { get: (o, k) => (k in o ? o[k] : (...a) => { if (k === "stroke") calls.stroke++; }), set: (o, k, v) => { o[k] = v; return true; } });
+  drawBladePatch(ctx, 50, 50, 80, 1, 40, 0.5, 0);
+  assert.equal(calls.stroke, 80, "deux traits par brin : pied et pointe");
 });
 
 test("poses : couchage et secteur de poussée", () => {
@@ -67,7 +76,7 @@ test("poses : couchage et secteur de poussée", () => {
 test("un jeton couche l'herbe autour de lui, qui se redresse ensuite", () => {
   const tufts = [{ x: 5, y: 5 }, { x: 5.6, y: 5 }, { x: 9, y: 9 }];
   const amount = new Float32Array(3), sector = new Uint8Array(3);
-  const buckets = bucketTufts(tufts);
+  const buckets = bucketPatches(tufts);
   updatePush(tufts, [{ x: 5, y: 5, r: 1 }], amount, sector, 0.03, buckets);
   assert.ok(amount[0] > 0.9 && amount[1] > 0.4 && amount[2] === 0);
   assert.equal(sector[1], 0, "poussée vers l'est, loin du jeton");

@@ -15,6 +15,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - 0.1.3 : style peint (herbe, terre, eau avec berges), arbres procéduraux.
 - 0.1.4 : courant animé des rivières, dans l'éditeur et dans la scène.
 - 0.1.5 : vent dans l'herbe, trois niveaux (ondulation, touffes, réaction aux jetons).
+- 0.1.6 : herbe faite de brins, brins animés par le vent.
 
 ## 0.2 — Palisade, Vellum, étages, zones retouchables
 

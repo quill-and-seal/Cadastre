@@ -3,19 +3,20 @@
  * et leur vent (drapeau `cadastre.wind`). Ce calque, au-dessus du fond et sous les jetons,
  * montre selon le réglage de chaque joueur :
  *   1 : l'ondulation (vagues de lumière des rafales)
- *   2 : en plus, des touffes qui se couchent sous les rafales
+ *   2 : en plus, des brins qui se couchent sous les rafales
  *   3 : en plus, l'herbe qui s'écarte au passage des jetons
  */
 import { MODULE_ID, log } from "./constants.js";
 import {
-  windField, tuftPositions, buildTuftAtlas, bendIndex, updatePush, bucketTufts, paintSheen,
-  TUFT_SCALE, WIND_LEVELS
+  windField, patchPositions, buildBladeAtlas, bendIndex, updatePush, bucketPatches, paintSheen,
+  PATCH_SIZE, WIND_LEVELS
 } from "./wind.js";
 import { ringsPath } from "./render.js";
 
 const FPS = 30;
 const SHEEN_PPC = 4;
-const ATLAS_CELL = 56;
+/** Résolution des brins, en pixels par case (étirés à la taille de la grille de la scène). */
+const ATLAS_PPC = 96;
 /** Rang de dessin dans le groupe principal : au-dessus du fond de scène, sous les tuiles et les jetons. */
 const SORT_LAYER = 100;
 
@@ -34,7 +35,7 @@ export function registerWind() {
       2: "CADASTRE.Settings.WindLevels.2",
       3: "CADASTRE.Settings.WindLevels.3"
     },
-    default: WIND_LEVELS.TUFTS,
+    default: WIND_LEVELS.BLADES,
     onChange: () => refresh()
   });
   Hooks.on("canvasReady", () => refresh());
@@ -97,18 +98,18 @@ function refresh() {
     root.addChild(sheenSprite);
     const sc = sheenCanvas.getContext("2d");
 
-    // Niveau 2 : touffes, chacune un sprite dont la pose change avec le vent.
+    // Niveau 2 : brins animés, un carré de brins par case d'herbe, dont la pose change avec le vent.
     let tufts = [], sprites = [], atlas = null, frameTex = null, buckets = null, amount = null, sector = null;
-    if (level >= WIND_LEVELS.TUFTS) {
-      tufts = tuftPositions(data.zone, data.wind.density, { seed: 7 });
+    if (level >= WIND_LEVELS.BLADES && data.wind.density > 0) {
+      tufts = patchPositions(data.zone, { seed: 7 });
       const atlasCanvas = makeCanvas(1, 1);
-      atlas = buildTuftAtlas(atlasCanvas, ATLAS_CELL, field.dir);
+      atlas = buildBladeAtlas(atlasCanvas, ATLAS_PPC, field.dir, data.wind.density);
       const base = PIXI.Texture.from(atlasCanvas);
       textures.push(base);
       const cache = new Map();
       frameTex = (f) => {
         const key = `${f.x},${f.y}`;
-        if (!cache.has(key)) cache.set(key, new PIXI.Texture(base.baseTexture ?? base.source, new PIXI.Rectangle(f.x, f.y, ATLAS_CELL, ATLAS_CELL)));
+        if (!cache.has(key)) cache.set(key, new PIXI.Texture(base.baseTexture ?? base.source, new PIXI.Rectangle(f.x, f.y, atlas.cell, atlas.cell)));
         return cache.get(key);
       };
       const layer = PIXI.ParticleContainer && tufts.length
@@ -119,11 +120,11 @@ function refresh() {
         const sp = new PIXI.Sprite(frameTex(atlas.frame(t.v, "wind", 0)));
         sp.anchor.set(0.5);
         sp.position.set(ox + t.x * size, oy + t.y * size);
-        sp.scale.set((t.k * TUFT_SCALE * size) / ATLAS_CELL);
+        sp.scale.set((PATCH_SIZE * size) / atlas.cell);
         layer.addChild(sp);
         sprites.push(sp);
       }
-      buckets = bucketTufts(tufts);
+      buckets = bucketPatches(tufts);
       amount = new Float32Array(tufts.length);
       sector = new Uint8Array(tufts.length);
     }

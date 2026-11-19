@@ -2,16 +2,16 @@
  * Vent dans l'herbe, en vue de dessus. Rien ici ne dépend de Foundry : le calque de la scène
  * (wind-layer.js) et l'aperçu de l'éditeur s'en servent tous les deux.
  *
- * Vue de dessus, une touffe d'herbe est une petite étoile de brins. Au repos, les brins
- * pointent vers le ciel : on n'en voit qu'un bout court. Sous le vent, ils se couchent et
- * leurs pointes filent dans le sens du vent ; au passage d'un jeton, ils se couchent en
- * éventail autour de lui. Les rafales sont des fronts qui avancent dans le sens du vent.
+ * Vue de dessus, l'herbe est un tapis de brins. Au repos, les brins pointent vers le ciel :
+ * on n'en voit qu'un bout court. Sous le vent, ils se couchent et leurs pointes filent dans
+ * le sens du vent ; au passage d'un jeton, ils se couchent en éventail autour de lui.
+ * Les rafales sont des fronts qui avancent dans le sens du vent.
  *
  * Réglages d'une carte (map.wind) :
  *   dir      : direction vers laquelle souffle le vent, en degrés (0 = vers l'est, 90 = vers le sud)
  *   strength : force, de 0 (calme) à 1 (tempête)
  *   gusts    : fréquence des rafales, de 0 (rares, longues) à 1 (serrées)
- *   density  : touffes par case (0 : pas de touffes)
+ *   density  : brins animés par case (0 : pas de brins animés, seulement l'ondulation)
  */
 import * as poly from "./poly.js";
 import { mulberry32 } from "./catalog.js";
@@ -19,13 +19,13 @@ import { waterRings } from "./render.js";
 import { propDef } from "./model.js";
 import { flattenNodes } from "./curves.js";
 
-export const WIND_DEFAULT = { dir: 20, strength: 0.55, gusts: 0.5, density: 2.5 };
-export const MAX_DENSITY = 4;
-/** Au-delà, les touffes sont éclaircies : la scène reste fluide. */
-export const MAX_TUFTS = 9000;
+export const WIND_DEFAULT = { dir: 20, strength: 0.55, gusts: 0.5, density: 45 };
+export const MAX_DENSITY = 120;
+/** Au-delà, les cases de brins animés sont plafonnées : la scène reste fluide. */
+export const MAX_PATCHES = 12000;
 
 /** Niveaux d'effet, choisis par chaque joueur. */
-export const WIND_LEVELS = { OFF: 0, SHEEN: 1, TUFTS: 2, FULL: 3 };
+export const WIND_LEVELS = { OFF: 0, SHEEN: 1, BLADES: 2, FULL: 3 };
 
 const clamp = (v, min, max, fallback) => {
   const n = Number(v);
@@ -39,7 +39,8 @@ export function normalizeWind(raw) {
     dir: Number.isFinite(Number(src.dir)) && src.dir !== null && src.dir !== "" ? r3(((Number(src.dir) % 360) + 360) % 360) : WIND_DEFAULT.dir,
     strength: r3(clamp(src.strength, 0, 1, WIND_DEFAULT.strength)),
     gusts: r3(clamp(src.gusts, 0, 1, WIND_DEFAULT.gusts)),
-    density: r3(clamp(src.density, 0, MAX_DENSITY, WIND_DEFAULT.density))
+    // Avant la 0.1.6, la densité comptait des touffes (0 à 4) : on passe au réglage par défaut.
+    density: Number(src.density) > 0 && Number(src.density) <= 4 ? WIND_DEFAULT.density : Math.round(clamp(src.density, 0, MAX_DENSITY, WIND_DEFAULT.density))
   };
 }
 
@@ -111,13 +112,13 @@ function propRings(map, p) {
 /**
  * Où pousse l'herbe qui bouge : le sol « herbe », moins l'eau, les chemins, les murs,
  * les pièces et tout ce qui est posé dessus (objets, arbres, tentes de la bibliothèque) :
- * ces éléments sont dans l'image de fond, les touffes ne doivent pas passer par-dessus.
+ * ces éléments sont dans l'image de fond, les brins ne doivent pas passer par-dessus.
  */
 export function grassZone(map) {
   let zone = map.terrains?.grass ?? [];
   if (!zone.length) return [];
   const cut = (rings) => { if (rings.length && zone.length) zone = poly.difference(zone, rings); };
-  // Marges : la berge déborde de 0,3 case autour de l'eau, une touffe d'une demi-case autour de son pied.
+  // Marges : la berge déborde de 0,3 case autour de l'eau, un brin un peu autour de son pied.
   const water = waterRings(map);
   if (water.length) cut(poly.offsetRings(water, 0.6));
   for (const q of map.paths ?? []) {
@@ -132,92 +133,98 @@ export function grassZone(map) {
   cut(map.rooms ?? []);
   let props = [];
   for (const p of map.props ?? []) props = props.concat(propRings(map, p));
-  // Marge : une touffe déborde d'une demi-case autour de son pied.
+  // Marge : un brin déborde un peu autour de son pied.
   if (props.length) cut(poly.offsetRings(poly.union(props, []), 0.35));
   return zone;
 }
 
 /* -------------------------------------------- */
-/*  Touffes                                     */
+/*  Brins animés                                */
 /* -------------------------------------------- */
 
-/** Taille d'affichage d'une touffe, en cases (une pose de la planche fait une case). */
-export const TUFT_SCALE = 0.8;
-
-/** Nombre de variantes de touffes dessinées. */
-export const TUFT_VARIANTS = 4;
+/**
+ * La couche animée est faite de « carrés de brins » : un par case d'herbe, chacun avec des
+ * dizaines de brins longs qui se couchent ensemble. Les pointes débordent sur les cases
+ * voisines, si bien qu'on ne voit jamais de bord entre deux carrés.
+ */
+/** Côté d'un carré de brins affiché, en cases (pieds dans la case, pointes qui débordent). */
+export const PATCH_SIZE = 1.8;
+/** Nombre de variantes de carrés dessinées (choisies au hasard, case par case). */
+export const PATCH_VARIANTS = 4;
 
 /**
- * Touffes semées dans la zone : grille tremblée, même graine, mêmes touffes.
- * @returns {{x:number, y:number, v:number, k:number}[]}  position (cases), variante, échelle
+ * Cases qui reçoivent des brins animés : celles dont le centre est dans la zone, à une
+ * demi-case du bord (les brins ne débordent ni sur la berge, ni sur les arbres).
+ * @returns {{x:number, y:number, v:number}[]}  centre de la case, variante
  */
-export function tuftPositions(zone, density, { seed = 1, maxCount = MAX_TUFTS } = {}) {
-  if (!zone?.length || !(density > 0)) return [];
-  const box = poly.ringsBounds(zone);
+export function patchPositions(zone, { seed = 1, maxCount = MAX_PATCHES } = {}) {
+  if (!zone?.length) return [];
+  const inner = poly.offsetRings(zone, -0.45);
+  const box = poly.ringsBounds(inner);
   if (!box) return [];
-  const area = Math.abs(poly.totalArea(zone));
-  // Éclaircit si la zone demande trop de touffes.
-  const d = Math.min(density, maxCount / Math.max(area, 1e-6));
-  const step = 1 / Math.sqrt(d);
   const rand = mulberry32(seed);
   const out = [];
-  for (let y = box.y0 + step / 2; y < box.y1; y += step) {
-    for (let x = box.x0 + step / 2; x < box.x1; x += step) {
-      const px = x + (rand() - 0.5) * step * 0.9, py = y + (rand() - 0.5) * step * 0.9;
-      const v = Math.floor(rand() * TUFT_VARIANTS), k = 0.8 + rand() * 0.4;
-      if (poly.pointInRings(zone, px, py)) out.push({ x: r3(px), y: r3(py), v, k: r3(k) });
+  for (let y = Math.floor(box.y0); y < box.y1; y++) {
+    for (let x = Math.floor(box.x0); x < box.x1; x++) {
+      const v = Math.floor(rand() * PATCH_VARIANTS);
+      if (poly.pointInRings(inner, x + 0.5, y + 0.5)) out.push({ x: x + 0.5, y: y + 0.5, v });
+      if (out.length >= maxCount) return out;
     }
   }
   return out;
 }
 
-/* -------------------------------------------- */
-/*  Dessin des touffes (Canvas 2D)              */
-/* -------------------------------------------- */
-
-const BLADE_DARK = "#356f27", BLADE_MID = "#4f963a", BLADE_TIP = "#7fbd55";
+const BLADE_ROOTS = ["#2e6323", "#38752a", "#427f30"];
+const BLADE_TIPS = ["#5a9f3f", "#6db04a", "#84c45a", "#9bd36a"];
 
 /**
- * Dessine une touffe vue de dessus, centrée en (cx, cy), dans un contexte 2D.
- * @param {number} size      rayon de la touffe au repos, en pixels
- * @param {number} variant   forme de la touffe (nombre et angle des brins)
- * @param {number} bend      0 : debout, 1 : couchée
+ * Dessine un carré de brins vus de dessus, centré en (cx, cy), dans un contexte 2D.
+ * @param {number} ppc       pixels par case
+ * @param {number} variant   disposition des brins
+ * @param {number} count     brins par case
+ * @param {number} bend      0 : debout, 1 : couchés
  * @param {number} bendAngle direction vers laquelle les brins se couchent (radians)
  */
-export function drawTuft(ctx, cx, cy, size, variant, bend, bendAngle) {
-  const rand = mulberry32(1000 + variant * 7919);
-  const blades = 9 + Math.floor(rand() * 5);
+export function drawBladePatch(ctx, cx, cy, ppc, variant, count, bend, bendAngle) {
+  const rand = mulberry32(5000 + variant * 7919);
   const bx = Math.cos(bendAngle), by = Math.sin(bendAngle);
-  const list = [];
-  for (let i = 0; i < blades; i++) {
-    const a = (i / blades) * Math.PI * 2 + (rand() - 0.5) * 0.8;
-    const len = size * (0.55 + rand() * 0.6);
-    const rx = Math.cos(a), ry = Math.sin(a);
-    // Pointe : courte quand le brin est debout, longue dans le sens du vent quand il se couche.
-    const upright = len * 0.38 * (1 - 0.55 * bend);
-    const lay = len * 1.05 * bend;
-    const tx = cx + rx * upright + bx * lay, ty = cy + ry * upright + by * lay;
-    const mx = cx + rx * len * 0.22 + bx * lay * 0.35, my = cy + ry * len * 0.22 + by * lay * 0.35;
-    list.push({ tx, ty, mx, my, w: size * (0.07 + rand() * 0.04) });
+  const blades = [];
+  for (let i = 0; i < count; i++) {
+    const x = cx + (rand() - 0.5) * ppc, y = cy + (rand() - 0.5) * ppc;
+    const a = rand() * Math.PI * 2;
+    const len = ppc * (0.18 + rand() * 0.2);
+    const stiff = 0.7 + rand() * 0.6;          // chaque brin plie un peu différemment
+    const b = Math.min(1, bend * stiff);
+    // Debout, le brin ne montre qu'un bout court ; couché, il file dans le sens du vent.
+    const up = len * 0.55 * (1 - 0.6 * b);
+    const lay = len * 1.05 * b;
+    const ex = Math.cos(a) * up + bx * lay - 0.25 * len * (1 - b) * 0.6;
+    const ey = Math.sin(a) * up + by * lay - 0.35 * len * (1 - b) * 0.6;
+    const curl = (rand() - 0.5) * len * 0.35;
+    const mx = ex * 0.5 - Math.sin(a) * curl * (1 - b), my = ey * 0.5 + Math.cos(a) * curl * (1 - b);
+    const shade = rand();
+    blades.push({
+      x, y, ex, ey, mx, my,
+      root: BLADE_ROOTS[Math.floor(shade * BLADE_ROOTS.length)],
+      tip: BLADE_TIPS[Math.min(BLADE_TIPS.length - 1, Math.floor((shade * 0.5 + rand() * 0.5 + b * 0.3) * BLADE_TIPS.length))],
+      w: ppc * (0.018 + rand() * 0.01)
+    });
   }
-  // Les brins couchés dans le sens du vent passent devant : tri par avancée.
-  list.sort((p, q) => (p.tx * bx + p.ty * by) - (q.tx * bx + q.ty * by));
+  blades.sort((p, q) => p.y - q.y);
   ctx.lineCap = "round";
-  for (const pass of [[BLADE_DARK, 1.7], [BLADE_MID, 1], [BLADE_TIP, 0.5]]) {
-    ctx.strokeStyle = pass[0];
-    for (const b of list) {
-      ctx.lineWidth = b.w * pass[1];
-      ctx.beginPath();
-      if (pass[0] === BLADE_TIP) {
-        // Reflet clair sur la moitié haute du brin.
-        ctx.moveTo((b.mx + b.tx) / 2, (b.my + b.ty) / 2);
-        ctx.lineTo(b.tx, b.ty);
-      } else {
-        ctx.moveTo(cx, cy);
-        ctx.quadraticCurveTo(b.mx, b.my, b.tx, b.ty);
-      }
-      ctx.stroke();
-    }
+  for (const bl of blades) {
+    ctx.strokeStyle = bl.root;
+    ctx.lineWidth = bl.w * 1.4;
+    ctx.beginPath();
+    ctx.moveTo(bl.x, bl.y);
+    ctx.quadraticCurveTo(bl.x + bl.mx * 0.5, bl.y + bl.my * 0.5, bl.x + bl.mx, bl.y + bl.my);
+    ctx.stroke();
+    ctx.strokeStyle = bl.tip;
+    ctx.lineWidth = bl.w;
+    ctx.beginPath();
+    ctx.moveTo(bl.x + bl.mx, bl.y + bl.my);
+    ctx.quadraticCurveTo(bl.x + (bl.mx + bl.ex) / 2, bl.y + (bl.my + bl.ey) / 2, bl.x + bl.ex, bl.y + bl.ey);
+    ctx.stroke();
   }
 }
 
@@ -227,38 +234,41 @@ export const PUSH_DIRS = 8;
 export const PUSH_LEVELS = [0.55, 1];
 
 /**
- * Planche de toutes les poses de touffes, pour un vent donné : par variante, BEND_STEPS
- * poses dans le sens du vent puis PUSH_DIRS × PUSH_LEVELS poses poussées par un jeton.
- * @param {HTMLCanvasElement|OffscreenCanvas} canvas
- * @param {number} cell  taille d'une pose en pixels (une touffe tient dans une case)
- * @returns {{cell:number, cols:number, frame:(v:number, kind:"wind"|"push", i:number, level?:number)=>{x:number,y:number}}}
+ * Planche de toutes les poses de carrés de brins, pour un vent donné : par variante,
+ * BEND_STEPS poses dans le sens du vent, puis PUSH_DIRS × PUSH_LEVELS poses poussées par un jeton.
+ * @param {number} ppc    pixels par case dans la planche
+ * @param {number} count  brins par case
+ * @returns {{cell:number, ppc:number, frame:(v:number, kind:"wind"|"push", i:number, level?:number)=>{x:number,y:number}}}
  */
-export function buildTuftAtlas(canvas, cell, windAngle) {
+export function buildBladeAtlas(canvas, ppc, windAngle, count) {
+  const cell = Math.round(PATCH_SIZE * ppc);
   const cols = BEND_STEPS + PUSH_DIRS * PUSH_LEVELS.length;
   canvas.width = cols * cell;
-  canvas.height = TUFT_VARIANTS * cell;
+  canvas.height = PATCH_VARIANTS * cell;
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const size = cell * 0.3;
-  for (let v = 0; v < TUFT_VARIANTS; v++) {
-    for (let i = 0; i < BEND_STEPS; i++) {
-      drawTuft(ctx, i * cell + cell / 2, v * cell + cell / 2, size, v, i / (BEND_STEPS - 1), windAngle);
-    }
+  const draw = (col, v, bend, angle) => {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(col * cell, v * cell, cell, cell);
+    ctx.clip();
+    drawBladePatch(ctx, col * cell + cell / 2, v * cell + cell / 2, ppc, v, count, bend, angle);
+    ctx.restore();
+  };
+  for (let v = 0; v < PATCH_VARIANTS; v++) {
+    for (let i = 0; i < BEND_STEPS; i++) draw(i, v, i / (BEND_STEPS - 1), windAngle);
     PUSH_LEVELS.forEach((level, l) => {
-      for (let d = 0; d < PUSH_DIRS; d++) {
-        const col = BEND_STEPS + l * PUSH_DIRS + d;
-        drawTuft(ctx, col * cell + cell / 2, v * cell + cell / 2, size, v, level, (d / PUSH_DIRS) * Math.PI * 2);
-      }
+      for (let d = 0; d < PUSH_DIRS; d++) draw(BEND_STEPS + l * PUSH_DIRS + d, v, level, (d / PUSH_DIRS) * Math.PI * 2);
     });
   }
   const frame = (v, kind, i, level = 0) => {
     const col = kind === "wind" ? Math.max(0, Math.min(BEND_STEPS - 1, i)) : BEND_STEPS + level * PUSH_DIRS + (((i % PUSH_DIRS) + PUSH_DIRS) % PUSH_DIRS);
     return { x: col * cell, y: v * cell };
   };
-  return { cell, cols, frame };
+  return { cell, ppc, frame };
 }
 
-/** Pose d'une touffe selon la force du vent (0 à 1). */
+/** Pose d'un carré de brins selon la force du vent (0 à 1). */
 export const bendIndex = (force) => Math.max(0, Math.min(BEND_STEPS - 1, Math.round(force * (BEND_STEPS - 1))));
 
 /** Secteur (0 à PUSH_DIRS - 1) d'une direction de poussée. */
@@ -269,20 +279,20 @@ export const pushSector = (dx, dy) => (Math.round((Math.atan2(dy, dx) / (Math.PI
 /* -------------------------------------------- */
 
 /**
- * Met à jour la poussée de chaque touffe : forte sous un jeton et autour, puis l'herbe se
- * redresse doucement quand il s'éloigne.
- * @param {{x,y}[]} tufts
+ * Met à jour la poussée de chaque carré de brins : forte sous un jeton et autour, puis
+ * l'herbe se redresse doucement quand il s'éloigne.
+ * @param {{x,y}[]} tufts  carrés de brins (centres, en cases)
  * @param {{x:number,y:number,r:number}[]} pushers  centres et rayons d'influence, en cases
- * @param {Float32Array} amount   poussée de chaque touffe (0 à 1), mise à jour sur place
- * @param {Uint8Array} sector     secteur de poussée de chaque touffe, mis à jour sur place
+ * @param {Float32Array} amount   poussée de chaque carré (0 à 1), mise à jour sur place
+ * @param {Uint8Array} sector     secteur de poussée de chaque carré, mis à jour sur place
  * @param {number} dt             secondes écoulées
- * @param {Map<string, number[]>} [buckets]  index spatial (bucketTufts), pour ne tester que les touffes proches
+ * @param {Map<string, number[]>} [buckets]  index spatial (bucketPatches), pour ne tester que les carrés proches
  */
 export function updatePush(tufts, pushers, amount, sector, dt, buckets = null) {
   const recover = Math.min(1, dt * 1.4);
   for (let i = 0; i < amount.length; i++) if (amount[i] > 0) amount[i] = Math.max(0, amount[i] - recover);
   for (const p of pushers) {
-    const ids = buckets ? nearbyTufts(buckets, p.x, p.y, p.r) : tufts.keys();
+    const ids = buckets ? nearbyPatches(buckets, p.x, p.y, p.r) : tufts.keys();
     for (const i of ids) {
       const t = tufts[i];
       const dx = t.x - p.x, dy = t.y - p.y, d = Math.hypot(dx, dy);
@@ -296,8 +306,8 @@ export function updatePush(tufts, pushers, amount, sector, dt, buckets = null) {
   }
 }
 
-/** Index spatial des touffes par case. */
-export function bucketTufts(tufts) {
+/** Index spatial des carrés de brins par case. */
+export function bucketPatches(tufts) {
   const map = new Map();
   tufts.forEach((t, i) => {
     const key = `${Math.floor(t.x)},${Math.floor(t.y)}`;
@@ -307,7 +317,7 @@ export function bucketTufts(tufts) {
   return map;
 }
 
-export function* nearbyTufts(buckets, x, y, r) {
+export function* nearbyPatches(buckets, x, y, r) {
   for (let j = Math.floor(y - r); j <= Math.floor(y + r); j++) {
     for (let i = Math.floor(x - r); i <= Math.floor(x + r); i++) {
       const list = buckets.get(`${i},${j}`);

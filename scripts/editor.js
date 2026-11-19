@@ -186,7 +186,7 @@ export class MapEditor {
               .map(([deg, k]) => `<option value="${deg}">${esc(t(`CADASTRE.Panel.WindDirs.${k}`))}</option>`).join("")}</select></label>
             <label>${esc(t("CADASTRE.Panel.WindStrength"))}<div class="cad-slider"><input type="range" name="windStrength" min="0" max="1" step="0.05"><output></output></div></label>
             <label>${esc(t("CADASTRE.Panel.WindGusts"))}<div class="cad-slider"><input type="range" name="windGusts" min="0" max="1" step="0.05"><output></output></div></label>
-            <label>${esc(t("CADASTRE.Panel.WindDensity"))}<div class="cad-slider"><input type="range" name="windDensity" min="0" max="4" step="0.1"><output></output></div></label>
+            <label>${esc(t("CADASTRE.Panel.WindDensity"))}<div class="cad-slider"><input type="range" name="windDensity" min="0" max="120" step="5"><output></output></div></label>
           </section>
         </aside>
       </div>
