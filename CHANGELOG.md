@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.10
+
+- **Eau plus légère, même rendu** :
+  - Le fond de l'eau (sable, galets, ombre des rochers) est calculé une seule fois, à la finesse de l'image de la scène ; à chaque image, la surface n'ajoute que ce qui bouge.
+  - La surface n'est dessinée que sur les morceaux de carte qui contiennent de l'eau.
+  - Les calculs de vitesse de l'eau ne créent plus d'objets temporaires : plus de petits à-coups réguliers.
+  - Chaque particule ne regarde que les rochers proches ; les tourbillons d'un rocher sont calculés une fois par image, et non pour chaque particule.
+  - Hors de l'écran, ou trop petites pour être vues de loin, les particules sont simulées quatre fois moins souvent.
+  - De loin, moins de points d'écume, en fondu, et les éclats trop fins pour l'écran s'effacent (ils scintillaient).
+  - Sur une grande rivière (8 500 particules, 12 rochers), le calcul par image passe de 45 ms à 11 ms quand un tiers de la rivière est à l'écran, et à 25 ms quand elle y est entière.
+- **Éditeur** : l'eau est calculée en arrière-plan, et seulement quand une retouche la touche ; peindre ailleurs ou changer les reflets ne remet plus l'écume à zéro.
+- **Pause** : rien n'est calculé quand l'eau n'est pas à l'écran ou que l'onglet est caché.
+- Le compteur de performances couvre maintenant l'herbe et l'eau.
+
 ## 0.1.9
 
 - **Herbe plus légère, même rendu** :

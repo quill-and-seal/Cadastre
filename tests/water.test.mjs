@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   normalizeWater, waterFlag, buildField, sampleField, fieldPixels, waterVelocity, rockFlow, WaterSim,
-  WATER_DEFAULT, INSTANCE_FLOATS, FIELD_RES, BASE_SPEED, SURFACE_FRAG, FLOAT_VERT
+  WATER_DEFAULT, INSTANCE_FLOATS, FIELD_RES, BASE_SPEED, SURFACE_FRAG, BED_FRAG, FLOAT_VERT, BED_MAX,
+  RockGrid, quadTriangles, waterVisible, bedLayout
 } from "../scripts/water.js";
 import { createMap, normalizeMap, paintArea, addPath, addProp } from "../scripts/model.js";
 import { rectRings } from "../scripts/poly.js";
@@ -94,7 +95,52 @@ test("simulation : particules dans l'eau, traits seulement s'ils sont demandés"
   assert.ok(new WaterSim(field, normalizeWater(null), { cap: 0.3 }).nFloat < sim.nFloat * 0.4, "réglage léger");
 });
 
+test("eau dessinée seulement là où elle est, fond précalculé à la finesse de la scène", () => {
+  const field = buildField(waterFlag(riverMap()));
+  const tri = quadTriangles(field);
+  assert.equal(tri.length, (field.quads.length / 4) * 12);
+  assert.ok(field.quads.length / 4 < (20 * 10) / 16, "pas toute la carte");
+  assert.ok(field.bounds.y0 <= 3.5 && field.bounds.y1 >= 6.5);
+  assert.ok(waterVisible(field, 0, 4, 2, 6));
+  assert.ok(!waterVisible(field, 0, 8.5, 20, 10), "pas d'eau en bas de la carte");
+  const lay = bedLayout(field, 100);
+  assert.equal(lay.width, Math.round(lay.rect[2] * 100));
+  const big = bedLayout(field, 10000);
+  assert.ok(big.width <= BED_MAX && big.height <= BED_MAX, "jamais plus grande que BED_MAX");
+});
+
+test("simulation : rochers rangés par zone, rien de dessiné hors de la vue, état repris", () => {
+  const field = buildField(waterFlag(riverMap()));
+  const grid = new RockGrid(field.rocks);
+  const r = field.rocks[0];
+  assert.ok(grid.near(r.x + 3 * r.r, r.y).includes(r), "en aval, le rocher compte");
+  assert.equal(grid.near(r.x - 200, r.y).length, 0);
+  assert.ok(grid.inside(r.x, r.y) && !grid.inside(r.x + 2 * r.r, r.y));
+  // Même vitesse avec ou sans le rangement.
+  const s = normalizeWater(null);
+  const a = waterVelocity(field, s, r.x + 3 * r.r, r.y + 0.1, 2), b = waterVelocity(field, s, r.x + 3 * r.r, r.y + 0.1, 2, undefined, grid);
+  assert.ok(Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9);
+  const sim = new WaterSim(field, s, { rand: seeded(5) });
+  for (let i = 0; i < 30; i++) sim.step(1 / 20);
+  sim.step(1 / 20, { x0: 0, y0: 0, x1: 5, y1: 10, ppc: 100 });
+  for (let i = 0; i < sim.count; i++) assert.ok(sim.instances[i * INSTANCE_FLOATS] <= 6.3, "rien de dessiné hors de la vue (marge d'une case)");
+  assert.ok(sim.stats.simulated < sim.nFloat, "hors de la vue, simulé moins souvent");
+  const far = new WaterSim(field, s, { rand: seeded(5) });
+  for (let i = 0; i < 30; i++) far.step(1 / 20);
+  far.step(1 / 20, { x0: 0, y0: 0, x1: 20, y1: 10, ppc: 8 });
+  const near = new WaterSim(field, s, { rand: seeded(5) });
+  for (let i = 0; i < 30; i++) near.step(1 / 20);
+  near.step(1 / 20, { x0: 0, y0: 0, x1: 20, y1: 10, ppc: 100 });
+  assert.ok(far.count < near.count * 0.6, `de loin, moins d'écume : ${far.count} / ${near.count}`);
+  const copy = new WaterSim(field, s, { state: sim.state() });
+  assert.equal(copy.Q, sim.Q, "état repris tel quel");
+  assert.equal(copy.t, sim.t);
+});
+
 test("programmes de carte graphique", () => {
+  assert.match(SURFACE_FRAG, /uniform sampler2D uBed/);
+  assert.match(BED_FRAG, /cells\(/);
+  assert.doesNotMatch(SURFACE_FRAG, /cells\(/, "le fond n'est plus recalculé à chaque image");
   assert.match(SURFACE_FRAG, /uniform sampler2D uField/);
   assert.match(FLOAT_VERT, /attribute vec4 aP0/);
 });

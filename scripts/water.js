@@ -36,6 +36,10 @@ export const PX = 50;
 export const BASE_SPEED = 1.4;
 /** Échantillons du champ de courant par case. */
 export const FIELD_RES = 8;
+/** Taille des morceaux de carte où l'eau est dessinée, en cases. */
+export const WATER_BLOCK = 4;
+/** Côté maximal de l'image du fond précalculé, en pixels. */
+export const BED_MAX = 4096;
 /** Traits du courant par case d'eau. */
 export const STROKE_DENSITY = 140;
 /** Plafonds : une très grande carte reste fluide. */
@@ -274,17 +278,66 @@ export function buildField(flag, { hideMasked = false } = {}) {
     return { ...r, tx: rv?.tx ?? 1, ty: rv?.ty ?? 0, U: rv?.U ?? 0, seed: (i * 7.31) % 10 };
   });
   field.area = field.cells.length / (R * R);
+  field.cells = Int32Array.from(field.cells);
+  // Morceaux de WATER_BLOCK cases qui contiennent de l'eau visible : seuls dessinés.
+  const B = WATER_BLOCK * R, quads = [];
+  let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+  for (let j0 = 0; j0 < H; j0 += B) {
+    for (let i0 = 0; i0 < W; i0 += B) {
+      let any = false;
+      for (let j = j0; j < Math.min(H, j0 + B) && !any; j++) {
+        for (let i = i0; i < Math.min(W, i0 + B); i++) if (field.a[j * W + i] > 0.004 || field.n[j * W + i] < 1) { any = true; break; }
+      }
+      if (!any) continue;
+      const x0 = i0 / R, y0 = j0 / R, x1 = Math.min(W, i0 + B) / R, y1 = Math.min(H, j0 + B) / R;
+      quads.push(x0, y0, x1, y1);
+      bx0 = Math.min(bx0, x0); by0 = Math.min(by0, y0); bx1 = Math.max(bx1, x1); by1 = Math.max(by1, y1);
+    }
+  }
+  field.quads = Float32Array.from(quads);
+  field.bounds = quads.length ? { x0: bx0, y0: by0, x1: bx1, y1: by1 } : { x0: 0, y0: 0, x1: 0, y1: 0 };
   return field;
+}
+
+/** Les morceaux d'eau en triangles (deux par morceau), pour la carte graphique. */
+export function quadTriangles(field) {
+  const q = field.quads, out = new Float32Array((q.length / 4) * 12);
+  for (let k = 0, o = 0; k < q.length; k += 4, o += 12) {
+    const [x0, y0, x1, y1] = [q[k], q[k + 1], q[k + 2], q[k + 3]];
+    out.set([x0, y0, x1, y0, x0, y1, x0, y1, x1, y0, x1, y1], o);
+  }
+  return out;
+}
+
+/** Y a-t-il de l'eau dans ce rectangle (cases) ? */
+export function waterVisible(field, x0, y0, x1, y1) {
+  const q = field.quads;
+  for (let k = 0; k < q.length; k += 4) if (q[k + 2] >= x0 && q[k] <= x1 && q[k + 3] >= y0 && q[k + 1] <= y1) return true;
+  return false;
+}
+
+/**
+ * Valeurs du champ en un point (interpolées), écrites dans `out` : profondeur, vitesse x et y,
+ * eau visible, objet ou chemin par-dessus.
+ */
+export function sampleInto(f, x, y, out) {
+  const gx = Math.max(0, Math.min(f.W - 1.001, x * f.R - 0.5)), gy = Math.max(0, Math.min(f.H - 1.001, y * f.R - 0.5));
+  const i = Math.floor(gx), j = Math.floor(gy), u = gx - i, v = gy - j;
+  const o = j * f.W + i, o1 = o + 1, o2 = o + f.W, o3 = o2 + 1;
+  const w0 = (1 - u) * (1 - v), w1 = u * (1 - v), w2 = (1 - u) * v, w3 = u * v;
+  out[0] = f.n[o] * w0 + f.n[o1] * w1 + f.n[o2] * w2 + f.n[o3] * w3;
+  out[1] = f.vx[o] * w0 + f.vx[o1] * w1 + f.vx[o2] * w2 + f.vx[o3] * w3;
+  out[2] = f.vy[o] * w0 + f.vy[o1] * w1 + f.vy[o2] * w2 + f.vy[o3] * w3;
+  out[3] = f.a[o] * w0 + f.a[o1] * w1 + f.a[o2] * w2 + f.a[o3] * w3;
+  const gi = Math.min(f.W - 1, Math.max(0, Math.floor(x * f.R))), gj = Math.min(f.H - 1, Math.max(0, Math.floor(y * f.R)));
+  out[4] = f.block[gj * f.W + gi];
+  return out;
 }
 
 /** Valeurs du champ en un point (interpolées). */
 export function sampleField(f, x, y) {
-  const gx = Math.max(0, Math.min(f.W - 1.001, x * f.R - 0.5)), gy = Math.max(0, Math.min(f.H - 1.001, y * f.R - 0.5));
-  const i = Math.floor(gx), j = Math.floor(gy), u = gx - i, v = gy - j;
-  const o = j * f.W + i, o1 = o + 1, o2 = o + f.W, o3 = o2 + 1;
-  const lerp = (arr) => (arr[o] * (1 - u) + arr[o1] * u) * (1 - v) + (arr[o2] * (1 - u) + arr[o3] * u) * v;
-  const gi = Math.min(f.W - 1, Math.max(0, Math.floor(x * f.R))), gj = Math.min(f.H - 1, Math.max(0, Math.floor(y * f.R)));
-  return { n: lerp(f.n), vx: lerp(f.vx), vy: lerp(f.vy), a: lerp(f.a), block: f.block[gj * f.W + gi] };
+  const o = sampleInto(f, x, y, new Float64Array(5));
+  return { n: o[0], vx: o[1], vy: o[2], a: o[3], block: o[4] };
 }
 
 /**
@@ -313,10 +366,77 @@ function noise(x, y) {
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 
-/** Vitesse induite par un tourbillon (noyau adouci), dans le repère du courant. */
-function vortex(a, b, ca, cb, gamma, core) {
+/**
+ * Rochers rangés par zone (carrés de ROCK_CELL cases) selon la portée de leur effet : chaque
+ * point ne regarde que les rochers dont l'effet peut l'atteindre.
+ */
+const ROCK_CELL = 2;
+const NO_ROCKS = [];
+export class RockGrid {
+  constructor(rocks) {
+    this.cells = new Map();
+    for (const r of rocks) {
+      if (r.U <= 0.05) continue;
+      // Portée : de 8 rayons en amont à 40 en aval, 14 de chaque côté, dans le repère du courant.
+      const R = r.r, xs = [], ys = [];
+      for (const [a, b] of [[-8 * R, -14 * R], [-8 * R, 14 * R], [40 * R, -14 * R], [40 * R, 14 * R]]) {
+        xs.push(r.x + r.tx * a - r.ty * b); ys.push(r.y + r.ty * a + r.tx * b);
+      }
+      const i0 = Math.floor(Math.min(...xs) / ROCK_CELL), i1 = Math.floor(Math.max(...xs) / ROCK_CELL);
+      const j0 = Math.floor(Math.min(...ys) / ROCK_CELL), j1 = Math.floor(Math.max(...ys) / ROCK_CELL);
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        const k = i * 65536 + j;
+        if (!this.cells.has(k)) this.cells.set(k, []);
+        this.cells.get(k).push(r);
+      }
+    }
+    // Pierres elles-mêmes (rondes), pour savoir si un point est dedans.
+    this.solid = new Map();
+    for (const r of rocks) {
+      for (let j = Math.floor((r.y - r.r) / ROCK_CELL); j <= Math.floor((r.y + r.r) / ROCK_CELL); j++) {
+        for (let i = Math.floor((r.x - r.r) / ROCK_CELL); i <= Math.floor((r.x + r.r) / ROCK_CELL); i++) {
+          const k = i * 65536 + j;
+          if (!this.solid.has(k)) this.solid.set(k, []);
+          this.solid.get(k).push(r);
+        }
+      }
+    }
+  }
+  near(x, y) { return this.cells.get(Math.floor(x / ROCK_CELL) * 65536 + Math.floor(y / ROCK_CELL)) ?? NO_ROCKS; }
+  inside(x, y) {
+    const list = this.solid.get(Math.floor(x / ROCK_CELL) * 65536 + Math.floor(y / ROCK_CELL));
+    if (!list) return false;
+    for (const r of list) if ((x - r.x) ** 2 + (y - r.y) ** 2 < r.r * r.r) return true;
+    return false;
+  }
+}
+
+/** Tourbillon (noyau adouci) ajouté à acc[0], acc[1], dans le repère du courant. */
+function addVortex(acc, a, b, ca, cb, gamma, core) {
   const ra = a - ca, rb = b - cb, k = gamma / (2 * Math.PI * (ra * ra + rb * rb + core * core));
-  return [-rb * k, ra * k];
+  acc[0] -= rb * k; acc[1] += ra * k;
+}
+
+/**
+ * Tourbillons d'un rocher à l'instant t (repère du courant) : les deux fixes juste derrière,
+ * puis l'allée de tourbillons détachés d'un côté puis de l'autre. Par groupes de 5 nombres :
+ * position (a, b), force, rayon du noyau, inutilisé. Gardés tant que t ne change pas.
+ */
+function streetOf(r, t, e) {
+  if (r._st && r._stT === t && r._stE === e) return r._st;
+  const R = r.r, Uw = r.U, st = r._st ?? new Float64Array(9 * 5);
+  const G0 = Uw * R * 2.6 * e;
+  st.set([1.5 * R, 0.7 * R, -G0, 0.55 * R, 0, 1.5 * R, -0.7 * R, G0, 0.55 * R, 0]);
+  const Ts = (5 * R) / Math.max(0.2, Uw), born = Math.floor((t + r.seed) / Ts);
+  for (let j = 0; j < 7; j++) {
+    const id = born - j, age = (t + r.seed) - id * Ts, side = id % 2 ? 1 : -1, o = 10 + j * 5;
+    st[o] = 2.4 * R + 0.7 * Uw * age;
+    st[o + 1] = side * 0.55 * R * (1 + 0.15 * age * Uw / R);
+    st[o + 2] = -side * Uw * R * 1.3 * e * Math.exp(-age / (Ts * 4));
+    st[o + 3] = R * (0.6 + 0.08 * age * Uw / R);
+  }
+  r._st = st; r._stT = t; r._stE = e;
+  return st;
 }
 
 /**
@@ -324,76 +444,81 @@ function vortex(a, b, ca, cb, gamma, core) {
  * chaque côté ; elle contourne au ras de la pierre ; derrière, deux tourbillons fixes la ramènent
  * vers le rocher, puis des tourbillons se détachent d'un côté puis de l'autre ; plus loin, l'eau
  * reste hachée et deux rides en V s'ouvrent vers l'aval.
- * @returns {null|number[]}  écart de vitesse (a, b), ralentissement, écume, coussin, eau hachée, rides
+ * Écrit dans `out` : écart de vitesse (a, b), ralentissement, écume, coussin, eau hachée, rides.
+ * @returns {boolean}  faux si le point est hors de portée du rocher
  */
-export function rockFlow(r, x, y, t, U, eddies) {
+export function rockFlowInto(r, x, y, t, U, eddies, out) {
   const rx = x - r.x, ry = y - r.y;
   const a = rx * r.tx + ry * r.ty, b = -rx * r.ty + ry * r.tx;
   const R = r.r, R2 = R * R;
-  if (a < -8 * R || a > 40 * R || Math.abs(b) > 14 * R) return null;
+  if (a < -8 * R || a > 40 * R || Math.abs(b) > 14 * R) return false;
   const d2 = Math.max(a * a + b * b, R2), d4 = d2 * d2;
   const near = Math.exp(-Math.max(0, Math.sqrt(d2) - R) / (0.45 * R));
-  let du = -U * R2 * (a * a - b * b) / d4 * near, dv = -U * 2 * R2 * a * b / d4 * near;
-  let slow = 0, foam = 0, cushion = 0, chop = 0, vee = 0;
+  out[0] = -U * R2 * (a * a - b * b) / d4 * near; out[1] = -U * 2 * R2 * a * b / d4 * near;
+  out[2] = 0; out[3] = 0; out[4] = 0; out[5] = 0; out[6] = 0;
   if (a < R * 0.3) {
     const ds = Math.sqrt(d2) - R;
     const front = Math.exp(-Math.max(0, ds) / (1.3 * R)) * Math.exp(-(b * b) / (1.6 * R2)) * Math.min(1, (R * 0.3 - a) / R);
-    du -= U * 0.9 * front;
-    dv += Math.sign(b || 1) * U * 0.5 * front * Math.min(1, Math.abs(b) / (0.25 * R) + 0.2) * Math.exp(-Math.max(0, ds) / (0.7 * R));
-    cushion = front;
-    if (a < 0) du = Math.max(du, -0.95 * U);
+    out[0] -= U * 0.9 * front;
+    out[1] += Math.sign(b || 1) * U * 0.5 * front * Math.min(1, Math.abs(b) / (0.25 * R) + 0.2) * Math.exp(-Math.max(0, ds) / (0.7 * R));
+    out[4] = front;
+    if (a < 0) out[0] = Math.max(out[0], -0.95 * U);
   }
   if (a > 0) {
     const e = eddies, Uw = r.U;
     const half = R * (1.1 + a / (5 * R));
-    const wake = Math.exp(-(b * b) / (half * half)) * Math.exp(-a / (18 * R)) * Math.min(1, a / R);
-    slow = 0.85 * wake * e;
-    du *= 1 - 0.5 * wake * e; dv *= 1 - 0.5 * wake * e;
-    const G0 = Uw * R * 2.6 * e;
-    for (const side of [1, -1]) {
-      const [vu, vv] = vortex(a, b, 1.5 * R, side * 0.7 * R, -side * G0, 0.55 * R);
-      du += vu; dv += vv;
-    }
-    const Ts = (5 * R) / Math.max(0.2, Uw), born = Math.floor((t + r.seed) / Ts);
-    for (let j = 0; j < 7; j++) {
-      const id = born - j, age = (t + r.seed) - id * Ts, side = id % 2 ? 1 : -1;
-      const ca = 2.4 * R + 0.7 * Uw * age, cb = side * 0.55 * R * (1 + 0.15 * age * Uw / R);
-      const fade = Math.exp(-age / (Ts * 4));
-      const [vu, vv] = vortex(a, b, ca, cb, -side * Uw * R * 1.3 * e * fade, R * (0.6 + 0.08 * age * Uw / R));
-      du += vu; dv += vv;
-    }
-    foam = wake * e;
+    const wake = Math.exp(-(b * b) / (half * half) - a / (18 * R)) * Math.min(1, a / R);
+    out[2] = 0.85 * wake * e;
+    out[0] *= 1 - 0.5 * wake * e; out[1] *= 1 - 0.5 * wake * e;
+    // Tourbillons : leurs positions et forces ne dépendent que du rocher et de l'instant,
+    // calculées une fois par image (streetOf) et non pour chaque point.
+    const st = streetOf(r, t, e);
+    for (let k = 0; k < st.length; k += 5) addVortex(out, a, b, st[k], st[k + 1], st[k + 2], st[k + 3]);
+    out[3] = wake * e;
     const halfChop = R * (1.3 + a / (3.2 * R));
-    chop = Math.exp(-(b * b) / (halfChop * halfChop)) * Math.exp(-a / (30 * R)) * Math.min(1, a / (2 * R)) * e;
+    out[5] = Math.exp(-(b * b) / (halfChop * halfChop) - a / (30 * R)) * Math.min(1, a / (2 * R)) * e;
     const arm = 0.9 * R + a * 0.33, off = Math.abs(b) - arm;
-    vee = Math.exp(-(off * off) / (0.16 * R2)) * Math.exp(-a / (28 * R)) * Math.min(1, a / R) * e;
-    dv += Math.sin(a / (0.9 * R) - t * 7) * U * 0.12 * vee * Math.sign(b || 1);
-    const m = Math.hypot(du, dv), cap = 0.9 * Uw;
-    if (m > cap) { du *= cap / m; dv *= cap / m; }
+    out[6] = Math.exp(-(off * off) / (0.16 * R2) - a / (28 * R)) * Math.min(1, a / R) * e;
+    out[1] += Math.sin(a / (0.9 * R) - t * 7) * U * 0.12 * out[6] * Math.sign(b || 1);
+    const m = Math.hypot(out[0], out[1]), cap = 0.9 * Uw;
+    if (m > cap) { out[0] *= cap / m; out[1] *= cap / m; }
   }
-  return [du, dv, slow, foam, cushion, chop, vee];
+  return true;
 }
 
+/** Comme rockFlowInto, mais renvoie un tableau (null hors de portée). */
+export function rockFlow(r, x, y, t, U, eddies) {
+  const out = new Float64Array(7);
+  return rockFlowInto(r, x, y, t, U, eddies, out) ? [...out] : null;
+}
+
+const SAMPLE = new Float64Array(5), ROCK = new Float64Array(7);
+
 /**
- * Vitesse de l'eau en un point, avec ce qui la colore.
- * @returns {number[]} vx, vy, profondeur relative, écume, coussin, eau hachée, rides en V, eau visible
+ * Vitesse de l'eau en un point, avec ce qui la colore, écrite dans `out` :
+ * vx, vy, profondeur relative, écume, coussin, eau hachée, rides en V, eau visible.
+ * @param {RockGrid} [grid]  rochers rangés par zone (sinon tous les rochers sont regardés)
  */
-export function waterVelocity(f, settings, x, y, t) {
-  const s = sampleField(f, x, y);
-  const U = Math.hypot(s.vx, s.vy);
-  const tx = U > 1e-4 ? s.vx / U : 1, ty = U > 1e-4 ? s.vy / U : 0;
-  let vx = s.vx, vy = s.vy, foam = 0, cushion = 0, chop = 0, vee = 0, slow = 0, dvx = 0, dvy = 0, wakeU = 0;
-  for (const r of f.rocks) {
-    if (r.U <= 0.05) continue;
-    const fl = rockFlow(r, x, y, t, U, settings.eddies);
-    if (!fl) continue;
-    const [du, dv, sl, fo, cu, ch, ve] = fl;
+export function waterVelocity(f, settings, x, y, t, out = new Float64Array(8), grid = null) {
+  const s = sampleInto(f, x, y, SAMPLE);
+  const svx = s[1], svy = s[2];
+  const U = Math.hypot(svx, svy);
+  const tx = U > 1e-4 ? svx / U : 1, ty = U > 1e-4 ? svy / U : 0;
+  let foam = 0, cushion = 0, chop = 0, vee = 0, slow = 0, dvx = 0, dvy = 0, wakeU = 0;
+  const rocks = grid ? grid.near(x, y) : f.rocks;
+  for (let k = 0; k < rocks.length; k++) {
+    const r = rocks[k];
+    if (r.U <= 0.05 || !rockFlowInto(r, x, y, t, U, settings.eddies, ROCK)) continue;
+    const du = ROCK[0], dv = ROCK[1];
     dvx += du * r.tx - dv * r.ty; dvy += du * r.ty + dv * r.tx;
-    slow = Math.max(slow, sl); foam = Math.max(foam, fo); cushion = Math.max(cushion, cu);
-    chop = Math.max(chop, ch); vee = Math.max(vee, ve);
-    if (fo > 0 || ch > 0) wakeU = Math.max(wakeU, r.U);
+    if (ROCK[2] > slow) slow = ROCK[2];
+    if (ROCK[3] > foam) foam = ROCK[3];
+    if (ROCK[4] > cushion) cushion = ROCK[4];
+    if (ROCK[5] > chop) chop = ROCK[5];
+    if (ROCK[6] > vee) vee = ROCK[6];
+    if ((ROCK[3] > 0 || ROCK[5] > 0) && r.U > wakeU) wakeU = r.U;
   }
-  vx = vx * (1 - slow) + dvx; vy = vy * (1 - slow) + dvy;
+  let vx = svx * (1 - slow) + dvx, vy = svy * (1 - slow) + dvy;
   // Remous : petite turbulence qui dérive avec le courant (rotationnel d'un bruit).
   const drift = U / BASE_SPEED;
   if (settings.turbulence > 0 || foam > 0) {
@@ -408,8 +533,10 @@ export function waterVelocity(f, settings, x, y, t) {
     const k = chop * wakeU * 0.35;
     vx += dny * k; vy -= dnx * k;
   }
+  out[0] = vx; out[1] = vy; out[2] = s[0]; out[3] = foam; out[4] = cushion; out[5] = chop; out[6] = vee;
   // Sous un objet ou un chemin, l'eau n'est pas visible : ce qui flotte y disparaît.
-  return [vx, vy, s.n, foam, cushion, chop, vee, s.block ? 0 : s.a];
+  out[7] = s[4] ? 0 : s[3];
+  return out;
 }
 
 /* -------------------------------------------- */
@@ -418,36 +545,61 @@ export function waterVelocity(f, settings, x, y, t) {
 
 const F = 6; // x, y, âge, durée de vie, hasard, réservé
 const LEAF = 0.012;
+/** Hors de l'écran, une particule n'avance qu'une image sur OFFSCREEN_EVERY, par plus grands pas. */
+const OFFSCREEN_EVERY = 4;
+/** En dessous, un point d'écume est plus petit qu'un pixel : on en dessine moins, en fondu. */
+const MIN_FOAM_PX = 0.7;
+/** En dessous de tant de pixels par case, les traits du courant s'éclaircissent en fondu. */
+const STROKE_FADE_PPC = 25;
+/** Plus grand rayon d'un point d'écume, en cases. */
+const FOAM_MAX = 2.7 / PX;
+
+/** Seconde valeur au hasard tirée de la première (pour décider qui reste dessiné de loin). */
+const pick = (rnd) => (rnd * 97.31) % 1;
 
 /**
  * Simulation : traits du courant et particules portés par l'eau. step() avance d'un pas et
  * remplit `instances` (INSTANCE_FLOATS nombres par élément à dessiner) :
  *   sorte 0 : trait (x, y = tête ; ax, ay = queue relative), 1 : écume (ax = rayon),
  *   2 : feuille (ax, ay = direction), 3 : brindille (ax, ay = direction).
+ * Hors de la vue, les particules avancent moins souvent et ne sont pas dessinées.
  */
 export class WaterSim {
   /**
    * @param {object} field     buildField()
    * @param {object} settings  normalizeWater()
-   * @param {{cap?:number, rand?:()=>number}} [options]  cap : part des particules (réglage léger)
+   * @param {{cap?:number, rand?:()=>number, state?:object}} [options]
+   *   cap : part des particules (réglage léger) ; state : état repris d'une autre simulation (state())
    */
-  constructor(field, settings, { cap = 1, rand = Math.random } = {}) {
+  constructor(field, settings, { cap = 1, rand = Math.random, state = null } = {}) {
     this.f = field;
     this.s = settings;
     this.rand = rand;
-    this.t = 0;
+    this.t = state?.t ?? 0;
+    this.frame = 0;
     const area = field.area;
     this.nStrokes = settings.strokes ? Math.min(MAX_STROKES, Math.round(area * STROKE_DENSITY * cap)) : 0;
     this.nFloat = settings.particles ? Math.min(MAX_FLOATERS, Math.round(area * settings.density * cap)) : 0;
     this.active = field.rocks.filter((r) => r.U > 0.05);
+    this.grid = new RockGrid(field.rocks);
     this.rockShare = area > 0 ? Math.min(0.35, (3 * this.active.length) / area) : 0;
-    this.P = new Float32Array(this.nStrokes * F);
-    this.Q = new Float32Array(this.nFloat * F);
-    for (let i = 0; i < this.nStrokes; i++) this._spawn(this.P, i, 2, 5);
-    for (let i = 0; i < this.nFloat; i++) this._spawn(this.Q, i, 4, 8);
+    if (state && state.P.length === this.nStrokes * F && state.Q.length === this.nFloat * F) {
+      this.P = state.P; this.Q = state.Q;
+    } else {
+      this.P = new Float32Array(this.nStrokes * F);
+      this.Q = new Float32Array(this.nFloat * F);
+      for (let i = 0; i < this.nStrokes; i++) this._spawn(this.P, i, 2, 5);
+      for (let i = 0; i < this.nFloat; i++) this._spawn(this.Q, i, 4, 8);
+    }
     this.instances = new Float32Array((this.nStrokes + this.nFloat) * INSTANCE_FLOATS);
     this.count = 0;
+    this.stats = { simulated: 0, drawn: 0 };
+    this._v = new Float64Array(8);
+    this._w = new Float64Array(8);
   }
+
+  /** État à reprendre ailleurs (calcul en arrière-plan). */
+  state() { return { t: this.t, P: this.P, Q: this.Q }; }
 
   _spawn(A, i, lifeMin, lifeRange) {
     const rand = this.rand, f = this.f;
@@ -466,70 +618,106 @@ export class WaterSim {
     A[i * F] = x; A[i * F + 1] = y; A[i * F + 2] = 0; A[i * F + 3] = lifeMin + rand() * lifeRange; A[i * F + 4] = rand();
   }
 
-  _inRock(x, y) {
+  _gone(x, y) {
     // Hors de la carte aussi : une rivière qui en sort emporte ses particules.
-    if (x < 0 || y < 0 || x > this.f.width || y > this.f.height) return true;
-    for (const r of this.f.rocks) if ((x - r.x) ** 2 + (y - r.y) ** 2 < r.r * r.r) return true;
-    return false;
+    return x < 0 || y < 0 || x > this.f.width || y > this.f.height || this.grid.inside(x, y);
   }
 
-  /** Avance de dt secondes et prépare les éléments à dessiner. */
-  step(dt) {
+  /** Avance une particule (pas en deux temps : elle suit bien les tourbillons). */
+  _advance(A, o, dt, speedK, jitter) {
+    const f = this.f, s = this.s, t = this.t, v = this._v, w = this._w;
+    const x = A[o], y = A[o + 1];
+    waterVelocity(f, s, x, y, t, v, this.grid);
+    waterVelocity(f, s, x + v[0] * dt * 0.5, y + v[1] * dt * 0.5, t, w, this.grid);
+    A[o] = x + w[0] * dt * speedK + (jitter ? (this.rand() - 0.5) * jitter * dt : 0);
+    A[o + 1] = y + w[1] * dt * speedK + (jitter ? (this.rand() - 0.5) * jitter * dt : 0);
+    A[o + 2] += dt;
+  }
+
+  /**
+   * Avance de dt secondes et prépare les éléments à dessiner.
+   * @param {number} dt
+   * @param {{x0:number,y0:number,x1:number,y1:number,ppc:number}} [view]  vue (cases) et pixels
+   *   d'écran par case : hors de la vue on simule moins souvent et on ne dessine rien
+   */
+  step(dt, view = null) {
     dt = Math.min(0.05, Math.max(0, dt));
     this.t += dt;
-    const t = this.t, f = this.f, s = this.s, out = this.instances, rand = this.rand;
-    let c = 0;
+    this.frame++;
+    const out = this.instances, v = this._v;  // _advance remplit _v et _w
+    const m = 1;  // marge autour de la vue, en cases
+    const vx0 = view ? view.x0 - m : -Infinity, vy0 = view ? view.y0 - m : -Infinity;
+    const vx1 = view ? view.x1 + m : Infinity, vy1 = view ? view.y1 + m : Infinity;
+    const ppc = view?.ppc ?? Infinity;
+    let c = 0, simulated = 0;
     const put = (x, y, ax, ay, alpha, kind, tone, white) => {
       const o = c * INSTANCE_FLOATS;
       out[o] = x; out[o + 1] = y; out[o + 2] = ax; out[o + 3] = ay; out[o + 4] = alpha; out[o + 5] = kind; out[o + 6] = tone; out[o + 7] = white;
       c++;
     };
-    const advance = (A, i, speedK, jitter) => {
-      const o = i * F;
-      let x = A[o], y = A[o + 1];
-      const v = waterVelocity(f, s, x, y, t);
-      const mx = x + v[0] * dt * 0.5, my = y + v[1] * dt * 0.5;
-      const w = waterVelocity(f, s, mx, my, t);
-      x += w[0] * dt * speedK + (jitter ? (rand() - 0.5) * jitter * dt : 0);
-      y += w[1] * dt * speedK + (jitter ? (rand() - 0.5) * jitter * dt : 0);
-      A[o] = x; A[o + 1] = y; A[o + 2] += dt;
-      return [x, y, w[0], w[1], v];
+    // Une particule qui ne sera pas dessinée (hors de la vue, ou trop petite de loin) est
+    // simulée au rythme ralenti.
+    const run = (A, n, lifeMin, lifeRange, speedK, jitter, culled, draw) => {
+      for (let i = 0; i < n; i++) {
+        const o = i * F;
+        const seen = A[o] >= vx0 && A[o] <= vx1 && A[o + 1] >= vy0 && A[o + 1] <= vy1 && !culled(A[o + 4]);
+        if (!seen) {
+          // Hors de la vue : une image sur OFFSCREEN_EVERY, par pas plus grands.
+          if ((i + this.frame) % OFFSCREEN_EVERY) continue;
+          this._advance(A, o, dt * OFFSCREEN_EVERY, speedK, jitter);
+        } else this._advance(A, o, dt, speedK, jitter);
+        simulated++;
+        const x = A[o], y = A[o + 1];
+        // _v : l'eau au départ du pas (profondeur, écume…), _w : sa vitesse au milieu du pas.
+        if (A[o + 2] > A[o + 3] || v[2] > 0.97 || v[7] < 0.5 || this._gone(x, y)) { this._spawn(A, i, lifeMin, lifeRange); continue; }
+        if (seen) draw(A, o, x, y, v, this._w);
+      }
     };
-    // Traits du courant.
-    for (let i = 0; i < this.nStrokes; i++) {
-      const [x, y, wx, wy, v] = advance(this.P, i, 1, 0);
-      const o = i * F, age = this.P[o + 2], life = this.P[o + 3], rnd = this.P[o + 4];
-      const [, , n, foam, cushion, chop, vee, a] = v;
-      if (age > life || n > 0.97 || a < 0.5 || this._inRock(x, y)) { this._spawn(this.P, i, 2, 5); continue; }
+    // Traits du courant (de loin, ils s'éclaircissent en fondu).
+    const strokeK = Math.min(1, (ppc / STROKE_FADE_PPC) ** 2);
+    // Écume : même au plus gros (bouillonnement), un point ne dépasse pas FOAM_MAX cases.
+    const foamKeep = Math.min(1, ((FOAM_MAX * ppc) / MIN_FOAM_PX) ** 2);
+    run(this.P, this.nStrokes, 2, 5, 1, 0, (rnd) => strokeK < 1 && pick(rnd) > strokeK, (A, o, x, y, vv, w) => {
+      const age = A[o + 2], life = A[o + 3], rnd = A[o + 4];
+      const wx = w[0], wy = w[1], foam = vv[3], cushion = vv[4], chop = vv[5], vee = vv[6];
+      if (strokeK < 1 && pick(rnd) > strokeK) return;
       const fade = Math.min(1, age / 0.4, (life - age) / 0.6);
       const sp = Math.hypot(wx, wy);
       const lit = Math.max(0.35 + 0.65 * Math.min(1, sp / BASE_SPEED), 0.5 + 0.5 * foam, 0.5 + 0.3 * cushion, 0.45 + 0.35 * chop, 0.5 + 0.5 * vee);
       const bright = Math.min(7, Math.floor(fade * lit * (0.6 + 0.4 * rnd) * 8));
-      if (bright <= 0) continue;
-      const white = Math.max(foam, cushion * 0.55, vee * 0.8) > 0.3 && rnd < Math.max(foam, cushion * 0.55, vee * 0.8) * 0.7;
+      if (bright <= 0) return;
+      const wm = Math.max(foam, cushion * 0.55, vee * 0.8), white = wm > 0.3 && rnd < wm * 0.7;
       const lk = Math.max(0.16, 0.044 / Math.max(sp, 0.01));
       put(x, y, -wx * lk, -wy * lk, white ? 0.85 : (0.08 + bright * 0.08) * 0.7, 0, bright / 7, white ? 1 : 0);
-    }
+    });
     // Écume, feuilles et brindilles.
-    for (let i = 0; i < this.nFloat; i++) {
-      const [x, y, wx, wy, v] = advance(this.Q, i, 0.92, 0.12);
-      const o = i * F, age = this.Q[o + 2], life = this.Q[o + 3], rnd = this.Q[o + 4];
-      const [, , n, foam, cushion, chop, vee, a] = v;
-      if (age > life || n > 0.97 || a < 0.5 || this._inRock(x, y)) { this._spawn(this.Q, i, 4, 8); continue; }
+    run(this.Q, this.nFloat, 4, 8, 0.92, 0.12, (rnd) => rnd >= LEAF && foamKeep < 1 && pick(rnd) > foamKeep, (A, o, x, y, vv, w) => {
+      const age = A[o + 2], life = A[o + 3], rnd = A[o + 4];
+      const wx = w[0], wy = w[1], foam = vv[3], cushion = vv[4], chop = vv[5], vee = vv[6];
       const fade = Math.min(1, age / 0.6, (life - age) / 1.0);
       if (rnd < LEAF) {
+        if ((3.6 / PX) * ppc < 1.2) return;   // feuille plus petite qu'un pixel
         const twig = rnd < LEAF * 0.35;
         const ang = twig ? Math.atan2(wy, wx) : age * ((rnd * 977) % 1 - 0.5) * 1.2 + rnd * 50;
         put(x, y, Math.cos(ang), Math.sin(ang), fade, twig ? 3 : 2, Math.floor((rnd * 4) / LEAF) % 4 / 4, 0);
-        continue;
+        return;
       }
       const white = Math.max(foam, cushion * 0.8, vee, chop * 0.6);
       const al = fade * (0.15 + 0.85 * white) * (0.5 + 0.5 * ((rnd * 7) % 1));
-      if (al < 0.08) continue;
+      if (al < 0.08) return;
       const size = (0.6 + ((rnd * 13) % 1) * 1.4 + white * 0.7) / PX;
-      put(x, y, size, 0, 0.2 + Math.min(3, Math.floor(al * 4)) * 0.22, 1, 0, 0);
-    }
+      // De loin : moins de points d'écume, ceux qui restent en fondu.
+      let lodK = 1;
+      const px = size * ppc;
+      if (px < MIN_FOAM_PX) {
+        const keep = (px / MIN_FOAM_PX) ** 2, p = pick(rnd);
+        if (p > keep) return;
+        lodK = Math.min(1, (keep - p) / (keep * 0.3));
+      }
+      put(x, y, size, 0, (0.2 + Math.min(3, Math.floor(al * 4)) * 0.22) * lodK, 1, 0, 0);
+    });
     this.count = c;
+    this.stats = { simulated, drawn: c };
     return c;
   }
 }
@@ -544,7 +732,7 @@ float noise(vec2 p) { vec2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * 
   return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y); }
 float fbm(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * noise(p); p *= 2.03; a *= 0.5; } return s; }`;
 
-/** Surface de l'eau : un rectangle de la taille de la carte (en cases). */
+/** Surface de l'eau : les morceaux de carte qui contiennent de l'eau (positions en cases). */
 export const SURFACE_VERT = `
 precision highp float;
 attribute vec2 aVertexPosition;
@@ -556,13 +744,13 @@ void main() {
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
 }`;
 
-export const SURFACE_FRAG = `
+/**
+ * Fond de l'eau, calculé une seule fois dans une image : sable et galets (rgb) et ombre portée
+ * des rochers (a). La surface le relit à chaque image, décalé par l'ondulation.
+ */
+export const BED_FRAG = `
 precision highp float;
 varying vec2 vPos;
-uniform sampler2D uField;
-uniform vec2 uMapSize;
-uniform float uTime, uGlow, uAlpha;
-uniform int uMode;
 uniform vec3 uRocks[${MAX_ROCKS}];
 uniform int uRockN;
 ${COMMON}
@@ -575,9 +763,36 @@ vec3 cells(vec2 p) {
   }
   return vec3(sqrt(d1), sqrt(d2) - sqrt(d1), id);
 }
-float caustic(vec2 q) {
+void main() {
+  vec2 bp = vPos * ${PX.toFixed(1)};
+  vec3 cl = cells(bp / 7.0);
+  float peb = smoothstep(0.55, 0.38, cl.x);
+  vec3 sand = mix(vec3(0.45, 0.40, 0.30), vec3(0.58, 0.52, 0.40), fbm(bp / 5.0));
+  vec3 pebC = mix(vec3(0.33, 0.32, 0.28), vec3(0.60, 0.55, 0.46), cl.z) * (0.7 + 0.4 * (1.0 - cl.x * 1.8));
+  vec3 bed = mix(sand, pebC, peb * 0.9) * (0.85 + 0.15 * smoothstep(0.0, 0.1, cl.y));
+  float shade = 1.0;
+  for (int i = 0; i < ${MAX_ROCKS}; i++) {
+    if (i >= uRockN) break;
+    vec3 r = uRocks[i];
+    float d = length(vPos - r.xy - vec2(r.z * 0.25, r.z * 0.3)) - r.z;
+    shade *= 1.0 - 0.4 * exp(-max(d, 0.0) / (0.45 * r.z));
+  }
+  gl_FragColor = vec4(bed, shade);
+}`;
+
+export const SURFACE_FRAG = `
+precision highp float;
+varying vec2 vPos;
+uniform sampler2D uField;
+uniform sampler2D uBed;
+uniform vec2 uMapSize;
+uniform vec4 uBedRect;
+uniform float uTime, uGlow, uAlpha, uPPC;
+uniform int uMode;
+${COMMON}
+float caustic(vec2 q, float fine) {
   float r1 = 1.0 - abs(noise(q / 15.0) * 2.0 - 1.0);
-  float r2 = 1.0 - abs(noise(q / 9.0 + 7.3) * 2.0 - 1.0);
+  float r2 = mix(0.75, 1.0 - abs(noise(q / 9.0 + 7.3) * 2.0 - 1.0), fine);
   return pow(r1 * r2, 5.0);
 }
 void main() {
@@ -588,20 +803,20 @@ void main() {
   vec2 vel = (f.gb - 0.5) * 8.0 * ${PX.toFixed(1)};
   vec2 px = vPos * ${PX.toFixed(1)};
   float depth = 1.0 - n * n;
+  // Vu de loin, les détails plus fins que les pixels scintilleraient : ils s'effacent en fondu.
+  float fine = smoothstep(8.0, 16.0, uPPC), tiny = smoothstep(25.0, 50.0, uPPC);
   // Reflets portés par le courant : deux phases qui se relaient, sans étirement.
   float T = 1.8, t = uTime;
   float ph0 = fract(t / T), ph1 = fract(t / T + 0.5);
   float w0 = 1.0 - abs(2.0 * ph0 - 1.0);
   vec2 q0 = px - vel * ph0 * T + floor(t / T) * vec2(37.0, 11.0);
   vec2 q1 = px - vel * ph1 * T + floor(t / T + 0.5) * vec2(53.0, 29.0);
-  float cs = caustic(q0) * w0 + caustic(q1) * (1.0 - w0);
+  float cs = caustic(q0, fine) * w0 + caustic(q1, fine) * (1.0 - w0);
   float rip = (noise(q0 / 6.0) * w0 + noise(q1 / 6.0) * (1.0 - w0)) - 0.5;
+  // Fond précalculé, vu à travers l'eau qui ondule.
   vec2 bp = px + vec2(rip) * 3.0 * depth;
-  vec3 cl = cells(bp / 7.0);
-  float peb = smoothstep(0.55, 0.38, cl.x);
-  vec3 sand = mix(vec3(0.45, 0.40, 0.30), vec3(0.58, 0.52, 0.40), fbm(bp / 5.0));
-  vec3 pebC = mix(vec3(0.33, 0.32, 0.28), vec3(0.60, 0.55, 0.46), cl.z) * (0.7 + 0.4 * (1.0 - cl.x * 1.8));
-  vec3 bed = mix(sand, pebC, peb * 0.9) * (0.85 + 0.15 * smoothstep(0.0, 0.1, cl.y));
+  vec4 bedT = texture2D(uBed, (bp / ${PX.toFixed(1)} - uBedRect.xy) / uBedRect.zw);
+  vec3 bed = bedT.rgb;
   vec3 deep, shallow; float absorb, causticK;
   if (uMode == 0) { deep = vec3(0.04, 0.20, 0.26); shallow = vec3(0.30, 0.55, 0.52); absorb = 0.04 + 0.62 * depth; causticK = 0.7; }
   else if (uMode == 1) { deep = vec3(0.02, 0.09, 0.15); shallow = vec3(0.12, 0.33, 0.38); absorb = 0.55 + 0.45 * depth; causticK = 0.25; }
@@ -612,17 +827,12 @@ void main() {
   float sky = fbm(px / 140.0 + vec2(uTime * 0.01, 0.0));
   col += vec3(0.55, 0.70, 0.80) * 0.07 * sky * uGlow;
   float glint = pow(max(0.0, noise(q0 / 3.0 + 11.0) * w0 + noise(q1 / 3.0 + 11.0) * (1.0 - w0)), 9.0);
-  col += vec3(1.0) * glint * 0.9 * uGlow * (0.4 + 0.6 * depth);
+  col += vec3(1.0) * glint * 0.9 * uGlow * (0.4 + 0.6 * depth) * tiny;
   // Liseré d'eau claire et d'écume contre la berge.
   col = mix(col, shallow * 1.2, smoothstep(0.86, 0.98, n) * 0.5);
-  col = mix(col, vec3(0.86, 0.92, 0.90), smoothstep(0.955, 0.995, n) * (0.35 + 0.4 * noise(px / 4.0 - uTime * 3.0)));
-  // Ombre portée des rochers sur l'eau.
-  for (int i = 0; i < ${MAX_ROCKS}; i++) {
-    if (i >= uRockN) break;
-    vec3 r = uRocks[i];
-    float d = length(vPos - r.xy - vec2(r.z * 0.25, r.z * 0.3)) - r.z;
-    col *= 1.0 - 0.4 * exp(-max(d, 0.0) / (0.45 * r.z));
-  }
+  col = mix(col, vec3(0.86, 0.92, 0.90), smoothstep(0.955, 0.995, n) * (0.35 + 0.4 * mix(0.5, noise(px / 4.0 - uTime * 3.0), tiny)));
+  // Ombre portée des rochers (précalculée avec le fond).
+  col *= bedT.a;
   float alpha = a * uAlpha;
   gl_FragColor = vec4(col * alpha, alpha);
 }`;
@@ -694,16 +904,33 @@ void main() {
 /** Quadrilatère d'un élément (bande de 4 sommets). */
 export const QUAD_CORNERS = new Float32Array([-1, -1, -1, 1, 1, -1, 1, 1]);
 
-/** Uniformes de la surface pour des réglages donnés. */
-export function surfaceUniforms(field, settings) {
+/** Uniformes du fond précalculé. */
+export function bedUniforms(field) {
   const rocks = new Float32Array(MAX_ROCKS * 3);
   field.rocks.slice(0, MAX_ROCKS).forEach((r, i) => rocks.set([r.x, r.y, r.r], i * 3));
+  return { uRocks: rocks, uRockN: Math.min(MAX_ROCKS, field.rocks.length) };
+}
+
+/**
+ * Emprise et taille de l'image du fond : l'eau et ses abords (l'ondulation lit un peu à côté),
+ * à la finesse demandée, sans dépasser BED_MAX pixels de côté.
+ * @param {number} ppc  pixels par case voulus (ceux de l'image de fond de la scène)
+ */
+export function bedLayout(field, ppc) {
+  const b = field.bounds, m = 0.25;
+  const x0 = b.x0 - m, y0 = b.y0 - m, w = b.x1 - b.x0 + 2 * m, h = b.y1 - b.y0 + 2 * m;
+  const k = Math.max(1, Math.min(ppc, BED_MAX / w, BED_MAX / h));
+  return { rect: new Float32Array([x0, y0, w, h]), width: Math.max(1, Math.round(w * k)), height: Math.max(1, Math.round(h * k)) };
+}
+
+/** Uniformes de la surface pour des réglages donnés. */
+export function surfaceUniforms(field, settings, bedRect) {
   return {
     uMapSize: new Float32Array([field.W / field.R, field.H / field.R]),
+    uBedRect: bedRect,
     uGlow: settings.glow,
     uMode: WATER_TEXTURES.indexOf(settings.texture),
-    uRocks: rocks,
-    uRockN: Math.min(MAX_ROCKS, field.rocks.length),
+    uPPC: 100,
     uAlpha: 1
   };
 }

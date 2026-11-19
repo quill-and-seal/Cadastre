@@ -266,8 +266,8 @@
         "1": "Surface animée",
         "2": "Complète (écume, feuilles, courant)"
       },
-      "GrassStats": "Compteur de l'herbe",
-      "GrassStatsHint": "Affiche en bas à gauche le nombre de brins dessinés et le temps par image, pour mesurer les performances de l'herbe."
+      "GrassStats": "Compteur de performances (herbe et eau)",
+      "GrassStatsHint": "Affiche en bas à gauche, pour l'herbe et l'eau, ce qui est dessiné et le temps de calcul par image."
     }
   }
 }
