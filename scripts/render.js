@@ -8,7 +8,6 @@ import { flattenNodes } from "./curves.js";
 import * as poly from "./poly.js";
 import { isAssetKey } from "./library.js";
 import { TREE_BY_TYPE } from "./trees.js";
-import { currentLines } from "./currents.js";
 import { cutIntervals } from "./curves.js";
 
 const COLORS = {
@@ -218,21 +217,6 @@ export function renderWater(map, prefix = "cad") {
 }
 
 /**
- * Courant des rivières pour l'éditeur : traits blancs animés (SMIL) qui glissent dans le sens
- * du courant. Pas dans l'image exportée : dans Foundry, le module les anime par-dessus.
- */
-export function renderCurrents(map, prefix = "cad") {
-  let out = "";
-  for (const l of currentLines(map)) {
-    const period = l.dash + l.gap;
-    out += `<path d="${polylinePath(l.points)}" fill="none" stroke="#e9fffb" stroke-opacity="${l.alpha}" stroke-width="${l.width}"`
-      + ` stroke-linecap="round" stroke-dasharray="${l.dash} ${l.gap}" stroke-dashoffset="${f3(-l.phase)}">`
-      + `<animate attributeName="stroke-dashoffset" from="${f3(-l.phase)}" to="${f3(-l.phase - period)}" dur="${f3(period / l.speed)}s" repeatCount="indefinite"/></path>`;
-  }
-  return out ? `<g class="cad-currents" clip-path="url(#${prefix}-wclip)">${out}</g>` : "";
-}
-
-/**
  * Chemins : bande texturée le long de la courbe, bordure de chaque côté (un trait plus
  * large dessous), ombre douce. Les textures restent fixes sur la carte : elles ne suivent
  * pas la courbe, comme des pavés posés sur le sol.
@@ -352,15 +336,18 @@ export function renderGrid(map, opacity = 0.12) {
 }
 
 /** Contenu complet (sans la balise <svg>). */
-export function renderContent(map, { mode = "export", grid = false, prefix = "cad", resolve = defaultResolve } = {}) {
+export function renderContent(map, { mode = "export", grid = false, prefix = "cad", resolve = defaultResolve, part = "all" } = {}) {
+  // « ground » : fond, sols et eau ; « top » : chemins, objets et murs. L'eau animée et l'herbe
+  // se glissent entre les deux.
+  const ground = part !== "top", top = part !== "ground";
   return renderDefs(map, prefix, resolve)
-    + `<rect x="0" y="0" width="${map.width}" height="${map.height}" fill="${map.background}"/>`
-    + renderTerrains(map, prefix)
-    + renderWater(map, prefix)
-    + renderPaths(map, prefix)
-    + renderProps(map, prefix, resolve)
-    + renderWalls(map, mode, prefix)
-    + (grid ? renderGrid(map) : "");
+    + (ground ? `<rect x="0" y="0" width="${map.width}" height="${map.height}" fill="${map.background}"/>`
+      + renderTerrains(map, prefix)
+      + renderWater(map, prefix) : "")
+    + (top ? renderPaths(map, prefix)
+      + renderProps(map, prefix, resolve)
+      + renderWalls(map, mode, prefix)
+      + (grid ? renderGrid(map) : "") : "");
 }
 
 /**
@@ -368,9 +355,9 @@ export function renderContent(map, { mode = "export", grid = false, prefix = "ca
  * @param {{scale?:number, grid?:boolean, mode?:"editor"|"export", resolve?:(src:string)=>string}} [options]
  *   scale = pixels par case ; resolve = URL de chaque image d'asset (à l'export : images intégrées)
  */
-export function renderSVG(map, { scale = map.gridSize, grid = false, mode = "export", resolve = defaultResolve } = {}) {
+export function renderSVG(map, { scale = map.gridSize, grid = false, mode = "export", resolve = defaultResolve, part = "all" } = {}) {
   const w = Math.round(map.width * scale), h = Math.round(map.height * scale);
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${w}" height="${h}" viewBox="0 0 ${map.width} ${map.height}" shape-rendering="geometricPrecision">`
-    + renderContent(map, { mode, grid, resolve })
+    + renderContent(map, { mode, grid, resolve, part })
     + "</svg>";
 }

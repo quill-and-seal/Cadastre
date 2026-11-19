@@ -19,7 +19,7 @@ import {
   registerLibrarySettings, CadastreLibraryApp, getLibrary, saveLibrary, assetsFromPaths, scanFolder
 } from "./library-app.js";
 import { mergeAssets } from "./library.js";
-import { registerCurrents } from "./currents-layer.js";
+import { registerWater } from "./water-layer.js";
 import { registerWind } from "./wind-layer.js";
 import { isMapEntry } from "./storage.js";
 import { exportMap } from "./export.js";
@@ -28,7 +28,7 @@ import * as model from "./model.js";
 
 Hooks.once("init", () => {
   registerLibrarySettings();
-  registerCurrents();
+  registerWater();
   registerWind();
   game.modules.get(MODULE_ID).api = {
     openManager: () => CadastreManagerApp.open(),

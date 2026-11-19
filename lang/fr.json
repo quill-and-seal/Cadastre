@@ -30,7 +30,7 @@
       "Saved": "Carte enregistrée.",
       "Coords": "{x} ; {y}",
       "Snap": "Aimanter à la grille (Ctrl inverse)",
-      "AnimateWater": "Animer le courant des rivières",
+      "AnimateWater": "Animer l'eau (pause : eau figée, comme dans l'image exportée)",
       "WindPreview": "Animer le vent dans l'herbe (la souris écarte l'herbe comme un jeton)"
     },
     "Tools": {
@@ -149,7 +149,20 @@
       "WindGap": "Espacement des brins (case de 100 px)",
       "WindLength": "Longueur des brins (case de 100 px)",
       "WindAngle": "Angle des brins",
-      "WindJitter": "Désordre de la grille"
+      "WindJitter": "Désordre de la grille",
+      "Water": "Eau",
+      "WaterTexture": "Texture de l'eau",
+      "WaterTextures": {
+        "clear": "Claire : fond de galets visible",
+        "deep": "Profonde",
+        "muddy": "Boueuse"
+      },
+      "WaterGlow": "Reflets de lumière",
+      "WaterStrokes": "Traits du courant",
+      "WaterParticles": "Particules (écume, feuilles)",
+      "WaterDensity": "Particules par case d'eau",
+      "WaterTurbulence": "Remous",
+      "WaterEddies": "Tourbillons derrière les rochers"
     },
     "Terrains": {
       "stone": "Dalles",
@@ -238,8 +251,6 @@
       "BadJson": "Fichier de liste illisible."
     },
     "Settings": {
-      "AnimateWater": "Animer le courant des rivières",
-      "AnimateWaterHint": "Dans les scènes exportées par Cadastre, le courant glisse le long des rivières. Réglage propre à chaque joueur : à couper sur un ordinateur peu puissant.",
       "WindLevel": "Vent dans l'herbe",
       "WindLevelHint": "Dans les scènes exportées par Cadastre. Réglage propre à chaque joueur : baisse-le sur un ordinateur peu puissant.",
       "WindLevels": {
@@ -247,6 +258,13 @@
         "1": "Léger (moins de brins animés)",
         "2": "Brins animés",
         "3": "Complet (l'herbe s'écarte au passage des jetons)"
+      },
+      "WaterLevel": "Eau vivante",
+      "WaterLevelHint": "Dans les scènes exportées par Cadastre. Réglage propre à chaque joueur : baisse-le sur un ordinateur peu puissant.",
+      "WaterLevels": {
+        "0": "Aucune (eau figée)",
+        "1": "Surface animée",
+        "2": "Complète (écume, feuilles, courant)"
       }
     }
   }

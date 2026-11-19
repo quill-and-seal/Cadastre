@@ -48,7 +48,7 @@ export function normalizeWind(raw) {
 /* -------------------------------------------- */
 
 /** Emprise d'un objet posé, tournée et à l'échelle (arbres : la couronne). */
-function propRings(map, p) {
+export function propRings(map, p) {
   const def = propDef(map, p.type);
   if (!def) return [];
   if (def.tree) {

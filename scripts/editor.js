@@ -8,8 +8,10 @@ import * as M from "./model.js";
 import * as P from "./poly.js";
 import { flattenNodes, rectNodes, ellipseNodes, smoothNodes, rdp, cleanNode, polylineLength } from "./curves.js";
 import { ringsPath as ringsPathD } from "./render.js";
-import { renderPaths, renderWater, renderCurrents } from "./render.js";
+import { renderPaths, renderWater } from "./render.js";
 import { WindPreview } from "./wind-preview.js";
+import { WaterPreview } from "./water-preview.js";
+import { normalizeWater, WATER_TEXTURES } from "./water.js";
 import { normalizeWind } from "./wind.js";
 
 /** Réglages du vent dans le panneau Carte : champ, clé, bornes, pas, affichage. */
@@ -23,6 +25,17 @@ const WIND_FIELDS = [
   ["windLength", "length", 4, 40, 1, (v) => `${v} px`],
   ["windAngle", "angle", 0, 70, 1, (v) => `± ${v}°`],
   ["windJitter", "jitter", 0, 1, 0.05, pct]
+];
+
+/** Réglages de l'eau dans le panneau Carte. */
+const WATER_FIELDS = [
+  ["waterTexture", "texture", "select"],
+  ["waterGlow", "glow", 0, 1, 0.05, pct],
+  ["waterStrokes", "strokes", "check"],
+  ["waterParticles", "particles", "check"],
+  ["waterDensity", "density", 0, 160, 5, (v) => String(v)],
+  ["waterTurbulence", "turbulence", 0, 1, 0.05, pct],
+  ["waterEddies", "eddies", 0, 1, 0.05, pct]
 ];
 import { renderDefs, renderTerrains, renderProps, renderWalls, renderGrid, polylinePath, terrainFill, terrainPatternId, propArt, defaultResolve } from "./render.js";
 import { isAssetKey, assetIdOf, assetKey, embedAsset, refreshMapAssets, filterAssets, normalizeLibrary, pruneAssets } from "./library.js";
@@ -125,6 +138,7 @@ export class MapEditor {
     const refreshed = refreshMapAssets(this.map, this.library);
 
     this._build();
+    this.waterPreview = new WaterPreview(this);
     this.windPreview = new WindPreview(this);
     this.renderMap(true);
     this._renderPanel();
@@ -170,10 +184,15 @@ export class MapEditor {
             <g class="cad-world">
               <rect class="cad-bg"></rect>
               <g class="cad-terrain"></g>
+              <g class="cad-water"></g>
+              <defs class="cad-extra-defs"></defs>
+            </g>
+          </svg>
+          <svg class="cad-svg cad-svg-mid" xmlns="${SVG_NS}">
+            <g class="cad-world-mid">
               <g class="cad-paths"></g>
               <g class="cad-props"></g>
               <g class="cad-walls"></g>
-              <defs class="cad-extra-defs"></defs>
             </g>
           </svg>
           <svg class="cad-svg cad-svg-top" xmlns="${SVG_NS}">
@@ -202,6 +221,13 @@ export class MapEditor {
             ${WIND_FIELDS.map(([name, , min, max, step]) => name === "windWaves"
               ? `<label>${esc(t("CADASTRE.Panel.WindWaves"))}<select name="windWaves">${["swell", "gusts", "mix"].map((w) => `<option value="${w}">${esc(t(`CADASTRE.Panel.WindWaveKinds.${w}`))}</option>`).join("")}</select></label>`
               : `<label>${esc(t(`CADASTRE.Panel.${name[0].toUpperCase()}${name.slice(1)}`))}<div class="cad-slider"><input type="range" name="${name}" min="${min}" max="${max}" step="${step}"><output></output></div></label>`).join("")}
+            <h3>${esc(t("CADASTRE.Panel.Water"))}</h3>
+            ${WATER_FIELDS.map(([name, , kind, max, step]) => {
+              const label = esc(t(`CADASTRE.Panel.${name[0].toUpperCase()}${name.slice(1)}`));
+              if (kind === "select") return `<label>${label}<select name="${name}">${WATER_TEXTURES.map((w) => `<option value="${w}">${esc(t(`CADASTRE.Panel.WaterTextures.${w}`))}</option>`).join("")}</select></label>`;
+              if (kind === "check") return `<label class="cad-check"><input type="checkbox" name="${name}"> ${label}</label>`;
+              return `<label>${label}<div class="cad-slider"><input type="range" name="${name}" min="${kind}" max="${max}" step="${step}"><output></output></div></label>`;
+            }).join("")}
           </section>
         </aside>
       </div>
@@ -209,7 +235,7 @@ export class MapEditor {
 
     const $ = (sel) => this.root.querySelector(sel);
     this.el = {
-      viewport: $(".cad-viewport"), svg: $(".cad-svg"), defs: $(".cad-defs"), world: $(".cad-world"), worldTop: $(".cad-world-top"), svgTop: $(".cad-svg-top"),
+      viewport: $(".cad-viewport"), svg: $(".cad-svg"), defs: $(".cad-defs"), world: $(".cad-world"), worldMid: $(".cad-world-mid"), svgMid: $(".cad-svg-mid"), water: $(".cad-water"), worldTop: $(".cad-world-top"), svgTop: $(".cad-svg-top"),
       bg: $(".cad-bg"), terrain: $(".cad-terrain"), paths: $(".cad-paths"), props: $(".cad-props"), walls: $(".cad-walls"),
       grid: $(".cad-grid"), border: $(".cad-border"), overlay: $(".cad-overlay"), extraDefs: $(".cad-extra-defs"),
       toolOptions: $(".cad-tool-options"), mapOptions: $(".cad-map-options"),
@@ -247,6 +273,7 @@ export class MapEditor {
 
   destroy() {
     this.windPreview?.destroy();
+    this.waterPreview?.destroy();
     for (const [target, type, fn, opts] of this._listeners) target.removeEventListener(type, fn, opts);
     this._listeners = [];
     if (this._frame) cancelAnimationFrame(this._frame);
@@ -284,9 +311,11 @@ export class MapEditor {
     }
     this.el.bg.setAttribute("fill", map.background);
     if (full || terrain) this.el.terrain.innerHTML = renderTerrains(map, prefix);
-    this.el.paths.innerHTML = renderWater(map, prefix) + renderPaths(map, prefix) + renderCurrents(map, prefix);
+    this.el.water.innerHTML = renderWater(map, prefix);
+    this.el.paths.innerHTML = renderPaths(map, prefix);
     if (!this.animateWater) this.el.svg.pauseAnimations?.();
     this.windPreview?.invalidate();
+    this.waterPreview?.invalidate();
     this.el.props.innerHTML = renderProps(map, prefix, this.resolve);
     this.el.walls.innerHTML = renderWalls(map, "editor", prefix);
     this.el.grid.style.display = this.showGrid ? "" : "none";
@@ -295,7 +324,7 @@ export class MapEditor {
 
   _applyView() {
     const { s, tx, ty } = this.view;
-    for (const g of [this.el.world, this.el.worldTop]) g.setAttribute("transform", `translate(${tx} ${ty}) scale(${s})`);
+    for (const g of [this.el.world, this.el.worldMid, this.el.worldTop]) g.setAttribute("transform", `translate(${tx} ${ty}) scale(${s})`);
     this.el.border.setAttribute("stroke-width", String(1.5 / s));
   }
 
@@ -651,6 +680,14 @@ export class MapEditor {
       input.value = wind[key];
       if (input.nextElementSibling) input.nextElementSibling.textContent = unit(wind[key]);
     }
+    const water = this.map.water;
+    for (const [name, key, kind, , , unit] of WATER_FIELDS) {
+      const input = f.querySelector(`[name="${name}"]`);
+      if (!input) continue;
+      if (kind === "check") input.checked = !!water[key];
+      else input.value = water[key];
+      if (unit && input.nextElementSibling) input.nextElementSibling.textContent = unit(water[key]);
+    }
   }
 
   _updateTopbar() {
@@ -916,6 +953,7 @@ export class MapEditor {
       case "water":
         this.animateWater = !this.animateWater;
         if (this.animateWater) this.el.svg.unpauseAnimations?.(); else this.el.svg.pauseAnimations?.();
+        this.waterPreview?.setEnabled(this.animateWater);
         return this._updateTopbar();
       case "save": return this.save();
       case "export": return this.onExport?.(this.getMap());
@@ -961,6 +999,17 @@ export class MapEditor {
     if (input.name === "name") {
       this.map.name = input.value.trim();
       this._setDirty(true);
+    } else if (input.name?.startsWith("water")) {
+      const field = WATER_FIELDS.find(([name]) => name === input.name);
+      if (!field) return;
+      const [, key, kind] = field;
+      this._begin();
+      const value = kind === "check" ? input.checked : kind === "select" ? input.value : Number(input.value);
+      const next = normalizeWater({ ...this.map.water, [key]: value });
+      const changed = JSON.stringify(next) !== JSON.stringify(this.map.water);
+      this.map.water = next;
+      this._commit(changed, { terrain: false });
+      this._syncMapFields();
     } else if (input.name?.startsWith("wind")) {
       const key = WIND_FIELDS.find(([name]) => name === input.name)?.[1];
       if (!key) return;

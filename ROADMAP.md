@@ -17,6 +17,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - 0.1.5 : vent dans l'herbe, trois niveaux (ondulation, touffes, réaction aux jetons).
 - 0.1.6 : herbe faite de brins, brins animés par le vent.
 - 0.1.7 : herbe en grille de traits dessinée par la carte graphique, vagues de vent, jetons qui écartent l'herbe.
+- 0.1.8 : eau vivante (texture, courant réaliste, obstacles et tourbillons, écume et feuilles).
 
 ## 0.2 — Palisade, Vellum, étages, zones retouchables
 
@@ -28,7 +29,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - Calques : masquer, verrouiller, réordonner.
 - Sélection de plusieurs objets au rectangle, déplacés et tournés ensemble.
 - Falaises et dénivelés ; écume et rapides sur les rivières.
-- Écoulement réaliste de l'eau ; nouveaux arbres assortis à l'herbe.
+- Nouveaux arbres assortis à l'herbe et à l'eau.
 
 ## 0.3 — Générateur de donjons et grottes
 

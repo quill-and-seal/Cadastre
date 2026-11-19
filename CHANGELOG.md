@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.8
+
+- **Eau vivante** : l'eau est dessinée par la carte graphique, avec un fond de sable et de galets vu à travers l'eau, des reflets de lumière qui ondulent et suivent le courant, des éclats de soleil et un liseré d'écume contre la berge. Trois textures : claire, profonde, boueuse.
+- **Courant réaliste** : rapide au milieu d'une rivière, presque nul contre les berges, déporté vers la rive extérieure dans les virages.
+- **Obstacles** : un objet posé dans une rivière fait obstacle. L'eau s'écrase devant, passe de chaque côté, tourbillonne derrière, reste hachée en aval, avec des rides en V.
+- **Écume et feuilles** portées par le courant ; traits du courant en option.
+- Réglages par carte dans le panneau Carte (Eau) ; réglage par joueur dans Foundry (Eau vivante : aucune, surface, complète).
+- L'image exportée contient la même eau, figée, sous les chemins, objets et murs.
+- Remplace les filets de courant : réexporter les scènes créées avant cette version.
+
 ## 0.1.7
 
 - **Nouvelle herbe** : une grille très serrée de brins, de simples traits dessinés par la carte graphique (des centaines de milliers sans ralentir). Le vent les couche dans sa direction, chacun avec un léger écart pour cacher le sol, et des vagues parcourent la prairie : houle régulière, rafales qui avancent, ou les deux.

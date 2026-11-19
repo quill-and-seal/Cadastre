@@ -47,13 +47,29 @@ Navigation : clic droit, molette enfoncée ou **Espace** + clic pour déplacer l
 
 Le panneau de droite règle l'outil en cours et la carte : nom, largeur et hauteur en cases, pixels par case dans la scène, couleur de fond.
 
-Sols disponibles : dalles, plancher, pavés, terre, herbe, eau. L'herbe est une grille serrée de brins animés par le vent (voir plus bas), la terre est peinte, et toutes deux se fondent dans leurs voisins ; les sols construits gardent un bord net. L'eau a son propre rendu : eau profonde au centre, claire le long des rives, fond de galets, berge de terre irrégulière cerclée d'encre. Une rivière se peint au pinceau ou se trace avec l'outil Chemin et le sol « eau » : les deux se rejoignent en une seule eau. Tout est dessiné en vectoriel par le module : aucune image à fournir.
+Sols disponibles : dalles, plancher, pavés, terre, herbe, eau. L'herbe est une grille serrée de brins animés par le vent (voir plus bas), la terre est peinte, et toutes deux se fondent dans leurs voisins ; les sols construits gardent un bord net. L'eau a son propre rendu, vivant (voir plus bas), bordé d'une berge de terre irrégulière cerclée d'encre. Une rivière se peint au pinceau ou se trace avec l'outil Chemin et le sol « eau » : les deux se rejoignent en une seule eau. Tout est dessiné en vectoriel par le module : aucune image à fournir.
 
-## Courant des rivières
+## Eau vivante
 
-Une rivière tracée avec l'outil **Chemin** et le sol **eau** a un courant : des filets blancs qui glissent le long de l'eau, plus vite au milieu que près des berges. Le courant suit le sens du tracé ; sur le chemin sélectionné (ou avant de tracer), tu peux l'inverser, régler sa vitesse ou le couper pour une eau calme. L'eau peinte au pinceau (étangs, lacs) reste calme.
+L'eau est dessinée par la carte graphique : fond de sable et de galets vu à travers l'eau, reflets de lumière qui ondulent sur le fond et suivent le courant, éclats de soleil sur les rides, liseré d'écume contre la berge. Une rivière tracée avec l'outil **Chemin** et le sol **eau** a un courant, rapide au milieu, presque nul contre les berges, déporté vers la rive extérieure dans les virages ; sur le chemin sélectionné (ou avant de tracer), tu peux l'inverser, régler sa vitesse ou le couper pour une eau calme. L'eau peinte au pinceau (étangs, lacs) reste calme.
 
-Dans l'éditeur, le courant bouge déjà (bouton vague de la barre du haut pour le mettre en pause). Dans Foundry, la scène exportée l'anime par-dessus son fond, sous les jetons ; chaque joueur peut le couper dans les réglages du module (**Animer le courant des rivières**) si son ordinateur peine.
+Tout objet posé dans une rivière (rocher de ta bibliothèque, tonneau, caisse…) fait obstacle : l'eau s'écrase devant, ralentit, passe de chaque côté, tourbillonne derrière, puis reste hachée sur une bonne distance, avec deux rides en V qui s'ouvrent vers l'aval. De l'écume et quelques feuilles flottent sur le courant ; l'écume se rassemble là où l'eau bouillonne.
+
+Réglages par carte, dans le panneau **Carte** de l'éditeur (**Eau**) :
+
+| Réglage | Par défaut | Rôle |
+|---|---|---|
+| Texture de l'eau | Claire | Claire (fond de galets visible), profonde ou boueuse. |
+| Reflets de lumière | 60 % | |
+| Traits du courant | non | Des milliers de traits qui suivent le courant. |
+| Particules | oui | Écume, feuilles et brindilles portées par l'eau. |
+| Particules par case d'eau | 60 | |
+| Remous | 35 % | |
+| Tourbillons derrière les rochers | 60 % | Force du sillage et des perturbations derrière les obstacles. |
+
+Dans l'éditeur, le bouton vague de la barre du haut met l'eau en pause. L'image de la scène exportée contient la même eau, figée, sous les chemins, objets et murs.
+
+Dans Foundry, chaque joueur choisit son niveau dans les réglages du module (**Eau vivante**) : aucune (l'eau figée de l'image de fond), surface animée, ou complète (écume, feuilles et traits du courant). Une scène exportée avant la 0.1.8 doit être réexportée pour avoir la nouvelle eau.
 
 ## Vent dans l'herbe
 

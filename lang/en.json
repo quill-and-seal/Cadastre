@@ -30,7 +30,7 @@
       "Saved": "Map saved.",
       "Coords": "{x}, {y}",
       "Snap": "Snap to grid (Ctrl inverts)",
-      "AnimateWater": "Animate river currents",
+      "AnimateWater": "Animate the water (paused: still water, as in the exported image)",
       "WindPreview": "Animate the wind in the grass (the mouse parts the grass like a token)"
     },
     "Tools": {
@@ -149,7 +149,20 @@
       "WindGap": "Blade spacing (100 px cell)",
       "WindLength": "Blade length (100 px cell)",
       "WindAngle": "Blade angle",
-      "WindJitter": "Grid disorder"
+      "WindJitter": "Grid disorder",
+      "Water": "Water",
+      "WaterTexture": "Water texture",
+      "WaterTextures": {
+        "clear": "Clear: pebble bed visible",
+        "deep": "Deep",
+        "muddy": "Muddy"
+      },
+      "WaterGlow": "Light reflections",
+      "WaterStrokes": "Current strokes",
+      "WaterParticles": "Particles (foam, leaves)",
+      "WaterDensity": "Particles per water cell",
+      "WaterTurbulence": "Turbulence",
+      "WaterEddies": "Eddies behind rocks"
     },
     "Terrains": {
       "stone": "Flagstones",
@@ -238,8 +251,6 @@
       "BadJson": "Unreadable list file."
     },
     "Settings": {
-      "AnimateWater": "Animate river currents",
-      "AnimateWaterHint": "In scenes exported by Cadastre, the current glides along rivers. Per-player setting: turn it off on a low-end computer.",
       "WindLevel": "Wind in the grass",
       "WindLevelHint": "In scenes exported by Cadastre. Per-player setting: lower it on a low-end computer.",
       "WindLevels": {
@@ -247,6 +258,13 @@
         "1": "Light (fewer animated blades)",
         "2": "Animated blades",
         "3": "Full (grass parts around tokens)"
+      },
+      "WaterLevel": "Living water",
+      "WaterLevelHint": "In scenes exported by Cadastre. Per-player setting: lower it on a low-end computer.",
+      "WaterLevels": {
+        "0": "None (still water)",
+        "1": "Animated surface",
+        "2": "Full (foam, leaves, current)"
       }
     }
   }

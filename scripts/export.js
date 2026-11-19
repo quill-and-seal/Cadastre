@@ -5,45 +5,62 @@
 import { MODULE_ID, MAX_TEXTURE, log } from "./constants.js";
 import { renderSVG, defaultResolve } from "./render.js";
 import { usedAssetSources } from "./library.js";
-import { currentsFlag } from "./currents.js";
 import { windFlag, grassZone, normalizeWind } from "./wind.js";
 import { bladeField } from "./grass.js";
 import { paintStillGrass } from "./grass-gl.js";
+import { waterFlag, buildField, normalizeWater } from "./water.js";
+import { paintStillWater } from "./water-gl.js";
 import { buildWallData, textureScale } from "./walls.js";
 import { isEmpty } from "./model.js";
 
 const FilePickerCls = () => foundry.applications?.apps?.FilePicker?.implementation ?? globalThis.FilePicker;
 const SceneCls = () => CONFIG.Scene.documentClass;
 
-/**
- * Dessine le SVG dans un canvas et renvoie l'image (WebP, PNG si le navigateur refuse).
- * @param {(ctx:CanvasRenderingContext2D)=>void} [after]  dessin ajouté par-dessus (herbe en traits)
- */
-export async function rasterize(svg, after = null) {
+/** Image d'un SVG, décodée par le navigateur. */
+async function svgImage(svg) {
   const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
   try {
     const img = new Image();
     img.src = url;
     await img.decode();
-    const canvas = document.createElement("canvas");
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0);
-    if (after) {
-      try {
-        after(ctx);
-      } catch (error) {
-        log("Herbe en traits non dessinée", error);
-      }
-    }
-    const toBlob = (type, quality) => new Promise((resolve) => canvas.toBlob(resolve, type, quality));
-    const webp = await toBlob("image/webp", 0.92);
-    if (webp?.type === "image/webp") return { blob: webp, ext: "webp" };
-    return { blob: await toBlob("image/png"), ext: "png" };
+    return img;
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/**
+ * Dessine des couches l'une sur l'autre dans un canvas et renvoie l'image (WebP, PNG si le
+ * navigateur refuse). Une couche est un SVG, ou une fonction qui dessine dans le canvas
+ * (eau et herbe animées, figées pour l'image). La taille est celle du premier SVG.
+ * @param {string|(string|((ctx:CanvasRenderingContext2D)=>void))[]} layers
+ */
+export async function rasterize(layers) {
+  if (!Array.isArray(layers)) layers = [layers];
+  let ctx = null;
+  for (const layer of layers) {
+    if (typeof layer === "string") {
+      const img = await svgImage(layer);
+      if (!ctx) {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        ctx = canvas.getContext("2d");
+      }
+      ctx.drawImage(img, 0, 0);
+    } else if (layer && ctx) {
+      try {
+        layer(ctx);
+      } catch (error) {
+        log("Couche animée non dessinée dans l'image", error);
+      }
+    }
+  }
+  const canvas = ctx.canvas;
+  const toBlob = (type, quality) => new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+  const webp = await toBlob("image/webp", 0.92);
+  if (webp?.type === "image/webp") return { blob: webp, ext: "webp" };
+  return { blob: await toBlob("image/png"), ext: "png" };
 }
 
 /** Lit une image et la renvoie en data URI. */
@@ -134,7 +151,16 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
   // L'herbe en traits, figée, est peinte par-dessus le rendu SVG : la même que le calque animé.
   const grassWind = normalizeWind(map.wind);
   const field = bladeField(grassZone(map), grassWind);
-  const { blob, ext } = await rasterize(renderSVG(map, { scale, resolve }), (ctx) => paintStillGrass(ctx, field, grassWind, scale));
+  // L'eau, figée, aussi : la même que celle que le calque anime.
+  const water = waterFlag(map);
+  const waterField = water ? buildField(water) : null;
+  // Sol, puis eau et herbe figées, puis chemins, objets et murs par-dessus.
+  const { blob, ext } = await rasterize([
+    renderSVG(map, { scale, resolve, part: "ground" }),
+    (ctx) => { if (waterField) paintStillWater(ctx, waterField, normalizeWater(water.water), scale); },
+    (ctx) => paintStillGrass(ctx, field, grassWind, scale),
+    renderSVG(map, { scale, resolve, part: "top" })
+  ]);
   const src = await uploadImage(blob, ext, map.name);
 
   const sceneData = {
@@ -163,10 +189,11 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
   await setBackground(scene, src);
   const walls = buildWallData(map);
   if (walls.length) await scene.createEmbeddedDocuments("Wall", walls);
-  // Courant des rivières : animé dans la scène par le calque du module (currents-layer.js).
-  const currents = currentsFlag(map);
-  if (currents) await scene.setFlag(MODULE_ID, "currents", currents);
-  else if (scene.getFlag(MODULE_ID, "currents")) await scene.unsetFlag(MODULE_ID, "currents");
+  // Eau vivante : animée dans la scène par le calque du module (water-layer.js).
+  if (water) await scene.setFlag(MODULE_ID, "water", water);
+  else if (scene.getFlag(MODULE_ID, "water")) await scene.unsetFlag(MODULE_ID, "water");
+  // L'ancien courant (avant la 0.1.8) est remplacé par l'eau vivante.
+  if (scene.getFlag(MODULE_ID, "currents")) await scene.unsetFlag(MODULE_ID, "currents");
   // Vent dans l'herbe : animé par le calque du module (wind-layer.js).
   const wind = windFlag(map);
   if (wind) await scene.setFlag(MODULE_ID, "wind", wind);
