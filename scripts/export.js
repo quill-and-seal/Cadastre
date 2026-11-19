@@ -6,15 +6,20 @@ import { MODULE_ID, MAX_TEXTURE, log } from "./constants.js";
 import { renderSVG, defaultResolve } from "./render.js";
 import { usedAssetSources } from "./library.js";
 import { currentsFlag } from "./currents.js";
-import { windFlag } from "./wind.js";
+import { windFlag, grassZone, normalizeWind } from "./wind.js";
+import { bladeField } from "./grass.js";
+import { paintStillGrass } from "./grass-gl.js";
 import { buildWallData, textureScale } from "./walls.js";
 import { isEmpty } from "./model.js";
 
 const FilePickerCls = () => foundry.applications?.apps?.FilePicker?.implementation ?? globalThis.FilePicker;
 const SceneCls = () => CONFIG.Scene.documentClass;
 
-/** Dessine le SVG dans un canvas et renvoie l'image (WebP, PNG si le navigateur refuse). */
-export async function rasterize(svg) {
+/**
+ * Dessine le SVG dans un canvas et renvoie l'image (WebP, PNG si le navigateur refuse).
+ * @param {(ctx:CanvasRenderingContext2D)=>void} [after]  dessin ajouté par-dessus (herbe en traits)
+ */
+export async function rasterize(svg, after = null) {
   const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
   try {
     const img = new Image();
@@ -23,7 +28,15 @@ export async function rasterize(svg) {
     const canvas = document.createElement("canvas");
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
-    canvas.getContext("2d").drawImage(img, 0, 0);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    if (after) {
+      try {
+        after(ctx);
+      } catch (error) {
+        log("Herbe en traits non dessinée", error);
+      }
+    }
     const toBlob = (type, quality) => new Promise((resolve) => canvas.toBlob(resolve, type, quality));
     const webp = await toBlob("image/webp", 0.92);
     if (webp?.type === "image/webp") return { blob: webp, ext: "webp" };
@@ -118,7 +131,10 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
 
   const { sceneWidth, sceneHeight, scale, reduced } = textureScale(map, MAX_TEXTURE);
   const { resolve, missing } = await inlineAssets(map);
-  const { blob, ext } = await rasterize(renderSVG(map, { scale, resolve }));
+  // L'herbe en traits, figée, est peinte par-dessus le rendu SVG : la même que le calque animé.
+  const grassWind = normalizeWind(map.wind);
+  const field = bladeField(grassZone(map), grassWind);
+  const { blob, ext } = await rasterize(renderSVG(map, { scale, resolve }), (ctx) => paintStillGrass(ctx, field, grassWind, scale));
   const src = await uploadImage(blob, ext, map.name);
 
   const sceneData = {

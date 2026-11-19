@@ -1,35 +1,22 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  normalizeWind, windField, grassZone, patchPositions, bendIndex, pushSector, updatePush, drawBladePatch,
-  bucketPatches, windFlag, WIND_DEFAULT, BEND_STEPS, PUSH_DIRS
-} from "../scripts/wind.js";
+import { normalizeWind, grassZone, windFlag, WIND_DEFAULT } from "../scripts/wind.js";
+import { bladeField, lod, visibleChunks, windUniforms, packPushers, PushTrail, CHUNK, MAX_PUSHERS, GRASS_VERT } from "../scripts/grass.js";
 import { createMap, normalizeMap, paintArea, addPath, addProp, addRoom } from "../scripts/model.js";
 import { rectRings, pointInRings, totalArea } from "../scripts/poly.js";
 import { rectNodes } from "../scripts/curves.js";
 
 test("réglages du vent : valeurs par défaut et bornes", () => {
   assert.deepEqual(normalizeWind(null), WIND_DEFAULT);
-  assert.deepEqual(normalizeWind({ dir: -90, strength: 3, gusts: -1, density: 999 }), { dir: 270, strength: 1, gusts: 0, density: 120 });
-  assert.equal(normalizeWind({ density: 2.5 }).density, WIND_DEFAULT.density, "ancienne densité en touffes : réglage par défaut");
-  assert.equal(normalizeWind({ density: 0 }).density, 0, "0 : pas de brins animés");
+  assert.deepEqual(WIND_DEFAULT, { dir: 40, strength: 0.6, waves: "mix", speed: 0.5, gap: 2.5, length: 24, angle: 25, jitter: 0 });
+  const w = normalizeWind({ dir: -90, strength: 3, waves: "tornade", speed: 0, gap: 100, length: 1, angle: 200, jitter: -1 });
+  assert.deepEqual(w, { dir: 270, strength: 1, waves: "mix", speed: 0.1, gap: 12, length: 4, angle: 70, jitter: 0 });
   assert.equal(normalizeWind({ dir: 0 }).dir, 0);
+  // Cartes d'avant la 0.1.7 : direction et force gardées, le reste par défaut.
+  const old = normalizeWind({ dir: 90, strength: 0.3, gusts: 0.5, density: 45 });
+  assert.deepEqual(old, { ...WIND_DEFAULT, dir: 90, strength: 0.3 });
   assert.deepEqual(createMap().wind, WIND_DEFAULT);
   assert.equal(normalizeMap({ wind: { dir: 45 } }).wind.dir, 45);
-});
-
-test("le champ de vent reste entre 0 et 1, nul par temps calme, et avance dans le sens du vent", () => {
-  const f = windField({ dir: 0, strength: 0.8, gusts: 0.5 });
-  let min = 1, max = 0;
-  for (let i = 0; i < 2000; i++) {
-    const v = f.at(Math.random() * 40, Math.random() * 30, Math.random() * 20);
-    min = Math.min(min, v); max = Math.max(max, v);
-  }
-  assert.ok(min >= 0 && max <= 1 && max - min > 0.4, `${min} → ${max}`);
-  assert.equal(windField({ strength: 0 }).at(3, 3, 1), 0);
-  // Le motif à l'instant t se retrouve plus loin dans le sens du vent (vers l'est) un peu plus tard.
-  const dt = 0.5, shift = f.speed * dt;
-  assert.ok(Math.abs(f.at(10, 7, 0) - f.at(10 + shift, 7, dt)) < 0.05);
 });
 
 test("la zone d'herbe exclut l'eau, les chemins, les pièces et ce qui est posé dessus", () => {
@@ -48,40 +35,75 @@ test("la zone d'herbe exclut l'eau, les chemins, les pièces et ce qui est posé
   assert.deepEqual(grassZone(createMap()), [], "pas d'herbe, pas de zone");
 });
 
-test("brins animés : un carré par case, loin des bords de la zone, toujours les mêmes", () => {
-  const zone = rectRings(0, 0, 10, 6);
-  const patches = patchPositions(zone, { seed: 3 });
-  assert.ok(patches.length >= 8 * 4 && patches.length <= 10 * 6, `${patches.length}`);
-  assert.ok(patches.every((p) => p.x >= 0.45 && p.y >= 0.45 && p.x <= 9.55 && p.y <= 5.55));
-  assert.deepEqual(patchPositions(zone, { seed: 3 }), patches);
-  assert.ok(patchPositions(rectRings(0, 0, 200, 200), { maxCount: 500 }).length <= 500);
-  assert.deepEqual(patchPositions([]), []);
+test("brins : une grille serrée dans la zone, par morceaux, toujours la même", () => {
+  const wind = normalizeWind({ gap: 10, jitter: 0 });     // 10 brins par case de côté
+  const zone = rectRings(0, 0, 20, 10);
+  const field = bladeField(zone, wind);
+  assert.equal(field.gap, 0.1);
+  assert.equal(field.count, 200 * 100);
+  assert.equal(field.chunks.reduce((n, c) => n + c.count, 0), field.count);
+  assert.equal(field.chunks.length, Math.ceil(20 / CHUNK) * Math.ceil(10 / CHUNK));
+  for (const c of field.chunks) {
+    for (let i = 0; i < c.roots.length; i += 2) {
+      const x = c.roots[i], y = c.roots[i + 1];
+      assert.ok(x > 0 && x < 20 && y > 0 && y < 10);
+      assert.ok(x >= c.x0 && x <= c.x1 && y >= c.y0 && y <= c.y1);
+    }
+  }
+  assert.deepEqual(bladeField(zone, wind).chunks[0].roots, field.chunks[0].roots);
+  // Un trou dans la zone reste vide.
+  const holed = bladeField([...rectRings(0, 0, 10, 10), ...rectRings(3, 3, 7, 7).reverse()], wind);
+  assert.ok(Math.abs(holed.count - (100 - 16) * 100) < 200, `${holed.count}`);
+  for (const c of holed.chunks) for (let i = 0; i < c.roots.length; i += 2) {
+    assert.ok(!(c.roots[i] > 3.05 && c.roots[i] < 6.95 && c.roots[i + 1] > 3.05 && c.roots[i + 1] < 6.95));
+  }
+  assert.equal(bladeField([], wind).count, 0);
 });
 
-test("un carré de brins se dessine, avec plus de brins couchés quand le vent forcit", () => {
-  const calls = { stroke: 0 };
-  const ctx = new Proxy({}, { get: (o, k) => (k in o ? o[k] : (...a) => { if (k === "stroke") calls.stroke++; }), set: (o, k, v) => { o[k] = v; return true; } });
-  drawBladePatch(ctx, 50, 50, 80, 1, 40, 0.5, 0);
-  assert.equal(calls.stroke, 80, "deux traits par brin : pied et pointe");
+test("brins mélangés : les premiers d'un morceau couvrent tout le morceau", () => {
+  const field = bladeField(rectRings(0, 0, 8, 8), normalizeWind({ gap: 5 }));
+  const c = field.chunks[0];
+  const quarters = [0, 0, 0, 0];
+  for (let i = 0; i < 400; i++) quarters[(c.roots[i * 2] < 4 ? 0 : 1) + (c.roots[i * 2 + 1] < 4 ? 0 : 2)]++;
+  assert.ok(quarters.every((q) => q > 60), quarters.join(" "));
 });
 
-test("poses : couchage et secteur de poussée", () => {
-  assert.equal(bendIndex(0), 0);
-  assert.equal(bendIndex(1), BEND_STEPS - 1);
-  assert.equal(pushSector(1, 0), 0);
-  assert.equal(pushSector(0, 1), PUSH_DIRS / 4, "vers le sud (y vers le bas)");
-  assert.equal(pushSector(-1, 0), PUSH_DIRS / 2);
+test("très grande carte : la grille se desserre", () => {
+  const field = bladeField(rectRings(0, 0, 100, 100), normalizeWind({ gap: 2.5 }), { maxBlades: 200_000 });
+  assert.ok(field.count <= 210_000 && field.count > 150_000, `${field.count}`);
+  assert.ok(field.gap > 0.025);
 });
 
-test("un jeton couche l'herbe autour de lui, qui se redresse ensuite", () => {
-  const tufts = [{ x: 5, y: 5 }, { x: 5.6, y: 5 }, { x: 9, y: 9 }];
-  const amount = new Float32Array(3), sector = new Uint8Array(3);
-  const buckets = bucketPatches(tufts);
-  updatePush(tufts, [{ x: 5, y: 5, r: 1 }], amount, sector, 0.03, buckets);
-  assert.ok(amount[0] > 0.9 && amount[1] > 0.4 && amount[2] === 0);
-  assert.equal(sector[1], 0, "poussée vers l'est, loin du jeton");
-  updatePush(tufts, [], amount, sector, 0.5, buckets);
-  assert.ok(amount[0] < 0.4, "elle se redresse");
+test("vu de loin, moins de brins mais plus larges", () => {
+  assert.deepEqual(lod(0.025, 100), { fraction: 1, widthScale: 1 });
+  const far = lod(0.025, 20);
+  assert.ok(far.fraction < 0.1 && far.widthScale > 3);
+  assert.equal(lod(0.025, 100, 0.35).fraction, 0.35, "réglage léger");
+  const field = bladeField(rectRings(0, 0, 30, 30), normalizeWind({ gap: 10 }));
+  assert.equal(visibleChunks(field, 0, 0, 5, 5).length, 1);
+  assert.equal(visibleChunks(field, -100, -100, 100, 100).length, field.chunks.length);
+});
+
+test("uniformes du vent et poussées des jetons", () => {
+  const u = windUniforms(normalizeWind({ dir: 90, waves: "gusts" }), 0.025);
+  assert.ok(Math.abs(u.uWind[0]) < 1e-6 && Math.abs(u.uWind[1] - 1) < 1e-6);
+  assert.equal(u.uMode, 1);
+  assert.equal(u.uLength, 0.24);
+  assert.ok(Math.abs(u.uWidth - 0.01) < 1e-9);
+  const p = packPushers([{ x: 1, y: 2, r: 0.5 }]);
+  assert.equal(p.length, MAX_PUSHERS * 4);
+  assert.deepEqual([...p.slice(0, 5)], [1, 2, 0.5, 1, 0]);
+  assert.match(GRASS_VERT, new RegExp(`uPush\\[${MAX_PUSHERS}\\]`));
+});
+
+test("un jeton laisse une trace où l'herbe se redresse", () => {
+  const trail = new PushTrail();
+  assert.equal(trail.update([{ id: "a", x: 5, y: 5, r: 0.8 }], 0.016).length, 1);
+  let list = trail.update([{ id: "a", x: 7, y: 5, r: 0.8 }], 0.016);
+  assert.equal(list.length, 2, "le jeton et sa trace");
+  assert.equal(list[1].x, 5);
+  list = trail.update([], 1);
+  assert.ok(list.length === 0 || list[0].s < 0.5, "la trace s'efface");
 });
 
 test("données du vent pour la scène", () => {
@@ -89,6 +111,7 @@ test("données du vent pour la scène", () => {
   assert.equal(windFlag(map), null);
   paintArea(map, rectRings(0, 0, 10, 10), "grass");
   const flag = windFlag(map);
+  assert.equal(flag.v, 2);
   assert.ok(Math.abs(totalArea(flag.zone) - 100) < 0.01);
   assert.deepEqual(flag.wind, map.wind);
 });

@@ -31,7 +31,7 @@
       "Coords": "{x}, {y}",
       "Snap": "Snap to grid (Ctrl inverts)",
       "AnimateWater": "Animate river currents",
-      "WindPreview": "Preview the wind in the grass (the mouse parts the grass like a token)"
+      "WindPreview": "Animate the wind in the grass (the mouse parts the grass like a token)"
     },
     "Tools": {
       "select": "Select (1)",
@@ -137,20 +137,19 @@
       },
       "FlowSpeed": "Current speed",
       "Wind": "Wind in the grass",
-      "WindDir": "Blows towards",
-      "WindDirs": {
-        "N": "North",
-        "NE": "North-east",
-        "E": "East",
-        "SE": "South-east",
-        "S": "South",
-        "SW": "South-west",
-        "W": "West",
-        "NW": "North-west"
-      },
+      "WindDir": "Blows towards (0°: east, 90°: south)",
       "WindStrength": "Strength",
-      "WindGusts": "Gusts",
-      "WindDensity": "Animated blades per cell (0: none)"
+      "WindWaves": "Waves",
+      "WindWaveKinds": {
+        "swell": "Steady swell",
+        "gusts": "Advancing gusts",
+        "mix": "Swell + gusts"
+      },
+      "WindSpeed": "Wave speed",
+      "WindGap": "Blade spacing (100 px cell)",
+      "WindLength": "Blade length (100 px cell)",
+      "WindAngle": "Blade angle",
+      "WindJitter": "Grid disorder"
     },
     "Terrains": {
       "stone": "Flagstones",
@@ -244,9 +243,9 @@
       "WindLevel": "Wind in the grass",
       "WindLevelHint": "In scenes exported by Cadastre. Per-player setting: lower it on a low-end computer.",
       "WindLevels": {
-        "0": "None",
-        "1": "Ripple (waves of light)",
-        "2": "Blades bending",
+        "0": "None (still grass)",
+        "1": "Light (fewer animated blades)",
+        "2": "Animated blades",
         "3": "Full (grass parts around tokens)"
       }
     }
