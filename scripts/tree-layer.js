@@ -357,6 +357,10 @@ async function refresh() {
 
     const root = new PIXI.Container();
     root.eventMode = "none";
+    // Vellum ne doit pas reprendre ces images : Cadastre gère lui-même leur netteté (des milliers
+    // de morceaux d'arbres agrandis un par un figeaient l'affichage au zoom).
+    root.vellumIgnore = true;
+    root._vellumPatch = true;
     Object.assign(root, { elevation: 0, sortLayer: SORT_LAYER, sort: 2 });
     const parent = canvas.primary ?? canvas.stage;
     parent.addChild(root);

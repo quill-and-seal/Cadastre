@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.23
+
+- **Plus de gel d'une minute au zoom avec Vellum** : Vellum prenait chacun des milliers de morceaux d'arbres de la scène pour une image à agrandir, et les retraitait un par un à chaque zoom. Les calques de Cadastre (arbres, herbe, eau) sont maintenant marqués pour que Vellum les laisse de côté : Cadastre gère déjà lui-même leur netteté. Fonctionne avec toutes les versions de Vellum ; Vellum 0.4.3 reconnaît en plus officiellement ce marquage.
+
 ## 0.1.22
 
 - **Plus de gel au zoom** : en zoomant, les arbres à l'écran étaient tous redessinés plus fins en même temps, puis envoyés d'un bloc à la carte graphique (plusieurs centaines de Mo pour une forêt) : l'affichage se figeait. Désormais :

@@ -87,6 +87,10 @@ function refresh() {
 
     const root = new PIXI.Container();
     root.eventMode = "none";
+    // Vellum ne doit pas reprendre ces images : Cadastre gère lui-même leur netteté (des milliers
+    // de morceaux d'arbres agrandis un par un figeaient l'affichage au zoom).
+    root.vellumIgnore = true;
+    root._vellumPatch = true;
     Object.assign(root, { elevation: 0, sortLayer: SORT_LAYER, sort: 1 });
     // Tout est en cases : une seule mise à l'échelle place l'eau sur la scène.
     root.position.set(ox, oy);
