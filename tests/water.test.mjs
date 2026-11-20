@@ -312,3 +312,20 @@ test("jonctions : jet à l'embouchure, aspiration à la sortie d'un lac, conflue
     prev = a;
   }
 });
+
+test("île : l'eau la contourne, s'écrase devant, file sur les côtés et ralentit derrière", async () => {
+  const { addCurrent } = await import("../scripts/water-data.js");
+  const R = (x0, y0, x1, y1) => [[x0, y0, x1, y0, x1, y1, x0, y1]];
+  const map = createMap({ width: 30, height: 16 });
+  paintArea(map, R(0, 0, 30, 16), "grass");
+  paintArea(map, R(0, 4, 30, 12), "water");
+  paintArea(map, R(13, 7, 17, 9), "grass");
+  for (const y of [5.5, 8, 10.5]) addCurrent(map.waterData, [[1, y], [29, y]], 1);
+  const f = buildField(waterFlag(map));
+  const at = (x, y) => sampleField(f, x, y), free = at(8, 8).vx;
+  assert.ok(at(12.8, 7.5).vy < -0.1 && at(12.8, 8.5).vy > 0.1, "devant, l'eau se partage de chaque côté");
+  assert.ok(at(12.8, 8).vx < free * 0.6, "elle ralentit en arrivant sur l'île");
+  assert.ok(at(15, 6.5).vx > free * 1.2, "plus vite sur les côtés");
+  assert.ok(at(17.3, 8).vx < free * 0.5, "plus lente à l'abri, derrière");
+  assert.ok(f.press[Math.floor(8 * FIELD_RES) * f.W + Math.floor(12.9 * FIELD_RES)] > 0.3, "écume là où elle s'écrase");
+});

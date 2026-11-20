@@ -321,23 +321,41 @@ export function buildField(flag, { hideMasked = false } = {}) {
     if (!sw) return null;
     return [sx / sw, sy / sw, nOut];
   };
+  /** Distance à la berge la plus proche (plafonnée à 2 cases) ; NEAR garde la direction qui s'en éloigne. */
+  const NEAR = [0, 0];
   const shoreDist = (x, y) => {
     let d = 2;
+    NEAR[0] = 0; NEAR[1] = 0;
     for (const si of near(shoreB, x, y, 2)) {
       const [ax, ay, bx, by] = shore[si];
       const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1e-9;
       const h = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L2));
-      d = Math.min(d, Math.hypot(x - ax - dx * h, y - ay - dy * h));
+      const ex = x - ax - dx * h, ey = y - ay - dy * h, e = Math.hypot(ex, ey);
+      if (e < d) { d = e; NEAR[0] = ex / (e || 1); NEAR[1] = ey / (e || 1); }
     }
     return d;
   };
   const masks = flag.masks.map((ring) => ({ ring: [ring], box: poly.ringsBounds([ring]) }));
   const masked = (x, y) => masks.some((m) => x >= m.box.x0 && x <= m.box.x1 && y >= m.box.y0 && y <= m.box.y1 && poly.pointInRings(m.ring, x, y));
   const inWater = new Uint8Array(size);
+  // Îles : les trous dans l'eau (contours tournant dans l'autre sens que l'eau qui les entoure).
+  const areaOf = (r) => { let A = 0; for (let i = 0; i < r.length; i += 2) { const j = (i + 2) % r.length; A += r[i] * r[j + 1] - r[j] * r[i + 1]; } return A / 2; };
+  const areas = flag.rings.map(areaOf);
+  const outer = Math.sign(areas.reduce((m, A) => (Math.abs(A) > Math.abs(m) ? A : m), 0)) || 1;
+  const islands = [];
+  flag.rings.forEach((r, k) => {
+    const A = areas[k];
+    if (Math.sign(A) === outer || Math.abs(A) < 0.05) return;
+    let cx = 0, cy = 0;
+    for (let i = 0; i < r.length; i += 2) { const j = (i + 2) % r.length, c = r[i] * r[j + 1] - r[j] * r[i + 1]; cx += (r[i] + r[j]) * c; cy += (r[i + 1] + r[j + 1]) * c; }
+    islands.push({ x: cx / (6 * A), y: cy / (6 * A), r: Math.sqrt(Math.abs(A) / Math.PI) });
+  });
   // Outil Eau : profondeur retouchée, courants tracés, eau calme, types d'eau.
   const data = flag.data ?? normalizeWaterData(null);
   const depth = depthGrid(data);
   field.adj = new Float32Array(size);
+  // Là où le courant vient s'écraser contre une berge : l'eau y blanchit.
+  field.press = new Float32Array(size);
   const flows = [];
   for (const c of data.currents) for (const p of currentSamples(c)) flows.push([...p, c.speed]);
   const flowB = new Map();
@@ -391,6 +409,36 @@ export function buildField(flag, { hideMasked = false } = {}) {
           const bank = Math.sqrt(Math.min(1, D / 0.5));
           vx += drawn[0] * bank; vy += drawn[1] * bank;
         }
+        // Une île en travers du courant : l'eau la contourne, plus vite sur les côtés, comme
+        // autour d'un rocher (écoulement autour d'un cylindre de même surface).
+        if (islands.length && (vx || vy)) {
+          const ux = vx, uy = vy, U = Math.hypot(ux, uy), tx = ux / U, ty = uy / U;
+          for (const isl of islands) {
+            const rx = x - isl.x, ry = y - isl.y, r2 = rx * rx + ry * ry, R2 = isl.r * isl.r;
+            if (r2 > (isl.r * 3 + 1) ** 2) continue;
+            const a = rx * tx + ry * ty, b = -rx * ty + ry * tx, d4 = Math.max(r2, R2) ** 2;
+            const fade = Math.exp(-Math.max(0, Math.sqrt(r2) - isl.r) / (isl.r * 1.2 + 0.5));
+            const du = -U * R2 * (a * a - b * b) / d4 * fade, dv = -U * 2 * R2 * a * b / d4 * fade;
+            vx += du * tx - dv * ty; vy += du * ty + dv * tx;
+          }
+          const sp = Math.hypot(vx, vy);
+          if (sp > U * 1.6) { vx *= U * 1.6 / sp; vy *= U * 1.6 / sp; }
+        }
+        // Contre une berge (île, rive), l'eau ne la traverse pas : elle s'y écrase et la contourne,
+        // et reste plus lente à l'abri, derrière.
+        if (D < BANK_REACH && (vx || vy)) {
+          const vn = vx * NEAR[0] + vy * NEAR[1], sp = Math.hypot(vx, vy), near = Math.exp(-D / 0.5);
+          if (vn < 0) {
+            vx -= NEAR[0] * vn * near; vy -= NEAR[1] * vn * near;
+            // L'eau qui ne passe plus glisse le long de la berge : la vitesse se garde.
+            const sp2 = Math.hypot(vx, vy);
+            if (sp2 > 1e-6) { const k = 1 + (sp / sp2 - 1) * 0.6; vx *= k; vy *= k; }
+            field.press[o] = Math.min(1, (-vn / sp) * Math.exp(-D / 0.35));
+          } else {
+            const lee = 1 - 0.55 * (vn / sp) * Math.exp(-D / 0.8);
+            vx *= lee; vy *= lee;
+          }
+        }
         // Plus vif là où c'est peu profond, plus lent là où c'est profond.
         const adj = depth.empty ? 0 : depth.at(x, y);
         field.adj[o] = adj;
@@ -440,6 +488,8 @@ export function buildField(flag, { hideMasked = false } = {}) {
   return field;
 }
 
+/** Portée de l'effet des berges sur le courant (cases). */
+const BANK_REACH = 1.6;
 /** Longueur du jet d'une rivière à son embouchure, en demi-largeurs. */
 const JET_LENGTH = 7;
 /** Portée d'un courant tracé et largeur de son influence (cases). */
@@ -537,6 +587,7 @@ export function sampleInto(f, x, y, out) {
   out[3] = f.a[o] * w0 + f.a[o1] * w1 + f.a[o2] * w2 + f.a[o3] * w3;
   const gi = Math.min(f.W - 1, Math.max(0, Math.floor(x * f.R))), gj = Math.min(f.H - 1, Math.max(0, Math.floor(y * f.R)));
   out[4] = f.block[gj * f.W + gi];
+  if (out.length > 5) out[5] = f.press ? f.press[gj * f.W + gi] : 0;
   return out;
 }
 
@@ -698,7 +749,7 @@ export function rockFlow(r, x, y, t, U, eddies) {
   return rockFlowInto(r, x, y, t, U, eddies, out) ? [...out] : null;
 }
 
-const SAMPLE = new Float64Array(5), ROCK = new Float64Array(7);
+const SAMPLE = new Float64Array(6), ROCK = new Float64Array(7);
 
 /**
  * Vitesse de l'eau en un point, avec ce qui la colore, écrite dans `out` :
@@ -739,6 +790,8 @@ export function waterVelocity(f, settings, x, y, t, out = new Float64Array(8), g
     const k = chop * wakeU * 0.35;
     vx += dny * k; vy -= dnx * k;
   }
+  // Contre une berge où le courant s'écrase (une île en travers), l'eau blanchit aussi.
+  if (s[5] > cushion) cushion = s[5];
   out[0] = vx; out[1] = vy; out[2] = s[0]; out[3] = foam; out[4] = cushion; out[5] = chop; out[6] = vee;
   // Sous un objet ou un chemin, l'eau n'est pas visible : ce qui flotte y disparaît.
   out[7] = s[4] ? 0 : s[3];

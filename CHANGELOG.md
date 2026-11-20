@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.16
+
+- **Îles** : le courant contourne enfin les îles (trous dans l'eau). Il s'écrase devant en blanchissant, se partage de chaque côté, file plus vite le long des flancs et reste plus lent à l'abri, derrière. Plus généralement, l'eau ne traverse plus une berge : contre une rive en travers du courant, elle glisse le long du bord.
+
 ## 0.1.15
 
 - **Outil Eau** (touche W) : toute l'eau se place avec un seul outil, en trois modes.
