@@ -174,7 +174,12 @@ async function uploadTrees(map, trees) {
     c.getContext("2d").drawImage(p.color, 0, 0);
     pages.push({ color: await uploadImage(await canvasBlob(c, "image/webp", 0.95), "webp", map.name, `-arbres${i}`), w: TREE_PAGE, h });
   }
-  return { v: 3, wind: normalizeWind(map.wind), pages, items: trees.items };
+  // Drapeau compact : un modèle par dessin (morceaux en tableaux), chaque plante n'en garde
+  // que la position, le numéro de modèle et sa rotation d'affichage.
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const models = trees.models.map((m) => ({ ...m, pieces: m.pieces.map((q) => [q.page, q.u, q.v, q.w, q.h, q.ox, q.oy, q.ax, q.ay, q.lx, q.ly, q.hz, q.id]) }));
+  const items = trees.items.map((t) => [r2(t.x), r2(t.y), t.m, t.spin || 0]);
+  return { v: 4, wind: normalizeWind(map.wind), pages, models, items };
 }
 
 /**

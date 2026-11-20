@@ -7,6 +7,8 @@
   - **Export** : les plantes identiques sont dessinées une fois et partagent leurs images dans la scène (envoi plus léger).
   - **Plus de calculs en parallèle** : jusqu'à 7 workers selon le processeur (4 avant).
   - **Scène** : moins de morceaux par arbre (chêne et hêtre ≈ 20, bouleau ≈ 50, sapins un par étage) ; le sous-bois est d'un seul tenant (immobile, trop petit pour qu'un balancement se voie) ; les arbres trop petits à l'écran ne sont pas animés.
+  - **Chargement des scènes** : les images des arbres tiennent dans un budget de 4 pages au plus (elles pouvaient en faire une trentaine avec une grande forêt, que chaque joueur devait charger et envoyer à sa carte graphique). Une grande forêt est donc envoyée un peu moins fine ; quand on zoome, les arbres à l'écran se redessinent plus fins comme avant. Les données de la scène sont aussi bien plus compactes (les plantes identiques partagent leur description).
+  - **Herbe** : elle n'est plus trouée sous chaque arbre généré (ils sont dessinés par-dessus) ; éditeur et export bien plus rapides sur les cartes boisées.
   - Pour en profiter sur une carte existante : réappliquer son biome (outil Biome), puis réexporter.
 
 ## 0.1.20

@@ -25,13 +25,16 @@ test("la zone d'herbe exclut l'eau, les chemins, les pièces et ce qui est posé
   addPath(map, [{ x: 0, y: 10 }, { x: 30, y: 10 }], { width: 2, terrain: "water" });
   addPath(map, [{ x: 15, y: 0 }, { x: 15, y: 9 }], { width: 1.5, terrain: "dirt" });
   addRoom(map, rectNodes(2, 2, 6, 6), "wood");
-  addProp(map, "tree-oak", 24, 4, 0, 1, 5);
+  addProp(map, "tree-palm", 24, 4, 0, 1, 5);
+  addProp(map, "tree-oak", 10, 16, 0, 1, 5);
   addProp(map, "table", 24, 15);
   const zone = grassZone(map);
   assert.ok(pointInRings(zone, 10, 3), "pré");
   for (const [x, y, what] of [[10, 10, "rivière"], [15, 4, "chemin"], [4, 4, "pièce"], [24, 4, "arbre"], [24, 15, "table"]]) {
     assert.ok(!pointInRings(zone, x, y), what);
   }
+  // Les arbres générés sont dessinés au-dessus de l'herbe : elle n'est pas trouée sous eux.
+  assert.ok(pointInRings(zone, 10, 16), "chêne généré");
   assert.deepEqual(grassZone(createMap()), [], "pas d'herbe, pas de zone");
 });
 

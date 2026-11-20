@@ -9,6 +9,8 @@ import { makeCanvas } from "./tree-paint.js";
 
 /** Taille d'une page d'images d'arbres, en pixels. */
 export const TREE_PAGE = 4096;
+/** Nombre de pages au plus pour tous les arbres d'une scène (mémoire de la carte graphique des joueurs). */
+export const TREE_BUDGET = 4;
 
 /**
  * Finesse des arbres dans la scène, en pixels par case : bien plus que l'image de fond, pour
@@ -29,11 +31,12 @@ export function pieceRecord(p, half) {
  * @param {{shadowPpc?:number, onProgress?:(done:number)=>void}} [opts]  shadowPpc : pixels par case
  *   de l'image de fond, où les ombres seront peintes
  * @returns {Promise<{items:object[], pages:{color, used:number}[], shadows:object[]}>}
- *   items : { x, y (cases), ppc, half, radius, kind, seed, rot, conifer, rigid, pieces:[{page, u, v, …pieceRecord}] }
+ *   models : { ppc, half, radius, kind, seed, rot, conifer, rigid, pieces:[{page, u, v, …pieceRecord}] }
+ *   items : { x, y (cases), m (modèle), spin, radius }
  */
 export async function packTrees(map, ppc, { shadowPpc = map.gridSize, onProgress = null } = {}) {
   const props = map.props.filter((p) => TREE_BY_TYPE.get(p.type)?.proc);
-  const out = { items: [], pages: [], shadows: [] };
+  const out = { items: [], models: [], pages: [], shadows: [] };
   let page = null, x = 0, y = 0, rowH = 0, done = 0;
   const gap = 2;
   const newPage = () => {
@@ -50,6 +53,17 @@ export async function packTrees(map, ppc, { shadowPpc = map.gridSize, onProgress
     x += w + gap; rowH = Math.max(rowH, h + gap);
     return at;
   };
+  // Budget : toutes les images d'arbres tiennent dans TREE_BUDGET pages ; une grande forêt est
+  // donc envoyée un peu moins fine (les arbres à l'écran se redessinent plus fins quand on zoome).
+  const uniq = new Map();
+  for (const p of props) {
+    const def = TREE_BY_TYPE.get(p.type), radius = treeRadius(def, p.k);
+    uniq.set(JSON.stringify([def.proc, p.s ?? 0, Math.round(radius * 100), def.spin ? 0 : Math.round(p.a ?? 0)]), radius);
+  }
+  let area = 0;
+  for (const radius of uniq.values()) area += (2 * (radius + 0.5)) ** 2 * 1.5;
+  ppc = Math.max(48, Math.min(ppc, Math.floor(Math.sqrt((TREE_BUDGET * TREE_PAGE * TREE_PAGE) / Math.max(1e-6, area)))));
+  out.ppc = ppc;
   // Plantes identiques (mêmes essence, graine, taille et orientation : les variantes du
   // sous-bois) : dessinées une seule fois, et leurs morceaux partagés dans les pages.
   const groups = new Map();
@@ -78,10 +92,13 @@ export async function packTrees(map, ppc, { shadowPpc = map.gridSize, onProgress
     const sw = Math.max(1, Math.ceil(r.shadowW * f)), sh = Math.max(1, Math.ceil(r.shadowH * f)), shadow = makeCanvas(sw, sh);
     shadow.getContext("2d").drawImage(r.shadow, 0, 0, sw, sh);
     r.shadow?.close?.();
+    // Modèle : ce que partagent les plantes identiques ; kind, seed, radius, rot : de quoi le
+    // redessiner plus fin quand on zoome (tree-layer.js).
+    const m = out.models.length;
+    out.models.push({ ppc: req.ppc, half: r.half, radius: req.radius, kind: req.kind, seed: req.seed, rot: req.rotation, conifer: r.conifer, rigid: r.rigid, pieces });
     for (const { p, spin } of same) {
-      // kind, seed, radius, rot : de quoi le redessiner plus fin quand on zoome (tree-layer.js) ;
       // spin : rotation appliquée à l'affichage (petites plantes).
-      out.items.push({ x: p.x, y: p.y, ppc: req.ppc, half: r.half, radius: req.radius, kind: req.kind, seed: req.seed, rot: req.rotation, spin, conifer: r.conifer, rigid: r.rigid, pieces });
+      out.items.push({ x: p.x, y: p.y, m, spin, radius: req.radius });
       out.shadows.push({ x: p.x, y: p.y, half: r.half * f, img: shadow });
       onProgress?.(++done);
     }

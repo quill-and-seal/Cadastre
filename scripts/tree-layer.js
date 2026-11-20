@@ -219,6 +219,16 @@ export class TreeSharpener {
   }
 }
 
+/** Plantes du drapeau, quelle que soit sa version (v4 : modèles partagés, morceaux en tableaux). */
+export function expandItems(data) {
+  if ((data.v ?? 1) < 4) return data.items;
+  const models = (data.models ?? []).map((m) => ({
+    ...m,
+    pieces: m.pieces.map(([page, u, v, w, h, ox, oy, ax, ay, lx, ly, hz, id]) => ({ page, u, v, w, h, ox, oy, ax, ay, lx, ly, hz, id }))
+  }));
+  return data.items.map(([x, y, m, spin]) => models[m] && { ...models[m], x, y, spin }).filter(Boolean);
+}
+
 let state = null;
 
 export function registerTrees() {
@@ -268,7 +278,7 @@ async function refresh() {
     parent.sortDirty = true;
     me.root = root;
 
-    const trees = treeSprites2(root, data.items, pages, { size, ox, oy, ppc });
+    const trees = treeSprites2(root, expandItems(data), pages, { size, ox, oy, ppc });
     const sharpener = me.sharpener = new TreeSharpener(trees, size, pages);
     let last = windClock();
     me.tick = () => {

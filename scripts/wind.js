@@ -88,7 +88,8 @@ export function grassZone(map) {
   }
   if (map.rooms?.length) cut(poly.offsetRings(map.rooms, tip * 0.6));
   let props = [];
-  for (const p of map.props ?? []) props = props.concat(propRings(map, p));
+  // Les arbres générés sont dessinés au-dessus de l'herbe (calque des arbres) : inutile de la trouer.
+  for (const p of map.props ?? []) if (!propDef(map, p.type)?.proc) props = props.concat(propRings(map, p));
   // Marge : un brin déborde un peu autour de son pied.
   if (props.length) cut(poly.offsetRings(poly.union(props, []), tip));
   return zone;
