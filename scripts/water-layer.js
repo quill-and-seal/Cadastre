@@ -13,7 +13,7 @@
  */
 import { MODULE_ID, log } from "./constants.js";
 import {
-  buildField, fieldPixels, normalizeWater, surfaceUniforms, bedUniforms, bedLayout, quadTriangles, waterVisible,
+  buildField, fieldPixels, coastPixels, normalizeWater, surfaceUniforms, bedUniforms, bedLayout, quadTriangles, waterVisible,
   WaterSim, WATER_LEVELS, SURFACE_VERT, SURFACE_FRAG, BED_FRAG, FLOAT_VERT, FLOAT_FRAG, QUAD_CORNERS, INSTANCE_FLOATS
 } from "./water.js";
 
@@ -51,6 +51,7 @@ function teardown() {
   if (!state.root.destroyed) state.root.destroy({ children: true });
   state.texture?.destroy(true);
   state.bed?.destroy(true);
+  state.coastTex?.destroy(true);
   state = null;
 }
 
@@ -80,7 +81,7 @@ function refresh() {
     // Objets et chemins sont dans l'image de fond, sous ce calque : l'eau animée s'efface
     // devant eux et laisse voir la même eau, figée dans l'image.
     const field = buildField(flag, { hideMasked: true });
-    if (!field.cells.length) return;
+    if (!field.cells.length && !field.coast) return;
     const renderer = canvas.app.renderer;
 
     const root = new PIXI.Container();
@@ -95,6 +96,10 @@ function refresh() {
 
     // Données brutes (profondeur, vitesse) : surtout pas de prémultiplication par l'alpha.
     const texture = PIXI.Texture.fromBuffer(fieldPixels(field), field.W, field.H, {
+      alphaMode: PIXI.ALPHA_MODES?.NPM ?? 0, scaleMode: PIXI.SCALE_MODES?.LINEAR ?? 1, mipmap: PIXI.MIPMAP_MODES?.OFF ?? 0
+    });
+    // Côtes : distance au rivage, plage, falaise.
+    const coastTex = PIXI.Texture.fromBuffer(coastPixels(field), field.W, field.H, {
       alphaMode: PIXI.ALPHA_MODES?.NPM ?? 0, scaleMode: PIXI.SCALE_MODES?.LINEAR ?? 1, mipmap: PIXI.MIPMAP_MODES?.OFF ?? 0
     });
     const quads = new PIXI.Geometry().addAttribute("aVertexPosition", quadTriangles(field), 2);
@@ -113,14 +118,14 @@ function refresh() {
       bake.destroy();
     }
 
-    const uniforms = { ...surfaceUniforms(field, settings, layout.rect), uField: texture, uBed: bed, uTime: 0 };
+    const uniforms = { ...surfaceUniforms(field, settings, layout.rect), uField: texture, uBed: bed, uCoast: coastTex, uTime: 0 };
     const surface = new PIXI.Mesh(quads, PIXI.Shader.from(SURFACE_VERT, SURFACE_FRAG, uniforms), undefined, PIXI.DRAW_MODES.TRIANGLES);
     root.addChild(surface);
 
     // Écume, feuilles, traits : un quadrilatère par élément, positions recalculées à chaque image.
     let sim = null, floatGeo = null, instBuf = null, floatMesh = null;
     const floatUniforms = { uMinWidth: 0.9 / size, uAlpha: 1 };
-    if (level >= WATER_LEVELS.FULL && (settings.particles || settings.strokes)) {
+    if (level >= WATER_LEVELS.FULL && (settings.particles || settings.strokes || field.coast)) {
       sim = new WaterSim(field, settings);
       for (let i = 0; i < 60; i++) sim.step(1 / 20);
       if (sim.instances.length) {
@@ -179,7 +184,7 @@ function refresh() {
     };
     tick();
     canvas.app.ticker.add(tick);
-    state = { root, tick, texture, bed };
+    state = { root, tick, texture, bed, coastTex };
   } catch (error) {
     log("Eau non animée", error);
     teardown();

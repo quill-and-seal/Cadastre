@@ -162,7 +162,10 @@
       "WaterParticles": "Particules (écume, feuilles)",
       "WaterDensity": "Particules par case d'eau",
       "WaterTurbulence": "Remous",
-      "WaterEddies": "Tourbillons derrière les rochers"
+      "WaterEddies": "Tourbillons derrière les rochers",
+      "WaterWaves": "Force des vagues (plages et falaises)",
+      "WaterPeriod": "Secondes entre deux vagues",
+      "WaterSpray": "Hauteur des gerbes"
     },
     "Terrains": {
       "stone": "Dalles",
@@ -170,7 +173,9 @@
       "cobble": "Pavés",
       "dirt": "Terre",
       "grass": "Herbe",
-      "water": "Eau"
+      "water": "Eau",
+      "sand": "Sable",
+      "rock": "Roche"
     },
     "Props": {
       "barrel": "Tonneau",

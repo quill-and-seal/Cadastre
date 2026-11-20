@@ -192,8 +192,42 @@ export const TERRAINS = [
       blades: [1, 2], length: [0.07, 0.17], width: 0.011, spread: Math.PI, opacity: 0.92,
       colors: ["#2d541c", "#3a6623", "#5b892e", "#6d9a36", "#86ad45"]
     }) } },
-  { id: "water", water: true, swatch: "#2a8a92", w: 2, h: 1, base: "#1f6f7d", pattern: waves() }
+  { id: "water", water: true, swatch: "#2a8a92", w: 2, h: 1, base: "#1f6f7d", pattern: waves() },
+  // Sable et roche : au bord de l'eau, ils font une plage et une falaise (coast.js).
+  { id: "sand", soft: true, swatch: "#d9c08f", w: 8, h: 8, base: "#cdb486", pattern: painted("sand", 8, "#c4a878", "#ead8ad", 0.22, 7) + sandRipples() + speckles(47, 220, ["#b3986a", "#f2e4c2", "#a88d60"], 0.008, 0.022, 8, 8) },
+  { id: "rock", swatch: "#7c766c", w: 6, h: 6, base: "#5f5a52", pattern: painted("rock", 6, "#5a554d", "#8f897e", 0.32, 13) + rockCracks() }
 ];
+
+/** Rides de vent sur le sable, très douces. */
+function sandRipples() {
+  const rand = mulberry32(71);
+  let out = "";
+  for (let i = 0; i < 26; i++) {
+    const x = r3(rand() * 8), y = r3(rand() * 8), len = r3(0.6 + rand() * 1.4), bend = r3((rand() - 0.5) * 0.25);
+    out += `<path d="M${x} ${y}q${r3(len / 2)} ${bend} ${len} 0" stroke="#b89e70" stroke-opacity="0.35" stroke-width="0.03" fill="none" stroke-linecap="round"/>`;
+  }
+  return out;
+}
+
+/** Fissures et arêtes de la roche. */
+function rockCracks() {
+  const rand = mulberry32(29);
+  let dark = "", light = "";
+  for (let i = 0; i < 22; i++) {
+    let x = rand() * 6, y = rand() * 6, d = `M${r3(x)} ${r3(y)}`;
+    let a = rand() * Math.PI * 2;
+    for (let k = 0; k < 3 + Math.floor(rand() * 3); k++) {
+      a += (rand() - 0.5) * 1.2;
+      const l = 0.15 + rand() * 0.35;
+      x += Math.cos(a) * l; y += Math.sin(a) * l;
+      d += `L${r3(x)} ${r3(y)}`;
+    }
+    dark += d;
+    light += `M${r3(rand() * 6)} ${r3(rand() * 6)}l${r3(0.2 + rand() * 0.3)} ${r3((rand() - 0.5) * 0.2)}`;
+  }
+  return `<path d="${dark}" stroke="#3f3b35" stroke-opacity="0.7" stroke-width="0.025" fill="none" stroke-linejoin="round"/>`
+    + `<path d="${light}" stroke="#b3ada2" stroke-opacity="0.35" stroke-width="0.03" fill="none" stroke-linecap="round"/>`;
+}
 
 export const TERRAIN_IDS = new Set(TERRAINS.map((t) => t.id));
 

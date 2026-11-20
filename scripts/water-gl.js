@@ -7,7 +7,7 @@
  */
 import {
   SURFACE_VERT, SURFACE_FRAG, BED_FRAG, FLOAT_VERT, FLOAT_FRAG, QUAD_CORNERS, INSTANCE_FLOATS,
-  fieldPixels, surfaceUniforms, bedUniforms, bedLayout, quadTriangles
+  fieldPixels, coastPixels, surfaceUniforms, bedUniforms, bedLayout, quadTriangles
 } from "./water.js";
 
 function program(gl, vs, fs) {
@@ -55,7 +55,7 @@ export class WaterRenderer {
     this.surface = program(gl, SURFACE_VERT, SURFACE_FRAG);
     this.bed = program(gl, SURFACE_VERT, BED_FRAG);
     this.floats = program(gl, FLOAT_VERT, FLOAT_FRAG);
-    this.uS = uniformsOf(gl, this.surface, ["projectionMatrix", "translationMatrix", "uField", "uBed", "uMapSize", "uBedRect", "uTime", "uGlow", "uAlpha", "uPPC", "uMode"]);
+    this.uS = uniformsOf(gl, this.surface, ["projectionMatrix", "translationMatrix", "uField", "uBed", "uMapSize", "uBedRect", "uTime", "uGlow", "uAlpha", "uPPC", "uMode", "uCoast", "uWaves", "uPeriod", "uWaveDir"]);
     this.uB = uniformsOf(gl, this.bed, ["projectionMatrix", "translationMatrix", "uRocks", "uRockN"]);
     this.uF = uniformsOf(gl, this.floats, ["projectionMatrix", "translationMatrix", "uMinWidth", "uAlpha"]);
     this.aS = gl.getAttribLocation(this.surface, "aVertexPosition");
@@ -70,6 +70,7 @@ export class WaterRenderer {
     this.instBuf = gl.createBuffer();
     this.tex = gl.createTexture();
     this.bedTex = gl.createTexture();
+    this.coastTex = gl.createTexture();
     this.field = null;
     this.quadCount = 0;
   }
@@ -87,6 +88,10 @@ export class WaterRenderer {
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, field.W, field.H, 0, gl.RGBA, gl.UNSIGNED_BYTE, fieldPixels(field));
+    setTexParams(gl, gl.LINEAR);
+    // Côtes : distance au rivage, plage, falaise.
+    gl.bindTexture(gl.TEXTURE_2D, this.coastTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, field.W, field.H, 0, gl.RGBA, gl.UNSIGNED_BYTE, coastPixels(field));
     setTexParams(gl, gl.LINEAR);
     const tri = quadTriangles(field);
     this.quadCount = tri.length / 2;
@@ -162,7 +167,13 @@ export class WaterRenderer {
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.bedTex);
     gl.uniform1i(this.uS.uBed, 1);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.coastTex);
+    gl.uniform1i(this.uS.uCoast, 2);
     gl.activeTexture(gl.TEXTURE0);
+    gl.uniform1f(this.uS.uWaves, u.uWaves);
+    gl.uniform1f(this.uS.uPeriod, u.uPeriod);
+    gl.uniform2fv(this.uS.uWaveDir, u.uWaveDir);
     gl.uniform2fv(this.uS.uMapSize, u.uMapSize);
     gl.uniform4fv(this.uS.uBedRect, u.uBedRect);
     gl.uniform1f(this.uS.uTime, time);
@@ -206,6 +217,7 @@ export class WaterRenderer {
     for (const b of [this.quads, this.corners, this.instBuf]) gl.deleteBuffer(b);
     gl.deleteTexture(this.tex);
     gl.deleteTexture(this.bedTex);
+    gl.deleteTexture(this.coastTex);
     for (const p of [this.surface, this.bed, this.floats]) gl.deleteProgram(p);
     gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
@@ -219,7 +231,7 @@ export class WaterRenderer {
  * @param {number} scale     pixels par case de l'image
  */
 export function paintStillWater(ctx, field, settings, scale, { tile = 2048 } = {}) {
-  if (!field?.cells?.length) return;
+  if (!field?.cells?.length && !field?.coast) return;
   const glCanvas = document.createElement("canvas");
   const r = new WaterRenderer(glCanvas, { preserve: true });
   try {

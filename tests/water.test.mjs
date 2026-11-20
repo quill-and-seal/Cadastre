@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import {
   normalizeWater, waterFlag, buildField, sampleField, fieldPixels, waterVelocity, rockFlow, WaterSim,
   WATER_DEFAULT, INSTANCE_FLOATS, FIELD_RES, BASE_SPEED, SURFACE_FRAG, BED_FRAG, FLOAT_VERT, BED_MAX,
-  RockGrid, quadTriangles, waterVisible, bedLayout
+  RockGrid, quadTriangles, waterVisible, bedLayout, coastPixels
 } from "../scripts/water.js";
+import { COAST_KINDS, wavePhase } from "../scripts/coast.js";
 import { createMap, normalizeMap, paintArea, addPath, addProp } from "../scripts/model.js";
 import { rectRings } from "../scripts/poly.js";
 
@@ -21,9 +22,9 @@ function riverMap({ rock = true, flow = 1 } = {}) {
 
 test("réglages de l'eau : valeurs par défaut et bornes", () => {
   assert.deepEqual(normalizeWater(null), WATER_DEFAULT);
-  assert.deepEqual(WATER_DEFAULT, { texture: "clear", glow: 0.6, strokes: false, particles: true, density: 60, turbulence: 0.35, eddies: 0.6 });
-  assert.deepEqual(normalizeWater({ texture: "lave", glow: 3, strokes: "oui", density: -5, eddies: 2 }),
-    { ...WATER_DEFAULT, glow: 1, density: 0, eddies: 1 });
+  assert.deepEqual(WATER_DEFAULT, { texture: "clear", glow: 0.6, strokes: false, particles: true, density: 60, turbulence: 0.35, eddies: 0.6, waves: 0.6, period: 7, spray: 0.6 });
+  assert.deepEqual(normalizeWater({ texture: "lave", glow: 3, strokes: "oui", density: -5, eddies: 2, waves: 4, period: 1, spray: -1 }),
+    { ...WATER_DEFAULT, glow: 1, density: 0, eddies: 1, waves: 1, period: 3, spray: 0 });
   assert.equal(normalizeWater({ texture: "muddy" }).texture, "muddy");
   assert.deepEqual(createMap().water, WATER_DEFAULT);
   assert.equal(normalizeMap({ water: { strokes: true } }).water.strokes, true);
@@ -143,4 +144,68 @@ test("programmes de carte graphique", () => {
   assert.doesNotMatch(SURFACE_FRAG, /cells\(/, "le fond n'est plus recalculé à chaque image");
   assert.match(SURFACE_FRAG, /uniform sampler2D uField/);
   assert.match(FLOAT_VERT, /attribute vec4 aP0/);
+});
+
+/* -------------------------------------------- */
+/*  Plages et falaises                          */
+/* -------------------------------------------- */
+
+/** Mer en haut ; plage à gauche, falaise à droite, herbe ailleurs. */
+function coastMap({ river = false } = {}) {
+  const map = createMap({ width: 20, height: 10 });
+  paintArea(map, rectRings(0, 0, 20, 10), "grass");
+  paintArea(map, rectRings(0, 4, 10, 6), "sand");
+  paintArea(map, rectRings(10, 4, 18, 7), "rock");
+  paintArea(map, rectRings(0, 0, 20, 4), "water");
+  if (river) addPath(map, [{ x: 4, y: 3 }, { x: 4, y: 9 }], { width: 1.5, terrain: "water", flow: 1 });
+  addProp(map, "barrel", 14, 3.3, 0, 1);
+  return map;
+}
+
+test("côtes : le sol qui borde l'eau fait une plage (sable) ou une falaise (roche)", () => {
+  const flag = waterFlag(coastMap());
+  const segs = flag.coast.segs;
+  assert.ok(segs.some((q) => q[4] === COAST_KINDS.sand && q[0] < 10), "plage à gauche");
+  assert.ok(segs.some((q) => q[4] === COAST_KINDS.rock && q[0] >= 10), "falaise à droite");
+  assert.ok(!segs.some((q) => q[0] > 18.5 && q[2] > 18.5 && Math.abs(q[1] - 4) < 0.01), "herbe : pas de côte");
+  for (const q of segs.filter((q) => Math.abs(q[1] - 4) < 0.01 && Math.abs(q[3] - 4) < 0.01)) assert.ok(q[6] > 0.99, "vers la terre");
+  assert.ok(flag.coast.dir[1] > 0.9, `les vagues viennent du large : ${flag.coast.dir}`);
+  assert.equal(waterFlag(riverMap()).coast, null, "pas de sable ni de roche : rien");
+  const withRiver = waterFlag(coastMap({ river: true })).coast.segs;
+  assert.ok(!withRiver.some((q) => Math.abs((q[0] + q[2]) / 2 - 4) < 0.6 && q[1] > 4.2), "berges d'une rivière : pas de vagues");
+});
+
+test("côtes : distance au rivage de part et d'autre, l'eau va jusqu'au bord", () => {
+  const field = buildField(waterFlag(coastMap()));
+  const c = field.coast, at = (x, y) => { const o = Math.floor(y * FIELD_RES) * field.W + Math.floor(x * FIELD_RES); return { d: c.d[o], sand: c.sand[o], rock: c.rock[o], a: field.a[o] }; };
+  const sea = at(5, 3.5), beach = at(5, 4.6), cliff = at(14, 4.4), meadow = at(5, 7.5);
+  assert.ok(sea.d < 0 && beach.d > 0, `${sea.d} ${beach.d}`);
+  assert.ok(Math.abs(beach.d - 0.6) < 0.1);
+  assert.ok(sea.sand > 0.9 && beach.sand > 0.9 && cliff.rock > 0.9);
+  assert.equal(meadow.sand + meadow.rock, 0, "loin du rivage, rien");
+  assert.ok(sea.a > 0.99, "près d'une côte, l'eau va jusqu'au rivage");
+  // Le sable près de l'eau est dessiné (la vague y monte).
+  assert.ok(waterVisible(field, 3, 4.5, 6, 5.5));
+  assert.equal(coastPixels(field).length, field.W * field.H * 4);
+  assert.ok(c.samples.length / 5 > 100, "points d'écume et de gerbes le long des côtes");
+});
+
+test("côtes : écume avec les vagues, gerbes contre la falaise, rien par temps calme", () => {
+  const field = buildField(waterFlag(coastMap()));
+  const sim = new WaterSim(field, normalizeWater({ particles: false }), { rand: seeded(9) });
+  assert.ok(sim.coast && sim.coast.capacity > 0);
+  let most = 0, drops = 0;
+  for (let i = 0; i < 20 * 10; i++) { sim.step(1 / 20); most = Math.max(most, sim.count); drops = Math.max(drops, sim.coast.nG); }
+  assert.ok(most > 50, `écume : ${most}`);
+  assert.ok(drops > 50, `gerbes : ${drops}`);
+  for (let i = 0; i < sim.count; i++) {
+    const y = sim.instances[i * INSTANCE_FLOATS + 1];
+    assert.ok(y > 0.5 && y < 6.5, `près du rivage (le ressac s’éloigne un peu) : ${y}`);
+  }
+  const calm = new WaterSim(field, normalizeWater({ particles: false, waves: 0 }), { rand: seeded(9) });
+  for (let i = 0; i < 100; i++) calm.step(1 / 20);
+  assert.equal(calm.count, 0, "pas de vagues : ni écume ni gerbes");
+  // Les vagues arrivent d'abord sur ce qui avance le plus en mer.
+  assert.ok(wavePhase(5, 3, 2.5, 7, [0, 1]) > wavePhase(5, 4, 2.5, 7, [0, 1]));
+  assert.match(SURFACE_FRAG, /uniform sampler2D uCoast/);
 });

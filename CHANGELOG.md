@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.11
+
+- **Plages et falaises** : deux nouveaux sols, **sable** et **roche**. Là où l'eau les borde, la côte s'anime d'elle-même, sans rien tracer de plus :
+  - **Plage** : l'eau monte sur le sable puis se retire au rythme des vagues, sans déferler. L'écume ne vient qu'avec chaque vague. Le sable reste mouillé jusqu'où montent les vagues, sèche un peu, et la vague suivante le remouille. Au bord, l'eau n'est qu'une mince pellicule transparente, sans reflets ; ils apparaissent plus au large. La surface monte et redescend avec l'eau.
+  - **Falaise** : une paroi de roche vue du dessus, fissurée, mouillée et couverte d'algues en bas. À chaque vague, des gerbes partent du pied, montent le long de la paroi et retombent en écume qui repart vers le large ; une dentelle d'écume s'étale puis se défait. Les gerbes éclatent par paquets, plus fortes là où la paroi fait face aux vagues. Les objets posés dans l'eau près d'une côte ont aussi leur gerbe.
+  - Les vagues avancent à leur vitesse réelle (environ 6 m/s près du bord, soit 4 cases par seconde) : ce qui avance le plus en mer est touché en premier. Elles viennent du large, déduit de l'orientation des côtes.
+  - Les berges des rivières et les rives d'herbe, de terre ou de pavés ne changent pas.
+- **Réglages de l'eau** : force des vagues (0 : mer calme), secondes entre deux vagues, hauteur des gerbes.
+- Sur une côte de sable ou de roche, l'eau peinte n'a plus de berge de terre ni de trait d'encre : c'est la vague qui fait le bord.
+
 ## 0.1.10
 
 - **Eau plus légère, même rendu** :

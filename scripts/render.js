@@ -189,7 +189,11 @@ export function renderWater(map, prefix = "cad") {
   const r = `filterUnits="userSpaceOnUse" ${region(map)}`;
   const id = (k) => `${prefix}-w${k}`;
   const round = `stroke-linejoin="round" stroke-linecap="round" fill="none"`;
+  // Plages et falaises : pas de berge de terre ni de trait d'encre, la vague fait le bord.
+  const coast = ringsPath([...(map.terrains?.sand ?? []), ...(map.terrains?.rock ?? [])]);
+  const mask = coast ? ` mask="url(#${id("coast")})"` : "";
   return `<defs>`
+      + (coast ? `<mask id="${id("coast")}" maskUnits="userSpaceOnUse" ${region(map)}><rect ${region(map)} fill="#fff"/><path d="${coast}" fill="#000"/></mask>` : "")
       + `<clipPath id="${id("clip")}"><path d="${d}"/></clipPath>`
       + `<filter id="${id("soft")}" ${r}><feGaussianBlur stdDeviation="0.3"/></filter>`
       + `<filter id="${id("rimblur")}" ${r}><feGaussianBlur stdDeviation="0.05"/></filter>`
@@ -201,18 +205,18 @@ export function renderWater(map, prefix = "cad") {
     + `</defs>`
     + `<g clip-path="url(#${prefix}-clip)">`
     // Berge : bande de terre cerclée d'encre côté rive, plus sombre près de l'eau.
-    + `<g filter="url(#${id("rough")})">`
+    + `<g${mask}><g filter="url(#${id("rough")})">`
       + `<path d="${d}" stroke="${WATER.ink}" stroke-width="0.66" ${round}/>`
       + `<path d="${d}" stroke="${WATER.bank}" stroke-width="0.56" ${round}/>`
       + `<path d="${d}" stroke="${WATER.bankDark}" stroke-width="0.22" ${round}/>`
-    + `</g>`
+    + `</g></g>`
     + `<g clip-path="url(#${id("clip")})">`
       + `<path d="${d}" fill="${WATER.deep}"/>`
       + `<path d="${d}" fill="url(#${id("bed")})"/>`
       + `<path d="${d}" stroke="${WATER.shallow}" stroke-width="1.5" stroke-opacity="0.9" ${round} filter="url(#${id("soft")})"/>`
       + `<path d="${d}" stroke="${WATER.rim}" stroke-width="0.32" stroke-opacity="0.75" ${round} filter="url(#${id("rimblur")})"/>`
     + `</g>`
-    + `<path d="${d}" stroke="${WATER.ink}" stroke-width="0.04" stroke-opacity="0.7" ${round}/>`
+    + `<path d="${d}" stroke="${WATER.ink}" stroke-width="0.04" stroke-opacity="0.7" ${round}${mask}/>`
     + `</g>`;
 }
 

@@ -15,17 +15,23 @@
  *   density    : particules par case d'eau
  *   turbulence : remous, 0 à 1
  *   eddies     : tourbillons derrière les rochers, 0 à 1
- * Le sens et la vitesse du courant se règlent par rivière (outil Chemin, sol « eau »).
+ *   waves      : force des vagues sur les côtes de sable et de roche, 0 (calme) à 1
+ *   period     : secondes entre deux vagues
+ *   spray      : hauteur des gerbes contre les falaises, 0 à 1
+ * Le sens et la vitesse du courant se règlent par rivière (outil Chemin, sol « eau ») ; plages
+ * et falaises viennent du sol qui borde l'eau (coast.js).
  */
 import * as poly from "./poly.js";
 import { flattenNodes } from "./curves.js";
 import { waterRings } from "./render.js";
 import { propDef } from "./model.js";
 import { propRings } from "./wind.js";
+import { coastSegments, buildCoast, CoastSim, COAST_GLSL, WAVE_SPEED, coastPixels } from "./coast.js";
+export { coastPixels };
 
-export const WATER_DEFAULT = { texture: "clear", glow: 0.6, strokes: false, particles: true, density: 60, turbulence: 0.35, eddies: 0.6 };
+export const WATER_DEFAULT = { texture: "clear", glow: 0.6, strokes: false, particles: true, density: 60, turbulence: 0.35, eddies: 0.6, waves: 0.6, period: 7, spray: 0.6 };
 export const WATER_TEXTURES = ["clear", "deep", "muddy"];
-export const WATER_LIMITS = { glow: [0, 1], density: [0, 160], turbulence: [0, 1], eddies: [0, 1] };
+export const WATER_LIMITS = { glow: [0, 1], density: [0, 160], turbulence: [0, 1], eddies: [0, 1], waves: [0, 1], period: [3, 14], spray: [0, 1] };
 
 /** Niveaux d'effet, choisis par chaque joueur. */
 export const WATER_LEVELS = { OFF: 0, SURFACE: 1, FULL: 2 };
@@ -65,7 +71,8 @@ export function normalizeWater(raw) {
   }
   return {
     texture: out.texture, glow: out.glow, strokes: out.strokes, particles: out.particles,
-    density: Math.round(out.density), turbulence: out.turbulence, eddies: out.eddies
+    density: Math.round(out.density), turbulence: out.turbulence, eddies: out.eddies,
+    waves: out.waves, period: out.period, spray: out.spray
   };
 }
 
@@ -122,7 +129,9 @@ export function waterFlag(map) {
       rocks.push({ x: r3(p.x), y: r3(p.y), r: r3(Math.max(def.w, def.h) * p.k * 0.45) });
     }
   }
-  return { v: 1, width: map.width, height: map.height, water: normalizeWater(map.water), rings: water, rivers, masks, rocks };
+  // Plages et falaises : rivages de sable et de roche.
+  const coast = coastSegments(map, water);
+  return { v: 1, width: map.width, height: map.height, water: normalizeWater(map.water), rings: water, rivers, masks, rocks, coast };
 }
 
 /* -------------------------------------------- */
@@ -247,6 +256,7 @@ export function buildField(flag, { hideMasked = false } = {}) {
   };
   const masks = flag.masks.map((ring) => ({ ring: [ring], box: poly.ringsBounds([ring]) }));
   const masked = (x, y) => masks.some((m) => x >= m.box.x0 && x <= m.box.x1 && y >= m.box.y0 && y <= m.box.y1 && poly.pointInRings(m.ring, x, y));
+  const inWater = new Uint8Array(size);
 
   // Lignes de la grille : intervalles dans l'eau (règle pair-impair sur les contours).
   for (let j = 0; j < H; j++) {
@@ -260,6 +270,7 @@ export function buildField(flag, { hideMasked = false } = {}) {
     for (let s = 0; s + 1 < xs.length; s += 2) {
       for (let i = Math.max(0, Math.ceil(xs[s] * R - 0.5)); i < W && (i + 0.5) / R < xs[s + 1]; i++) {
         const x = (i + 0.5) / R, o = j * W + i;
+        inWater[o] = 1;
         const D = shoreDist(x, y);
         const rv = riverAt(x, y);
         field.n[o] = rv ? Math.min(1, rv.rel) : 1 - Math.min(1, D / 1.5);
@@ -273,6 +284,8 @@ export function buildField(flag, { hideMasked = false } = {}) {
       }
     }
   }
+  // Plages et falaises : distance au rivage de part et d'autre, jusque sur la terre.
+  field.coast = buildCoast(field, flag.coast, shore, inWater);
   field.rocks = flag.rocks.map((r, i) => {
     const rv = riverAt(r.x, r.y);
     return { ...r, tx: rv?.tx ?? 1, ty: rv?.ty ?? 0, U: rv?.U ?? 0, seed: (i * 7.31) % 10 };
@@ -286,7 +299,10 @@ export function buildField(flag, { hideMasked = false } = {}) {
     for (let i0 = 0; i0 < W; i0 += B) {
       let any = false;
       for (let j = j0; j < Math.min(H, j0 + B) && !any; j++) {
-        for (let i = i0; i < Math.min(W, i0 + B); i++) if (field.a[j * W + i] > 0.004 || field.n[j * W + i] < 1) { any = true; break; }
+        for (let i = i0; i < Math.min(W, i0 + B); i++) {
+          const o = j * W + i;
+          if (field.a[o] > 0.004 || field.n[o] < 1 || (field.coast && field.coast.sand[o] + field.coast.rock[o] > 0)) { any = true; break; }
+        }
       }
       if (!any) continue;
       const x0 = i0 / R, y0 = j0 / R, x1 = Math.min(W, i0 + B) / R, y1 = Math.min(H, j0 + B) / R;
@@ -591,7 +607,9 @@ export class WaterSim {
       for (let i = 0; i < this.nStrokes; i++) this._spawn(this.P, i, 2, 5);
       for (let i = 0; i < this.nFloat; i++) this._spawn(this.Q, i, 4, 8);
     }
-    this.instances = new Float32Array((this.nStrokes + this.nFloat) * INSTANCE_FLOATS);
+    // Plages et falaises : écume du va-et-vient, gerbes et ressac.
+    this.coast = field.coast ? new CoastSim(field, settings, { rand, rocks: field.rocks }) : null;
+    this.instances = new Float32Array((this.nStrokes + this.nFloat + (this.coast?.capacity ?? 0)) * INSTANCE_FLOATS);
     this.count = 0;
     this.stats = { simulated: 0, drawn: 0 };
     this._v = new Float64Array(8);
@@ -716,6 +734,10 @@ export class WaterSim {
       }
       put(x, y, size, 0, (0.2 + Math.min(3, Math.floor(al * 4)) * 0.22) * lodK, 1, 0, 0);
     });
+    if (this.coast) {
+      this.coast.s = this.s;
+      this.coast.step(dt, this.t, view, put);
+    }
     this.count = c;
     this.stats = { simulated, drawn: c };
     return c;
@@ -790,50 +812,157 @@ uniform vec4 uBedRect;
 uniform float uTime, uGlow, uAlpha, uPPC;
 uniform int uMode;
 ${COMMON}
+${COAST_GLSL}
 float caustic(vec2 q, float fine) {
   float r1 = 1.0 - abs(noise(q / 15.0) * 2.0 - 1.0);
   float r2 = mix(0.75, 1.0 - abs(noise(q / 9.0 + 7.3) * 2.0 - 1.0), fine);
   return pow(r1 * r2, 5.0);
 }
+void waterColors(out vec3 deep, out vec3 shallow) {
+  if (uMode == 0) { deep = vec3(0.04, 0.20, 0.26); shallow = vec3(0.30, 0.55, 0.52); }
+  else if (uMode == 1) { deep = vec3(0.02, 0.09, 0.15); shallow = vec3(0.12, 0.33, 0.38); }
+  else { deep = vec3(0.22, 0.22, 0.13); shallow = vec3(0.40, 0.38, 0.24); }
+}
 void main() {
   vec4 f = texture2D(uField, vPos / uMapSize);
   float a = f.a;
-  if (a < 0.004) { gl_FragColor = vec4(0.0); return; }
+  // Côte (plage ou falaise) : distance au rivage, de part et d'autre.
+  float cd = 9.0, sandW = 0.0, rockW = 0.0;
+  vec2 cn = vec2(0.0, 1.0);
+  if (uWaves > 0.0) coastAt(vPos, cd, sandW, rockW, cn);
+  float cw = sandW + rockW;
+  if (a < 0.004 && (cw < 0.01 || cd <= 0.0)) { gl_FragColor = vec4(0.0); return; }
+  float t = uTime;
+  vec2 px = vPos * ${PX.toFixed(1)};
+  vec3 deep, shallow;
+  waterColors(deep, shallow);
+
+  // Vagues : phase au point du rivage, bord de l'eau qui monte et se retire (px du prototype).
+  float k = cw > 0.01 ? rockW / cw : 0.0;
+  vec2 ps = vPos - cn * cd;
+  float sA = cAlongS(ps);
+  float cc = cPhase(ps, t);
+  float Rpx = mix(cRunPx(sA, t), 4.0, k);
+  float epx = Rpx * cPulse(cc);
+  float dpx = cd * ${PX.toFixed(1)};
+  float hpx = epx - dpx;
+  float hit = smoothstep(0.0, 0.03, cc) * (1.0 - smoothstep(0.12, 0.7, cc));
+  vec2 sea = -cn;
+  float cwk = min(1.0, cw);
+
+  if (cd > 0.0) {
+    // Sur la terre : sable ou roche mouillés, paroi de la falaise, pellicule d'eau qui monte.
+    vec4 o = vec4(0.0);
+    float reachMax = mix((12.0 + uWaves * 0.9 * 70.0) * (0.95 + 0.05 * sin(sA / 53.0 + 0.7)), 9.0, k);
+    float pk = clamp(dpx / max(Rpx, 1.0), 0.0, 1.0);
+    float cLeft = 0.3 + 0.7 * acos(2.0 * pk - 1.0) / 3.14159;
+    float since = cc > 0.3 ? max(0.0, cc - cLeft) : cc + 1.0 - cLeft;
+    // La zone mouillée ne bouge pas ; elle sèche un peu entre deux vagues, la suivante la remouille.
+    float wet = smoothstep(reachMax * 1.08, reachMax * 0.9, dpx) * (1.0 - 0.28 * smoothstep(0.0, 0.8, since));
+    o = vec4(0.0, 0.0, 0.0, wet * mix(0.32, 0.4, k));
+    if (rockW > 0.01) {
+      // Paroi vue du dessus : roche fissurée, plus sombre et couverte d'algues en bas.
+      float F = 37.0 + 8.0 * sin(sA / 23.0 + 0.5) + 5.0 * sin(sA / 9.1 + 1.7) + 3.0 * sin(sA / 4.3);
+      float ff = dpx / F;
+      float lit = dot(sea, normalize(vec2(-0.6, -0.8)));
+      vec3 cl = cCells(px / vec2(7.0, 5.0));
+      float strata = 0.5 + 0.5 * sin(dpx * 0.9 + fbm(px / 25.0) * 5.0);
+      float crack = smoothstep(0.07, 0.0, abs(noise(vec2(sA / 3.5, ff * 1.4)) - 0.5));
+      vec3 rk = mix(vec3(0.44, 0.41, 0.37), vec3(0.58, 0.55, 0.49), fbm(px / 18.0));
+      rk *= (0.78 + 0.24 * cl.z) * (1.0 - 0.35 * crack) * (0.92 + 0.08 * strata) * (0.68 + 0.4 * clamp(ff, 0.0, 1.0)) * (0.85 + 0.25 * lit);
+      rk *= 1.0 - 0.45 * smoothstep(0.06, 0.0, cl.y);
+      rk = mix(rk, vec3(0.20, 0.24, 0.15), 0.45 * smoothstep(0.35, 0.0, ff));
+      rk *= mix(1.0, 0.62, wet);
+      rk += vec3(0.10) * smoothstep(0.82, 1.0, ff) * (1.0 - smoothstep(1.0, 1.05, ff));
+      float rim = 1.0 + 0.12 * (noise(px / 3.0) - 0.5) * 2.0;
+      float faceM = (1.0 - smoothstep(rim - 0.04, rim + 0.04, ff)) * smoothstep(0.3, 0.7, rockW);
+      o = o * (1.0 - faceM) + vec4(rk * faceM, faceM);
+    }
+    if (hpx > 0.0) {
+      // Pellicule d'eau sur le sable, presque transparente ; liseré d'écume qui vient avec la vague.
+      // Même teinte que l'eau juste avant le rivage (sable vu à travers une eau très mince) :
+      // pas de couture au bord, et elle s'efface vers le front de la vague.
+      float wa = smoothstep(0.0, 6.0, hpx) * 0.85;
+      float lipK = smoothstep(0.0, 0.06, cc) * (1.0 - smoothstep(0.3, 0.6, cc));
+      float lip = smoothstep(7.0, 0.0, hpx) * (0.35 + 0.4 * noise(vec2(sA / 4.0, t * 2.0))) * lipK;
+      float band = k * smoothstep(5.0, 0.0, hpx) * (0.25 + 0.75 * hit);
+      float fw = max(lip * (1.0 - k), band) * (0.4 + 0.6 * uWaves);
+      vec3 sandUnder = mix(vec3(0.68, 0.58, 0.42), vec3(0.62, 0.55, 0.41), noise(px / 5.0)) * mix(vec3(0.85, 0.95, 0.92), vec3(1.0), 0.3);
+      vec3 film = mix(mix(sandUnder, shallow, 0.08), vec3(0.88, 0.93, 0.92), fw / max(0.001, max(wa, fw)));
+      float fa = max(wa, fw * 0.9);
+      o = o * (1.0 - fa) + vec4(film * fa, fa);
+    }
+    gl_FragColor = o * uAlpha * smoothstep(0.0, 0.3, cw);
+    return;
+  }
+
   float n = f.r;
   vec2 vel = (f.gb - 0.5) * 8.0 * ${PX.toFixed(1)};
-  vec2 px = vPos * ${PX.toFixed(1)};
   float depth = 1.0 - n * n;
+  // Près d'une côte : la houle avance vers elle, la surface monte et redescend avec chaque vague,
+  // et les reflets s'éteignent là où l'eau n'est qu'une mince pellicule.
+  float hd = hpx * mix(1.0, 2.5, k);
+  float swell = cwk > 0.0 ? cos(((t - dot(vPos, uWaveDir) / ${WAVE_SPEED.toFixed(1)}) / uPeriod - cAlong(sA)) * 6.2832) * 0.6 * uWaves * smoothstep(0.0, 60.0, hd) : 0.0;
+  float disp = cwk * (epx * exp(-max(hpx, 0.0) / 70.0) + swell * 6.0);
+  float refl = mix(1.0, smoothstep(30.0, 170.0, hd), cwk);
+  vec2 pq = px - cn * disp;
   // Vu de loin, les détails plus fins que les pixels scintilleraient : ils s'effacent en fondu.
   float fine = smoothstep(8.0, 16.0, uPPC), tiny = smoothstep(25.0, 50.0, uPPC);
   // Reflets portés par le courant : deux phases qui se relaient, sans étirement.
-  float T = 1.8, t = uTime;
+  float T = 1.8;
   float ph0 = fract(t / T), ph1 = fract(t / T + 0.5);
   float w0 = 1.0 - abs(2.0 * ph0 - 1.0);
-  vec2 q0 = px - vel * ph0 * T + floor(t / T) * vec2(37.0, 11.0);
-  vec2 q1 = px - vel * ph1 * T + floor(t / T + 0.5) * vec2(53.0, 29.0);
+  vec2 q0 = pq - vel * ph0 * T + floor(t / T) * vec2(37.0, 11.0);
+  vec2 q1 = pq - vel * ph1 * T + floor(t / T + 0.5) * vec2(53.0, 29.0);
   float cs = caustic(q0, fine) * w0 + caustic(q1, fine) * (1.0 - w0);
   float rip = (noise(q0 / 6.0) * w0 + noise(q1 / 6.0) * (1.0 - w0)) - 0.5;
-  // Fond précalculé, vu à travers l'eau qui ondule.
-  vec2 bp = px + vec2(rip) * 3.0 * depth;
+  // Fond précalculé, vu à travers l'eau qui ondule ; sable fin au bord d'une plage.
+  vec2 bp = px + vec2(rip) * 3.0 * depth * refl;
   vec4 bedT = texture2D(uBed, (bp / ${PX.toFixed(1)} - uBedRect.xy) / uBedRect.zw);
-  vec3 bed = bedT.rgb;
-  vec3 deep, shallow; float absorb, causticK;
-  if (uMode == 0) { deep = vec3(0.04, 0.20, 0.26); shallow = vec3(0.30, 0.55, 0.52); absorb = 0.04 + 0.62 * depth; causticK = 0.7; }
-  else if (uMode == 1) { deep = vec3(0.02, 0.09, 0.15); shallow = vec3(0.12, 0.33, 0.38); absorb = 0.55 + 0.45 * depth; causticK = 0.25; }
-  else { deep = vec3(0.22, 0.22, 0.13); shallow = vec3(0.40, 0.38, 0.24); absorb = 0.6 + 0.35 * depth; causticK = 0.12; }
+  vec3 bed = mix(bedT.rgb, mix(vec3(0.68, 0.58, 0.42), vec3(0.62, 0.55, 0.41), noise(bp / 5.0)), sandW * exp(dpx / 60.0));
+  float absorb, causticK;
+  if (uMode == 0) { absorb = 0.04 + 0.62 * depth; causticK = 0.7; }
+  else if (uMode == 1) { absorb = 0.55 + 0.45 * depth; causticK = 0.25; }
+  else { absorb = 0.6 + 0.35 * depth; causticK = 0.12; }
+  // Au bord d'une plage, l'eau n'est qu'une mince pellicule : presque transparente.
+  absorb *= mix(1.0, smoothstep(0.0, 25.0, hd), cwk);
   vec3 water = mix(shallow, deep, smoothstep(0.0, 1.0, depth));
   vec3 col = mix(bed * mix(vec3(0.85, 0.95, 0.92), vec3(1.0), 0.3), water, absorb);
-  col += vec3(0.85, 1.0, 0.92) * cs * causticK * (1.0 - absorb * 0.7) * uGlow * 1.4;
+  col += vec3(0.85, 1.0, 0.92) * cs * causticK * (1.0 - absorb * 0.7) * uGlow * 1.4 * refl;
+  col *= 1.0 + swell * 0.07;
   float sky = fbm(px / 140.0 + vec2(uTime * 0.01, 0.0));
-  col += vec3(0.55, 0.70, 0.80) * 0.07 * sky * uGlow;
+  col += vec3(0.55, 0.70, 0.80) * 0.07 * sky * uGlow * refl;
   float glint = pow(max(0.0, noise(q0 / 3.0 + 11.0) * w0 + noise(q1 / 3.0 + 11.0) * (1.0 - w0)), 9.0);
-  col += vec3(1.0) * glint * 0.9 * uGlow * (0.4 + 0.6 * depth) * tiny;
-  // Liseré d'eau claire et d'écume contre la berge.
-  col = mix(col, shallow * 1.2, smoothstep(0.86, 0.98, n) * 0.5);
-  col = mix(col, vec3(0.86, 0.92, 0.90), smoothstep(0.955, 0.995, n) * (0.35 + 0.4 * mix(0.5, noise(px / 4.0 - uTime * 3.0), tiny)));
+  col += vec3(1.0) * glint * 0.9 * uGlow * (0.4 + 0.6 * depth) * tiny * refl;
+  // Liseré d'eau claire et d'écume contre la berge (pas sur une côte : la vague le remplace).
+  float bank = 1.0 - cwk;
+  col = mix(col, shallow * 1.2, smoothstep(0.86, 0.98, n) * 0.5 * bank);
+  col = mix(col, vec3(0.86, 0.92, 0.90), smoothstep(0.955, 0.995, n) * (0.35 + 0.4 * mix(0.5, noise(px / 4.0 - uTime * 3.0), tiny)) * bank);
+  if (cwk > 0.0) {
+    // Ombre douce au pied d'une falaise.
+    col *= 1.0 - 0.3 * k * exp(-hpx / 10.0) * cwk;
+    // Plage : liseré d'écume qui arrive avec la vague et se dissipe pendant le retrait.
+    float lipK = smoothstep(0.0, 0.06, cc) * (1.0 - smoothstep(0.3, 0.6, cc));
+    float lip = smoothstep(7.0, 0.0, hpx) * (0.35 + 0.4 * noise(vec2(sA / 4.0, t * 2.0))) * lipK * (1.0 - k);
+    float fw = lip * (0.4 + 0.6 * uWaves);
+    // Falaise : après chaque coup, une dentelle d'écume s'étale vers le large et se défait.
+    if (k > 0.01) {
+      float expo = cExposure(cn) * cWaveF(sA, t);
+      float ago = cc * uPeriod;
+      vec2 lq = px - sea * ago * 9.0;
+      vec3 c2 = cCells(lq / 5.0 + vec2(t * 0.07, -t * 0.05));
+      float net = smoothstep(0.16, 0.02, c2.y) * (0.6 + 0.4 * noise(lq / 9.0));
+      float spread = 8.0 + ago * 14.0;
+      float lace = net * exp(-hpx / spread) * smoothstep(0.0, 0.04, cc) * (1.0 - smoothstep(0.15, 0.95, cc));
+      float band = smoothstep(5.0, 0.0, hpx) * (0.25 + 0.75 * hit) * (0.6 + 0.4 * noise(vec2(sA / 3.0, t * 3.0)));
+      fw = max(fw, k * min(1.0, expo * 1.3) * clamp(lace * 0.9 + band, 0.0, 1.0) * (0.35 + 0.65 * uWaves));
+    }
+    col = mix(col, vec3(0.88, 0.93, 0.92), fw * cwk);
+  }
   // Ombre portée des rochers (précalculée avec le fond).
   col *= bedT.a;
-  float alpha = a * uAlpha;
+  // Près d'une côte, l'eau va jusqu'au rivage, sans laisser voir la berge dessinée.
+  float alpha = max(a, cwk) * uAlpha;
   gl_FragColor = vec4(col * alpha, alpha);
 }`;
 
@@ -930,6 +1059,10 @@ export function surfaceUniforms(field, settings, bedRect) {
     uBedRect: bedRect,
     uGlow: settings.glow,
     uMode: WATER_TEXTURES.indexOf(settings.texture),
+    // Vagues : seulement s'il y a une côte de sable ou de roche.
+    uWaves: field.coast ? settings.waves : 0,
+    uPeriod: settings.period,
+    uWaveDir: new Float32Array(field.coast?.dir ?? [0, 0]),
     uPPC: 100,
     uAlpha: 1
   };

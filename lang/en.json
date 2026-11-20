@@ -162,7 +162,10 @@
       "WaterParticles": "Particles (foam, leaves)",
       "WaterDensity": "Particles per water cell",
       "WaterTurbulence": "Turbulence",
-      "WaterEddies": "Eddies behind rocks"
+      "WaterEddies": "Eddies behind rocks",
+      "WaterWaves": "Wave strength (beaches and cliffs)",
+      "WaterPeriod": "Seconds between waves",
+      "WaterSpray": "Spray height"
     },
     "Terrains": {
       "stone": "Flagstones",
@@ -170,7 +173,9 @@
       "cobble": "Cobblestones",
       "dirt": "Dirt",
       "grass": "Grass",
-      "water": "Water"
+      "water": "Water",
+      "sand": "Sand",
+      "rock": "Rock"
     },
     "Props": {
       "barrel": "Barrel",

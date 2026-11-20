@@ -20,6 +20,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - 0.1.8 : eau vivante (texture, courant réaliste, obstacles et tourbillons, écume et feuilles).
 - 0.1.9 : herbe optimisée (même rendu), calcul en arrière-plan dans l'éditeur, compteur de performances.
 - 0.1.10 : eau optimisée (même rendu), calcul en arrière-plan dans l'éditeur.
+- 0.1.11 : plages et falaises (sols sable et roche), vagues, gerbes et ressac.
 
 ## 0.2 — Palisade, Vellum, étages, zones retouchables
 
@@ -30,7 +31,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - Zones de sol sélectionnables et déformables comme les murs ; un sol qui suit le mur de sa pièce.
 - Calques : masquer, verrouiller, réordonner.
 - Sélection de plusieurs objets au rectangle, déplacés et tournés ensemble.
-- Falaises et dénivelés ; écume et rapides sur les rivières.
+- Dénivelés à l'intérieur des terres ; écume et rapides sur les rivières.
 - Nouveaux arbres assortis à l'herbe et à l'eau.
 - Eau : remous lus dans une table, simulation des particules sur la carte graphique.
 

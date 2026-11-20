@@ -55,6 +55,10 @@ L'eau est dessinée par la carte graphique : fond de sable et de galets vu à tr
 
 Tout objet posé dans une rivière (rocher de ta bibliothèque, tonneau, caisse…) fait obstacle : l'eau s'écrase devant, ralentit, passe de chaque côté, tourbillonne derrière, puis reste hachée sur une bonne distance, avec deux rides en V qui s'ouvrent vers l'aval. De l'écume et quelques feuilles flottent sur le courant ; l'écume se rassemble là où l'eau bouillonne.
 
+### Plages et falaises
+
+Peins du **sable** ou de la **roche** au bord de l'eau : la côte s'anime d'elle-même. Sur une plage, l'eau monte sur le sable puis se retire au rythme des vagues ; l'écume vient avec chaque vague et le sable reste mouillé jusqu'où elles montent. Contre une falaise, une paroi de roche apparaît au bord de l'eau ; à chaque vague, des gerbes partent du pied, montent le long de la paroi et retombent, puis l'écume repart vers le large. Les vagues avancent à leur vitesse réelle et touchent d'abord ce qui avance le plus en mer ; elles viennent du large, déduit de l'orientation des côtes. Les berges des rivières et les rives d'herbe ou de pavés ne changent pas.
+
 Réglages par carte, dans le panneau **Carte** de l'éditeur (**Eau**) :
 
 | Réglage | Par défaut | Rôle |
@@ -66,6 +70,9 @@ Réglages par carte, dans le panneau **Carte** de l'éditeur (**Eau**) :
 | Particules par case d'eau | 60 | |
 | Remous | 35 % | |
 | Tourbillons derrière les rochers | 60 % | Force du sillage et des perturbations derrière les obstacles. |
+| Force des vagues | 60 % | Plages et falaises ; 0 : mer calme. |
+| Secondes entre deux vagues | 7 s | |
+| Hauteur des gerbes | 60 % | Contre les falaises et les rochers. |
 
 Dans l'éditeur, le bouton vague de la barre du haut met l'eau en pause. L'image de la scène exportée contient la même eau, figée, sous les chemins, objets et murs.
 

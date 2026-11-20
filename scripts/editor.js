@@ -35,7 +35,11 @@ const WATER_FIELDS = [
   ["waterParticles", "particles", "check"],
   ["waterDensity", "density", 0, 160, 5, (v) => String(v)],
   ["waterTurbulence", "turbulence", 0, 1, 0.05, pct],
-  ["waterEddies", "eddies", 0, 1, 0.05, pct]
+  ["waterEddies", "eddies", 0, 1, 0.05, pct],
+  // Plages et falaises (eau bordée de sable ou de roche).
+  ["waterWaves", "waves", 0, 1, 0.05, pct],
+  ["waterPeriod", "period", 3, 14, 0.5, (v) => `${v} s`],
+  ["waterSpray", "spray", 0, 1, 0.05, pct]
 ];
 import { renderDefs, renderTerrains, renderProps, renderWalls, renderGrid, polylinePath, terrainFill, terrainPatternId, propArt, defaultResolve } from "./render.js";
 import { isAssetKey, assetIdOf, assetKey, embedAsset, refreshMapAssets, filterAssets, normalizeLibrary, pruneAssets } from "./library.js";
