@@ -123,7 +123,15 @@ export function paintTree(built, ppc) {
       ctx.beginPath(); ctx.moveTo(ax + nx * sgn * wa * 0.45, ay + ny * sgn * wa * 0.45); ctx.lineTo(bx + nx * sgn * wb * 0.45, by + ny * sgn * wb * 0.45); ctx.stroke();
       if (wpx < 5) continue;
       const r2 = mulberry32(((g.a[0] * 7919 + g.a[1] * 104729) * 1e3) | 0);
-      if (sp.birchBark) {
+      if (sp.smoothBark) {
+        // Écorce lisse (hêtre) : quelques marbrures claires seulement.
+        ctx.strokeStyle = rgb(barkL, 0.35); ctx.lineWidth = Math.max(0.7, wpx * 0.06);
+        for (let k = 0; k < len / 12; k++) {
+          const t = r2(), mx = ax + (bx - ax) * t, my = ay + (by - ay) * t, wl = trunkW * (g.w + (g.w2 - g.w) * t) / 2;
+          const c = (r2() * 2 - 1) * wl * 0.6, l2 = wl * 0.5, dx = (bx - ax) / len, dy = (by - ay) / len;
+          ctx.beginPath(); ctx.moveTo(mx + nx * c - dx * l2, my + ny * c - dy * l2); ctx.lineTo(mx + nx * c + dx * l2, my + ny * c + dy * l2); ctx.stroke();
+        }
+      } else if (sp.birchBark) {
         ctx.strokeStyle = rgb([38, 34, 30], 0.85); ctx.lineWidth = Math.max(1, wpx * 0.08);
         for (let k = 0; k < len / 7; k++) {
           const t = r2(), mx = ax + (bx - ax) * t, my = ay + (by - ay) * t, wl = trunkW * (g.w + (g.w2 - g.w) * t) / 2;
@@ -163,6 +171,21 @@ export function paintTree(built, ppc) {
     if (it.g) { if (it.g.twig) batch.push(it.g); continue; }
     flushWood();
     const l = it.l, x = X(l.p), y = Y(l.p), Lp = l.L * S, h = l.p[2] / zmax;
+    if (l.fruit || l.cap) {
+      // Baie ou chapeau de champignon : disque encré, ombré du côté opposé à la lumière.
+      const rr = Math.max(0.6, Lp / 2), c = hex(l.color);
+      ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(x, y, rr + Math.max(0.5, rr * 0.12), 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = rgb(mix(c, [0, 0, 0], 0.25)); ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = rgb(c); ctx.beginPath(); ctx.arc(x - rr * 0.12, y - rr * 0.15, rr * 0.82, 0, Math.PI * 2); ctx.fill();
+      if (l.cap && l.dots) {
+        const lr = mulberry32((l.seed * 4294967296) >>> 0);
+        ctx.fillStyle = "rgba(245,238,225,0.95)";
+        for (let k = 0; k < 9; k++) { const a = lr() * Math.PI * 2, d = rr * 0.7 * Math.sqrt(lr()); ctx.beginPath(); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, Math.max(0.4, rr * (0.07 + lr() * 0.06)), 0, Math.PI * 2); ctx.fill(); }
+      }
+      ctx.fillStyle = `rgba(255,255,255,${l.cap ? 0.25 : 0.55})`;
+      ctx.beginPath(); ctx.arc(x - rr * 0.35, y - rr * 0.4, rr * (l.cap ? 0.35 : 0.25), 0, Math.PI * 2); ctx.fill();
+      continue;
+    }
     if (l.needle) {
       // Touffe de 5 aiguilles.
       const lr = mulberry32((l.seed * 4294967296) >>> 0);
@@ -179,13 +202,14 @@ export function paintTree(built, ppc) {
     // Une feuille : limbe en deux moitiés (côté éclairé plus clair), contour encré ;
     // pétiole et nervure seulement si elle est assez grande à l'image.
     const ca = Math.cos(l.ang), sa = Math.sin(l.ang);
-    const W = (u, v) => [x + ((u + 0.14) * ca - v * l.f * sa) * Lp, y + ((u + 0.14) * sa + v * l.f * ca) * Lp];
-    const { top, bot } = leafShape(l, sp.leaf, Lp < 10 ? 8 : Lp < 22 ? 16 : 36);
+    const off = l.off ?? 0.14;
+    const W = (u, v) => [x + ((u + off) * ca - v * l.f * sa) * Lp, y + ((u + off) * sa + v * l.f * ca) * Lp];
+    const { top, bot } = leafShape(l, l.shape ?? sp.leaf, l.shape === "fern" ? (Lp < 10 ? 12 : 24) : Lp < 10 ? 8 : Lp < 22 ? 16 : 36);
     let base = mix(cDark, cMid, Math.min(1, 0.05 + h));
     base = mix(base, l.shade > 0.5 ? cLight : cDark, Math.abs(l.shade - 0.5) * 0.4);
     const litTop = sa * LIGHT[0] - ca * LIGHT[1] > 0;
     const big = Lp >= 10;
-    if (big) { const p0 = W(-0.14, 0), p1 = W(0, 0); ctx.strokeStyle = INK; ctx.lineWidth = Math.max(0.8, Lp * 0.035); ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke(); }
+    if (big && off) { const p0 = W(-off, 0), p1 = W(0, 0); ctx.strokeStyle = INK; ctx.lineWidth = Math.max(0.8, Lp * 0.035); ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke(); }
     const outline = new Path2D(); let q = W(0, 0); outline.moveTo(q[0], q[1]);
     for (const [u, v] of top) { q = W(u, v); outline.lineTo(q[0], q[1]); }
     for (let i = bot.length - 1; i >= 0; i--) { q = W(bot[i][0], bot[i][1]); outline.lineTo(q[0], q[1]); }
@@ -197,13 +221,14 @@ export function paintTree(built, ppc) {
     if (big) { const m0 = W(0.02, 0), m1 = W(0.88, 0); ctx.strokeStyle = rgb(mix(base, cLight, 0.6), 0.6); ctx.lineWidth = Math.max(0.5, Lp * 0.025); ctx.beginPath(); ctx.moveTo(m0[0], m0[1]); ctx.lineTo(m1[0], m1[1]); ctx.stroke(); }
   }
   flushWood();
+  if (tree.stumpR) paintStumpTop(ctx, cx, cy, tree.stumpR * S, sp, seed);
 
   /* Carte du vent : mêmes formes (simplifiées), même ordre. */
   const sharp = makeCanvas(L.size, L.size), D = sharp.getContext("2d");
   D.fillStyle = "#000"; D.fillRect(0, 0, L.size, L.size);
   const bmax = zmax + tree.R;
   // Le sapin plie d'un bloc (tronc souple, branches raides) ; le feuillu par ses branches.
-  const bend = tree.pine
+  const bend = sp.rigid ? () => 0 : tree.pine
     ? (p) => Math.min(1, 0.25 + 0.55 * Math.max(0, p[2]) / zmax + 0.2 * Math.hypot(p[0], p[1]) / tree.R)
     : (p) => Math.pow(Math.min(1, Math.max(0, (Math.max(0, p[2]) + Math.hypot(p[0], p[1])) / bmax)), 1.4);
   // Phase continue tout autour de l'arbre (aucune couture qui déchirerait l'image).
@@ -231,6 +256,34 @@ export function paintTree(built, ppc) {
   wd.putImageData(A, 0, 0);
 
   return { color, data, shadow, half: L.half, shadowW: L.shadow.w, shadowH: L.shadow.h };
+}
+
+/** Dessus d'une souche : écorce, bois coupé, cernes, fentes et mousse. */
+function paintStumpTop(ctx, x, y, r, sp, seed) {
+  const rand = mulberry32((seed * 31 + 7) >>> 0);
+  const [b0, b1] = sp.bark.map(hex), [w0, w1] = sp.wood.map(hex);
+  // Contour un peu irrégulier.
+  const ring = (k) => { const p = new Path2D(); for (let i = 0; i <= 24; i++) { const a = i / 24 * Math.PI * 2, rr = r * k * (1 + 0.05 * Math.sin(a * 3 + seed) + 0.03 * Math.sin(a * 7)); i ? p.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr) : p.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } p.closePath(); return p; };
+  ctx.fillStyle = INK; ctx.fill(ring(1.08));
+  ctx.fillStyle = rgb(b0); ctx.fill(ring(1));
+  ctx.fillStyle = rgb(b1, 0.5); ctx.save(); ctx.translate(-r * 0.05, -r * 0.06); ctx.fill(ring(0.97)); ctx.restore();
+  ctx.fillStyle = rgb(w0); ctx.fill(ring(0.84));
+  ctx.fillStyle = rgb(w1, 0.6); ctx.fill(ring(0.6));
+  ctx.strokeStyle = rgb(mix(w0, [60, 35, 15], 0.45), 0.55); ctx.lineWidth = Math.max(0.6, r * 0.018);
+  for (let k = 0.12; k < 0.84; k += 0.07 + rand() * 0.04) ctx.stroke(ring(k));
+  // Fentes de séchage depuis le cœur.
+  ctx.strokeStyle = rgb(mix(w0, [40, 20, 8], 0.6), 0.7); ctx.lineWidth = Math.max(0.7, r * 0.025);
+  for (let i = 0; i < 3; i++) {
+    const a = rand() * Math.PI * 2, l = r * (0.4 + rand() * 0.4);
+    ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * r * 0.08, y + Math.sin(a) * r * 0.08); ctx.lineTo(x + Math.cos(a + 0.1) * l, y + Math.sin(a + 0.1) * l); ctx.stroke();
+  }
+  // Mousse sur le bord.
+  const moss = sp.leaves;
+  for (let i = 0; i < 40; i++) {
+    const a = rand() * Math.PI * 2, d = r * (0.85 + rand() * 0.25);
+    ctx.fillStyle = rgb(hex(rand() < 0.5 ? moss.mid : moss.light), 0.85);
+    ctx.beginPath(); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, r * (0.04 + rand() * 0.05), 0, Math.PI * 2); ctx.fill();
+  }
 }
 
 /** Aperçu de l'éditeur : ombre puis arbre, dans une seule image. */

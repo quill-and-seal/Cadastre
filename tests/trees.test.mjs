@@ -52,7 +52,7 @@ import { treeRadius } from "../scripts/trees.js";
 import { renderProps } from "../scripts/render.js";
 
 test("arbre généré : même graine, même arbre ; la couronne a le rayon demandé", () => {
-  for (const kind of Object.keys(SPECIES)) {
+  for (const kind of Object.keys(SPECIES).filter((k) => ["broad", "conifer"].includes(SPECIES[k].form))) {
     const a = buildTree(kind, 5, 1.5, { detail: 0.3 }), b = buildTree(kind, 5, 1.5, { detail: 0.3 });
     assert.equal(a.leaves.length, b.leaves.length, kind);
     assert.deepEqual(a.leaves[10].p, b.leaves[10].p, kind);
@@ -101,4 +101,15 @@ test("arbre généré : les feuilles cachées sous deux épaisseurs d'autres son
   const zTop = Math.max(...full.leaves.map((l) => l.p[2]));
   const top = (b) => b.leaves.filter((l) => l.p[2] > zTop - 0.05).length;
   assert.equal(top(cut), top(full));
+});
+
+test("fougère, souche et champignons : générés, déterministes, à leur taille", () => {
+  for (const [kind, R] of [["fern", 0.6], ["stump", 0.5], ["mushrooms", 0.15]]) {
+    const a = buildTree(kind, 3, R), b = buildTree(kind, 3, R);
+    assert.deepEqual(a.leaves.map((l) => l.p), b.leaves.map((l) => l.p), kind);
+    for (const l of a.leaves) assert.ok(Math.hypot(l.p[0], l.p[1]) <= R + 1e-6, kind);
+  }
+  assert.ok(buildTree("fern", 3, 0.6).leaves.length > 100);
+  assert.ok(buildTree("stump", 3, 0.5).tree.stumpR > 0.1);
+  assert.ok(buildTree("mushrooms", 3, 0.15).leaves.every((l) => l.cap));
 });

@@ -158,8 +158,38 @@ export const TREES = [
   { id: "birch", w: 3, h: 3, tree: true, proc: "birch", make: (seed) => lobedCanopy(seed, 3, { lobes: [7, 10], palette: { dark: "#3b7a3a", mid: "#55984a", light: "#8cc26a" } }) },
   { id: "pine", w: 3, h: 3, tree: true, proc: "pine", make: (seed) => pine(seed, 3) },
   { id: "bush", w: 1.4, h: 1.4, tree: true, proc: "bush", make: (seed) => lobedCanopy(seed, 1.4, { lobes: [6, 8], palette: { dark: "#2f6e35", mid: "#418a43", light: "#69ad5c" }, flowers: 0.35 }) },
-  { id: "palm", w: 3.4, h: 3.4, tree: true, make: (seed) => palm(seed, 3.4) }
+  { id: "palm", w: 3.4, h: 3.4, tree: true, make: (seed) => palm(seed, 3.4) },
+  // Forêts (biomes) : arbres, sous-bois et petits éléments du sol.
+  { id: "beech", w: 4.4, h: 4.4, tree: true, proc: "beech", make: (seed) => lobedCanopy(seed, 4.4, { lobes: [9, 12], palette: { dark: "#24562a", mid: "#33743a", light: "#6aac56" } }) },
+  { id: "spruce", w: 3, h: 3, tree: true, proc: "spruce", make: (seed) => pine(seed, 3) },
+  { id: "bilberry", w: 0.7, h: 0.7, tree: true, proc: "bilberry", make: (seed) => lobedCanopy(seed, 0.7, { lobes: [6, 8], palette: { dark: "#2a5a24", mid: "#3f8236", light: "#7fb455" } }) },
+  { id: "fern", w: 1.2, h: 1.2, tree: true, proc: "fern", make: (seed) => fernIcon(seed, 1.2) },
+  { id: "stump", w: 1, h: 1, tree: true, proc: "stump", make: (seed) => stumpIcon(seed, 1) },
+  { id: "mushrooms", w: 0.3, h: 0.3, tree: true, proc: "mushrooms", make: (seed) => capsIcon(seed, 0.3) }
 ];
+
+/** Icônes simples (palette, silhouette le temps du calcul). */
+function fernIcon(seed, size) {
+  const rand = mulberry32(seed), c = size / 2, n = 9;
+  let d = "";
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + rand() * 0.3, L = size * 0.46;
+    d += `M${r3(c)} ${r3(c)}L${r3(c + Math.cos(a) * L)} ${r3(c + Math.sin(a) * L)}`;
+  }
+  return `<path d="${d}" stroke="${INK}" stroke-width="${r3(size * 0.09)}" stroke-linecap="round" fill="none"/>`
+    + `<path d="${d}" stroke="#4a8f38" stroke-width="${r3(size * 0.06)}" stroke-linecap="round" fill="none"/>`;
+}
+function stumpIcon(seed, size) {
+  const c = size / 2, k = 0.9 + mulberry32(seed)() * 0.2;
+  return circle(c, c, size * 0.3 * k, `fill="#5a4030" stroke="${INK}" stroke-width="0.03"`) + circle(c, c, size * 0.24, `fill="#c49a68"`)
+    + circle(c, c, size * 0.14, `fill="none" stroke="#8a6438" stroke-width="0.012"`) + circle(c, c, size * 0.07, `fill="none" stroke="#8a6438" stroke-width="0.012"`);
+}
+function capsIcon(seed, size) {
+  const rand = mulberry32(seed), c = size / 2;
+  let out = "";
+  for (let i = 0; i < 4; i++) out += circle(c + (rand() - 0.5) * size * 0.5, c + (rand() - 0.5) * size * 0.5, size * (0.1 + rand() * 0.08), `fill="#8a5a2e" stroke="${INK}" stroke-width="0.008"`);
+  return out;
+}
 
 export const TREE_PREFIX = "tree-";
 export const TREE_BY_TYPE = new Map(TREES.map((t) => [`${TREE_PREFIX}${t.id}`, t]));

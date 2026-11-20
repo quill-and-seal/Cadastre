@@ -5,6 +5,8 @@
 import { TERRAINS, PROPS, mulberry32 } from "./catalog.js";
 import { TREES, TREE_PREFIX, TREE_BY_TYPE, pickTreeKind, treeRadius } from "./trees.js";
 import { treeSprites } from "./tree-sprites.js";
+import { BIOMES, sowBiome } from "./biomes.js";
+import { onGroundTile } from "./ground-tiles.js";
 import * as M from "./model.js";
 import * as P from "./poly.js";
 import { flattenNodes, rectNodes, ellipseNodes, smoothNodes, rdp, cleanNode, polylineLength } from "./curves.js";
@@ -61,6 +63,7 @@ export const TOOLS = [
   { id: "door", icon: "fa-door-open", key: "6" },
   { id: "prop", icon: "fa-chair", key: "7" },
   { id: "trees", icon: "fa-tree", key: "0" },
+  { id: "biome", icon: "fa-seedling", key: "b" },
   { id: "eraser", icon: "fa-eraser", key: "8" }
 ];
 /** Couleurs des types d'eau dans la palette (bord, large). */
@@ -136,6 +139,9 @@ export class MapEditor {
       treeRadius: 2,
       treeSize: 1,
       treeDensity: 1,
+      biome: "broadleaf",
+      biomeRadius: 3,
+      biomeDensity: 1,
       doorWidth: 1,
       doorKind: "door",
       propType: PROPS[0].id,
@@ -167,6 +173,8 @@ export class MapEditor {
     this.waterPreview = new WaterPreview(this);
     // Herbe « comme en 0.1.8 » si ce joueur l'a choisie dans les réglages du module.
     this.windPreview = legacyGrass() ? new WindPreviewLegacy(this) : new WindPreview(this);
+    // Un sol peint (litière, aiguilles) arrive : ses motifs et la palette sont redessinés.
+    this._offGround = onGroundTile(() => { if (!this._destroyed) { this.renderMap(true); this._renderPanel(); } });
     this.renderMap(true);
     this._renderPanel();
     this._syncMapFields();
@@ -332,6 +340,7 @@ export class MapEditor {
 
   destroy() {
     this._destroyed = true;
+    this._offGround?.();
     if (this._treeRedraw) cancelAnimationFrame(this._treeRedraw);
     this.windPreview?.destroy();
     this.waterPreview?.destroy();
@@ -468,6 +477,15 @@ export class MapEditor {
       case "door": {
         const target = p && this._doorTarget(p);
         if (target) out += pathEl(polylinePath([target.a, target.b]), "cad-door-preview", 6);
+        break;
+      }
+      case "biome": {
+        if (drag?.kind === "biome" && drag.points.length) {
+          const soil = BIOMES.find((b) => b.id === o.biome)?.soil ?? "litter";
+          const d = polylinePath(drag.points.length > 1 ? drag.points : [drag.points[0], [drag.points[0][0] + 0.001, drag.points[0][1]]]);
+          out += `<path d="${d}" fill="none" stroke="${this._fill(soil)}" stroke-opacity="0.9" stroke-width="${2 * o.biomeRadius}" stroke-linecap="round" stroke-linejoin="round"/>`;
+        }
+        if (p) out += disc(p, o.biomeRadius, "cad-brush");
         break;
       }
       case "trees": {
@@ -652,6 +670,14 @@ export class MapEditor {
             <span>${esc(t(`CADASTRE.Props.${p.id}`))}</span></button>`;
         }).join("")}</div>${this._libraryPalette("prop", "propType")}
           <div class="cad-row">${number("propAngle", "CADASTRE.Panel.Angle", o.propAngle, -360, 360, 15)}${number("propScale", "CADASTRE.Panel.Scale", o.propScale, 0.25, 4, 0.05)}</div>`;
+        break;
+      case "biome":
+        html = title("CADASTRE.Panel.Biome") + `<div class="cad-swatches">${BIOMES.map((b) => `
+          <button type="button" data-opt="biome" data-val="${b.id}" class="${o.biome === b.id ? "active" : ""}">
+            <svg viewBox="0 0 2 2"><rect width="2" height="2" fill="url(#${this.prefix}-t-${b.soil})"/><circle cx="1.25" cy="0.8" r="0.55" fill="${b.swatch[1]}" stroke="#13221a" stroke-width="0.06"/><circle cx="0.6" cy="1.35" r="0.32" fill="${b.swatch[1]}" stroke="#13221a" stroke-width="0.05" opacity="0.85"/></svg>
+            <span>${esc(t(`CADASTRE.Biomes.${b.id}`))}</span></button>`).join("")}</div>`
+          + title("CADASTRE.Panel.BrushSize") + slider("biomeRadius", o.biomeRadius, 0.5, 10, 0.25)
+          + title("CADASTRE.Panel.TreeDensity") + slider("biomeDensity", o.biomeDensity, 0.2, 3, 0.1);
         break;
       case "trees": {
         const kinds = ["mix", ...TREES.map((x) => x.id)];
@@ -1315,6 +1341,9 @@ export class MapEditor {
         this._commit(!!door, { terrain: false });
         break;
       }
+      case "biome":
+        this.drag = { kind: "biome", points: [p] };
+        break;
       case "trees":
         this._begin();
         this.drag = { kind: "trees", start: p, last: p, travel: 0, moved: false, changed: false, rand: mulberry32((Date.now() ^ (Math.random() * 2 ** 32)) >>> 0) };
@@ -1347,9 +1376,11 @@ export class MapEditor {
         this.view.ty = drag.ty + event.clientY - drag.y;
         this._applyView();
         break;
-      case "stroke": {
+      case "stroke":
+      case "biome": {
         const last = drag.points.at(-1);
         if (dist(last, p) > 0.04) drag.points.push(p);
+        if (drag.kind === "biome") this._schedule("overlay");
         break;
       }
       case "shape":
@@ -1477,6 +1508,14 @@ export class MapEditor {
         if (closed) pts.pop();
         this._begin();
         this._commit(!!M.addWall(this.map, smoothNodes(pts, closed), closed), { terrain: false });
+        break;
+      }
+      case "biome": {
+        // Sol du biome sous le trait, puis sa végétation semée dedans.
+        const rings = P.strokeRings(drag.points.length > 1 ? drag.points : [drag.points[0], [drag.points[0][0] + 0.001, drag.points[0][1]]], o.biomeRadius);
+        this._begin();
+        const placed = sowBiome(this.map, rings, o.biome, mulberry32((Date.now() ^ (Math.random() * 2 ** 32)) >>> 0), { density: o.biomeDensity });
+        this._commit(placed >= 0);
         break;
       }
       case "trees": {

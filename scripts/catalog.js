@@ -195,7 +195,13 @@ export const TERRAINS = [
   { id: "water", water: true, swatch: "#2a8a92", w: 2, h: 1, base: "#1f6f7d", pattern: waves() },
   // Sable et roche : au bord de l'eau, ils font une plage et une falaise (coast.js).
   { id: "sand", soft: true, swatch: "#d9c08f", w: 8, h: 8, base: "#cdb486", pattern: painted("sand", 8, "#c4a878", "#ead8ad", 0.22, 7) + sandRipples() + speckles(47, 220, ["#b3986a", "#f2e4c2", "#a88d60"], 0.008, 0.022, 8, 8) },
-  { id: "rock", swatch: "#7c766c", w: 6, h: 6, base: "#5f5a52", pattern: painted("rock", 6, "#5a554d", "#8f897e", 0.32, 13) + rockCracks() }
+  { id: "rock", swatch: "#7c766c", w: 6, h: 6, base: "#5f5a52", pattern: painted("rock", 6, "#5a554d", "#8f897e", 0.32, 13) + rockCracks() },
+  // Sols de forêt peints élément par élément (ground.js) : `ground` nomme leur tuile, calculée à
+  // la demande ; en attendant, leur motif simple ci-dessous.
+  { id: "litter", soft: true, swatch: "#7a5428", w: 8, h: 8, base: "#4a3420", ground: "litter",
+    pattern: painted("litter", 8, "#3a2614", "#7a5428", 0.4, 17) + speckles(53, 600, ["#9a5a22", "#c48a3a", "#5a3820", "#7d6a2a"], 0.02, 0.05, 8, 8) },
+  { id: "needles", soft: true, swatch: "#6e4a28", w: 8, h: 8, base: "#4a3018", ground: "needles",
+    pattern: painted("needles", 8, "#3a2414", "#6e4426", 0.3, 19) + speckles(59, 300, ["#3a6020", "#5a8228", "#8e5a2c"], 0.03, 0.09, 8, 8) }
 ];
 
 /** Rides de vent sur le sable, très douces. */

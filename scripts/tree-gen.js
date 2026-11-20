@@ -36,7 +36,32 @@ export const SPECIES = {
     form: "conifer", depth: 3, fork: 2.4, spread: 0.5, lai: 1.2, leaf: "needle", leafM: 0.08,
     gnarl: 0, trunkW: 0.11,
     bark: ["#3b2618", "#7a5133"], leaves: { dark: "#123522", mid: "#1f5534", light: "#5c9a5a" }
-  }
+  },
+  // Hêtre : couronne en dôme très dense, écorce lisse et grise, feuilles ovales au bord ondulé.
+  beech: {
+    form: "broad", depth: 5, fork: 2.5, spread: 0.55, lai: 5.5, leaf: "beech", leafM: 0.08, perTwig: 14,
+    trunkH: 1.2, gnarl: 0.06, rise: 0.16, taper: 0.76, laterals: 2.5, rootL: 0.35, trunkW: 0.12,
+    bark: ["#5e6264", "#a8aaa6"], leaves: { dark: "#1c4a1f", mid: "#2f7a2e", light: "#7cc04c" }, smoothBark: true
+  },
+  // Épicéa : plus sombre, étages serrés, branches qui retombent, aiguilles courtes.
+  spruce: {
+    form: "conifer", depth: 4, fork: 2.6, spread: 0.5, lai: 1.4, leaf: "needle", leafM: 0.025,
+    gnarl: 0, trunkW: 0.1, droop: 0.22,
+    bark: ["#3a2a20", "#6e5440"], leaves: { dark: "#0c2a1c", mid: "#17442d", light: "#3f7a52" }
+  },
+  // Myrtille : touffe basse de tiges fines, petites feuilles, baies bleues.
+  bilberry: {
+    form: "broad", depth: 3, fork: 2.4, spread: 1.0, lai: 3, leaf: "birch", leafM: 0.025, perTwig: 8,
+    trunkH: 0.04, gnarl: 0.12, rise: 0.15, taper: 0.8, laterals: 2, rootL: 0, trunkW: 0.05, limbs: 9,
+    bark: ["#3d5a2c", "#6f8f4a"], leaves: { dark: "#24521f", mid: "#3f8236", light: "#8fc45d" },
+    fruit: { colors: ["#2c3a7a", "#3b4c9a", "#22305f"], m: 0.008, prob: 0.5, cluster: [1, 3] }
+  },
+  // Fougère : frondes en arceau partant du centre, folioles alternées.
+  fern: { form: "fern", fronds: [8, 14], pinnaM: 0.12, trunkW: 0.02, bark: ["#3c5a24", "#6c8c3c"], leaves: { dark: "#1e5222", mid: "#3d8a32", light: "#93cc5a" } },
+  // Souche : bois coupé, cernes, racines, un peu de mousse. Ne bouge pas au vent.
+  stump: { form: "stump", trunkW: 0.32, rigid: true, bark: ["#3a2a1c", "#6a4c32"], wood: ["#b58a5c", "#d8b483"], leaves: { dark: "#2f5a22", mid: "#4f8a34", light: "#8cbf55" } },
+  // Champignons : quelques chapeaux en grappe (cèpes bruns ou amanites rouges à points blancs).
+  mushrooms: { form: "caps", rigid: true, trunkW: 0.1, bark: ["#5a4632", "#8a7050"], leaves: { dark: "#5a3a1c", mid: "#8a5a2c", light: "#c89a5c" } }
 };
 
 export const norm = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
@@ -126,7 +151,7 @@ function growBroadleaf(rand, sp) {
     }
   }
   // Charpentières : 3 à 5 grosses branches tout autour du tronc, plus une flèche au centre.
-  const n0 = 3 + Math.floor(rand() * 3), az0 = rand() * Math.PI * 2;
+  const n0 = (sp.limbs ?? 3) + Math.floor(rand() * 3), az0 = rand() * Math.PI * 2;
   const w0 = 0.82 * Math.pow(1 / (n0 + 0.5), 1 / 2.4);
   const limb = sp.trunkH > 1.2 ? 0.75 : 0.85;
   for (let i = 0; i < n0; i++) {
@@ -156,7 +181,7 @@ function growConifer(rand, sp) {
       const s = j / (m + 1);
       const q = [p[0] + (end[0] - p[0]) * s, p[1] + (end[1] - p[1]) * s, p[2] + (end[2] - p[2]) * s];
       const sg = j % 2 ? 1 : -1, ang = 0.75 + rand() * 0.35;
-      const nd = norm([dir[0] * Math.cos(ang) + u[0] * sg * Math.sin(ang), dir[1] * Math.cos(ang) + u[1] * sg * Math.sin(ang), dir[2] * Math.cos(ang) + u[2] * sg * Math.sin(ang) - 0.12]);
+      const nd = norm([dir[0] * Math.cos(ang) + u[0] * sg * Math.sin(ang), dir[1] * Math.cos(ang) + u[1] * sg * Math.sin(ang), dir[2] * Math.cos(ang) + u[2] * sg * Math.sin(ang) - 0.12 - (sp.droop ?? 0) * 1.5]);
       shoot(q, nd, (L * (1 - s) * (level === 1 ? 0.5 : 0.4) + 0.04) * (0.8 + rand() * 0.4), w * 0.35, level + 1);
     }
   }
@@ -169,12 +194,78 @@ function growConifer(rand, sp) {
     const az0 = rand() * Math.PI * 2;
     for (let i = 0; i < n; i++) {
       const az = az0 + (i / n) * Math.PI * 2 + (rand() - 0.5) * 0.6;
-      const dir = norm([Math.cos(az), Math.sin(az), -0.05 - sp.spread * 0.2 + f * 0.25]);
+      const dir = norm([Math.cos(az), Math.sin(az), -0.05 - sp.spread * 0.2 - (sp.droop ?? 0) + f * 0.25]);
       shoot([0, 0, z], dir, Lmax * (0.72 + rand() * 0.38) * (k % 2 ? 0.8 : 1), 0.3 * (1 - f * 0.75), 1);
     }
   }
   tips.push({ p: [0, 0, H], dir: [0, 0, 1], d: 3, len: 0.15, base: [0, 0, H - 0.15] });
   return { segs, tips, pine: true };
+}
+
+/** Fougère : frondes en arceau, rachis (fin, dessiné) et folioles alternées de chaque côté. */
+function growFern(rand, sp) {
+  const segs = [], tips = [], leaves = [];
+  const [f0, f1] = sp.fronds, n = f0 + Math.floor(rand() * (f1 - f0 + 1)), az0 = rand() * Math.PI * 2;
+  for (let i = 0; i < n; i++) {
+    const az = az0 + (i / n) * Math.PI * 2 + (rand() - 0.5) * 0.5;
+    const Lf = 0.7 + rand() * 0.3, rise = 0.35 + rand() * 0.2, bend = (rand() - 0.5) * 0.25, tp = rand();
+    const pt = (t) => {
+      const a = az + bend * t * t, d = Lf * t;
+      return [Math.cos(a) * d, Math.sin(a) * d, Lf * rise * Math.sin(Math.PI * Math.min(1, t * 0.85))];
+    };
+    const N = 8;
+    let prev = pt(0);
+    for (let k = 1; k <= N; k++) {
+      const q = pt(k / N);
+      segs.push({ a: prev, b: q, w: 1 - 0.8 * (k - 1) / N, w2: 1 - 0.8 * k / N, d: 99, twig: true });
+      prev = q;
+    }
+    tips.push({ p: prev, dir: [Math.cos(az), Math.sin(az), 0], d: 1, len: Lf });
+    // Folioles : plus longues au milieu de la fronde, alternées, inclinées vers la pointe.
+    const m = 22;
+    for (let k = 1; k < m; k++) {
+      const t = k / m, p = pt(t), q = pt(Math.min(1, t + 0.02));
+      const along = Math.atan2(q[1] - p[1], q[0] - p[0]);
+      const side = k % 2 ? 1 : -1;
+      const len = (sp.pinnaM / CASE_M) * Math.pow(Math.sin(Math.PI * Math.min(1, t * 1.05)), 0.6) * (0.9 + rand() * 0.2);
+      leaves.push({ p: [p[0], p[1], p[2] + 0.003], ang: along + side * (1.15 - 0.45 * t), L: len, W: 0.22, f: 0.7 + rand() * 0.3, shape: "fern", off: 0, shade: rand(), seed: rand(), tp });
+    }
+  }
+  return { segs, tips, leaves };
+}
+
+/** Souche : racines qui plongent tout autour, plateau de bois coupé au centre. */
+function growStump(rand) {
+  const segs = [], tips = [];
+  const nr = 4 + Math.floor(rand() * 3), ar = rand() * Math.PI * 2;
+  for (let i = 0; i < nr; i++) {
+    const a = ar + (i / nr) * Math.PI * 2 + (rand() - 0.5) * 0.6, L = 0.3 + rand() * 0.3;
+    let prev = [Math.cos(a) * 0.2, Math.sin(a) * 0.2, 0.25], wa = 1.1;
+    for (let k = 1; k <= 4; k++) {
+      const t = k / 4, ab = a + (rand() - 0.5) * 0.3;
+      const q = [Math.cos(ab) * (0.2 + L * t), Math.sin(ab) * (0.2 + L * t), 0.25 * (1 - t)];
+      const wb = 1.1 - 0.75 * t;
+      segs.push({ a: prev, b: q, w: wa, w2: wb, d: 1, root: true });
+      prev = q; wa = wb;
+    }
+    tips.push({ p: prev, dir: [Math.cos(a), Math.sin(a), 0], d: 1, len: L });
+  }
+  return { segs, tips, stumpR: 0.36 + rand() * 0.06 };
+}
+
+/** Champignons : quelques chapeaux serrés, une même espèce par grappe. */
+function growCaps(rand) {
+  const tips = [], leaves = [];
+  const red = rand() < 0.35, n = 3 + Math.floor(rand() * 6);
+  const colors = red ? ["#b8281c", "#c93a22", "#a51f18"] : ["#6e4422", "#8a5a2e", "#5c3a1e"];
+  for (let i = 0; i < n; i++) {
+    const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * 0.8;
+    const size = (0.04 + rand() * 0.07) / CASE_M;
+    const p = [Math.cos(a) * d, Math.sin(a) * d, size * (0.5 + rand())];
+    leaves.push({ cap: true, p, L: size, ang: rand() * Math.PI * 2, color: colors[Math.floor(rand() * 3)], dots: red, shade: rand(), seed: rand(), tp: 0 });
+    tips.push({ p: [p[0], p[1], 0], dir: [1, 0, 0], d: 1, len: 0 });
+  }
+  return { segs: [], tips, leaves };
 }
 
 /** Mise à l'échelle : la couronne a exactement le rayon voulu (en cases). */
@@ -187,7 +278,11 @@ function fit(tree, R) {
   const sc = (p) => { if (p && !seen.has(p)) { seen.add(p); p[0] *= k; p[1] *= k; p[2] *= k; } };
   for (const s of tree.segs) { sc(s.a); sc(s.b); }
   for (const t of tree.tips) { sc(t.p); sc(t.base); if (t.len) t.len *= k; }
+  // Feuilles déjà posées (fougère, champignons) : leur position suit, leur taille reste réelle.
+  for (const l of tree.leaves ?? []) sc(l.p);
+  if (tree.stumpR) tree.stumpR *= k;
   tree.R = R;
+  tree.k = k;
   tree.zmax = tree.segs.reduce((z, s) => Math.max(z, s.b[2]), 0) || 1;
   return tree;
 }
@@ -224,7 +319,7 @@ function foliage(tree, rand, sp, detail = 1) {
     }
     return leaves;
   }
-  const W = sp.leaf === "oak" ? 0.42 : 0.34;
+  const W = sp.leaf === "oak" ? 0.42 : sp.leaf === "beech" ? 0.36 : 0.34;
   const target = Math.min(MAX_LEAVES, Math.round(sp.lai * crown / (Lc * Lc * W * 1.2)));
   // Les rameaux (fins, dessinés) partent des branches des deux derniers niveaux ; les feuilles
   // s'y alternent de chaque côté, plus une au bout.
@@ -256,6 +351,16 @@ function foliage(tree, rand, sp, detail = 1) {
         const ang = flat < 0.3 ? rand() * Math.PI * 2 : last ? tw + (rand() - 0.5) * 0.3 : tw + (k % 2 ? 1 : -1) * (0.55 + rand() * 0.55);
         leaves.push({ p, ang, L: Lc * (0.75 + rand() * 0.5), W, f: 0.45 + rand() * 0.55, lobes: 3.5 + Math.floor(rand() * 2), shade: rand(), seed: rand(), tp });
       }
+      // Fruits : une petite grappe au bout de certains rameaux.
+      if (sp.fruit && rand() < sp.fruit.prob) {
+        const [c0, c1] = sp.fruit.cluster, n = c0 + Math.floor(rand() * (c1 - c0 + 1));
+        const tip = [a[0] + dir[0] * L, a[1] + dir[1] * L, a[2] + dir[2] * L + 0.01];
+        const d = sp.fruit.m / CASE_M;
+        for (let k = 0; k < n; k++) {
+          const q = [tip[0] + (rand() - 0.5) * d * 2, tip[1] + (rand() - 0.5) * d * 2, tip[2] + rand() * 0.004];
+          leaves.push({ fruit: true, p: q, L: d * (0.85 + rand() * 0.3), ang: 0, color: sp.fruit.colors[Math.floor(rand() * sp.fruit.colors.length)], shade: rand(), seed: rand(), tp });
+        }
+      }
     }
   }
   return leaves;
@@ -267,7 +372,13 @@ export function leafShape(l, kind, N = 36) {
   for (let i = 0; i <= N; i++) {
     const t = i / N;
     let w;
-    if (kind === "oak") {
+    if (kind === "beech") {
+      // Ovale pointue, bord légèrement ondulé.
+      w = l.W * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.8)), 0.85) * (1 + 0.05 * Math.sin(t * 38));
+    } else if (kind === "fern") {
+      // Foliole étroite, dentée en peigne.
+      w = l.W * Math.pow(1 - t, 0.7) * Math.min(1, t * 6) * (i % 2 ? 1 : 0.55);
+    } else if (kind === "oak") {
       const env = Math.pow(Math.sin(Math.PI * Math.pow(t, 0.85)), 0.7);
       w = l.W * env * (0.58 + 0.42 * Math.pow(Math.abs(Math.cos(Math.PI * l.lobes * t)), 0.55));
     } else {
@@ -288,9 +399,12 @@ export function leafShape(l, kind, N = 36) {
 export function buildTree(kind, seed, radius, { detail = 1, rotation = 0, cull = true } = {}) {
   const sp = SPECIES[kind] ?? SPECIES.oak;
   const rand = mulberry32(seed >>> 0);
-  const tree = fit(sp.form === "conifer" ? growConifer(rand, sp) : growBroadleaf(rand, sp), radius);
+  const grow = { conifer: growConifer, fern: growFern, stump: growStump, caps: growCaps }[sp.form] ?? growBroadleaf;
+  const tree = fit(grow(rand, sp), radius);
   for (const g of tree.segs) if (g.w2 === undefined) g.w2 = g.w * 0.75;
-  const leaves = foliage(tree, mulberry32((seed ^ 0x9e3779b9) >>> 0), sp, detail);
+  if (!tree.segs.length) tree.zmax = Math.max(0.05, ...(tree.leaves ?? []).map((l) => l.p[2]));
+  const leaves = tree.leaves ?? foliage(tree, mulberry32((seed ^ 0x9e3779b9) >>> 0), sp, detail);
+  delete tree.leaves;
   // L'arbre est tourné avant d'être dessiné : la lumière et l'ombre restent en haut à gauche.
   if (rotation) {
     const r = rotation * Math.PI / 180, c = Math.cos(r), sn = Math.sin(r), seen = new Set();
@@ -320,6 +434,7 @@ export function cullHidden(leaves, layers = 2) {
   const keep = new Uint8Array(leaves.length);
   for (const i of order) {
     const l = leaves[i], ca = Math.cos(l.ang), sa = Math.sin(l.ang);
+    if (l.fruit || l.cap) { keep[i] = 1; continue; }
     const W = l.needle ? 0.25 : l.W * (l.f ?? 1);
     const at = (u, v) => [l.p[0] + ((u + 0.14) * ca - v * sa) * l.L, l.p[1] + ((u + 0.14) * sa + v * ca) * l.L];
     // Surface de la feuille : quelques points jusqu'au bord.

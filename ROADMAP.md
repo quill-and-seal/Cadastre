@@ -28,6 +28,12 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - 0.1.16 : le courant contourne les îles et glisse le long des berges.
 - 0.1.17 : arbres générés branche par branche et feuille par feuille, animés par le même vent que l'herbe.
 - 0.1.18 : arbres nets à tous les zooms (redessinés plus fins à la volée), feuilles cachées retirées.
+- 0.1.19 : pinceau Biome, forêts de feuillus et de conifères (plantes et sols peints élément par élément).
+
+## Biomes (V1 : 20 biomes, un par issue)
+
+- ✅ Forêt de feuillus, forêt de conifères (0.1.19).
+- À venir : plaine, bocage, verger, terre de lavande, champs de blé, vignoble, marais, berges de rivière, mangrove, plaine rocheuse, garrigue, montagne, lande, savane, désert, oasis, jungle, toundra / taïga enneigée.
 
 ## 0.2 — Palisade, Vellum, étages, zones retouchables
 

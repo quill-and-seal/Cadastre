@@ -62,5 +62,7 @@ export async function packTrees(map, ppc, { shadowPpc = map.gridSize, onProgress
     for (const b of [r.color, r.data, r.shadow]) b?.close?.();
     onProgress?.(++done);
   }));
+  // Dans la scène, les plus petites plantes sont posées d'abord : le sous-bois reste sous les arbres.
+  out.items.sort((a, b) => a.radius - b.radius);
   return out;
 }

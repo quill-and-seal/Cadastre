@@ -3,6 +3,7 @@
  * Coordonnées SVG en cases : une case = 1 unité.
  */
 import { TERRAINS, PROP_BY_ID, mulberry32 } from "./catalog.js";
+import { groundTile } from "./ground-tiles.js";
 import { wallPoints, doorEnds } from "./model.js";
 import { flattenNodes } from "./curves.js";
 import * as poly from "./poly.js";
@@ -81,8 +82,11 @@ export function renderDefs(map, prefix = "cad", resolve = defaultResolve) {
     out += isAssetKey(key)
       ? `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${t.w}" height="${t.h}">`
         + `<image href="${attr(resolve(t.src))}" width="${t.w}" height="${t.h}" preserveAspectRatio="none"/></pattern>`
-      : `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${t.w}" height="${t.h}">`
-        + `<rect width="${t.w}" height="${t.h}" fill="${t.base}"/>${t.pattern}</pattern>`;
+      : t.ground && groundTile(t.ground)
+        ? `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${t.w}" height="${t.h}">`
+          + `<image href="${groundTile(t.ground)}" width="${t.w}" height="${t.h}" preserveAspectRatio="none"/></pattern>`
+        : `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${t.w}" height="${t.h}">`
+          + `<rect width="${t.w}" height="${t.h}" fill="${t.base}"/>${t.pattern}</pattern>`;
     // Seconde couche d'un sol (les brins de l'herbe), avec son propre motif, posée sur la première.
     if (t.overlay) {
       out += `<pattern id="${id}-o" patternUnits="userSpaceOnUse" width="${t.overlay.w}" height="${t.overlay.h}">${t.overlay.pattern}</pattern>`;
@@ -266,7 +270,11 @@ export function renderProps(map, prefix = "cad", resolve = defaultResolve, { tre
     if (run) out += runIsTree ? `<g>${run}</g>` : `<g filter="url(#${prefix}-drop)">${run}</g>`;
     run = "";
   };
-  for (const p of map.props) {
+  // Les plantes générées, des plus petites aux plus grandes : le sous-bois reste sous les arbres.
+  const size = (p) => (TREE_BY_TYPE.get(p.type)?.w ?? 0) * p.k;
+  const isProc = (p) => !!TREE_BY_TYPE.get(p.type)?.proc;
+  const ordered = [...map.props.filter((p) => !isProc(p)), ...map.props.filter(isProc).sort((a, b) => size(a) - size(b))];
+  for (const p of ordered) {
     const def = PROP_BY_ID.get(p.type) ?? TREE_BY_TYPE.get(p.type) ?? (isAssetKey(p.type) ? map.assets?.[p.type.slice(6)] : null);
     if (!def) continue;
     const isTree = !!def.tree;

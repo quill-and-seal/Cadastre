@@ -18,6 +18,8 @@ import { isEmpty } from "./model.js";
 import { TREE_BY_TYPE } from "./trees.js";
 import { packTrees, TREE_PAGE, DATA_SCALE, treePpc } from "./tree-pack.js";
 import { makeCanvas } from "./tree-paint.js";
+import { TERRAINS } from "./catalog.js";
+import { loadGroundTile } from "./ground-tiles.js";
 
 const FilePickerCls = () => foundry.applications?.apps?.FilePicker?.implementation ?? globalThis.FilePicker;
 const SceneCls = () => CONFIG.Scene.documentClass;
@@ -193,6 +195,8 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
   // L'eau, figée, aussi : la même que celle que le calque anime.
   const water = waterFlag(map);
   const waterField = water ? buildField(water) : null;
+  // Sols peints (litière, aiguilles) : leur tuile doit être prête avant le rendu.
+  await Promise.all(TERRAINS.filter((t) => t.ground && map.terrains[t.id]?.length).map((t) => loadGroundTile(t.ground)));
   // Arbres générés : animés dans la scène, hors de l'image de fond ; leur ombre y reste.
   const trees = await exportTrees(map, scale);
   // Sol, puis eau et herbe figées, puis chemins, objets et murs par-dessus.

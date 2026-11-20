@@ -44,6 +44,7 @@
       "eraser": "Gomme (8)",
       "path": "Chemin (9)",
       "trees": "Arbres (0)",
+      "biome": "Biome (B)",
       "water": "Eau (W)"
     },
     "Hints": {
@@ -58,6 +59,7 @@
       "fill": "Clic dans une pièce : pose le sol jusqu'aux murs (portes fermées comprises). Dehors, remplit tout ce qui n'est pas enclos.",
       "path": "Route, quai : trace la courbe à la plume (clic : coin, clic-glisser : courbe, Entrée : finir) ou à main levée. Largeur, sol et bordure dans le panneau. Avec la sélection, glisse ses points pour le redessiner. Les rivières se tracent avec l'outil Eau.",
       "trees": "Clic : un arbre. Glisser : sème des arbres dans la zone du pinceau, espacés selon la densité. Chaque arbre est unique ; la sélection permet ensuite de le déplacer, le tourner, le redimensionner.",
+      "biome": "Glisse pour peindre un biome : son sol, et sa végétation semée dedans (arbres, sous-bois, souches, champignons), espacée naturellement. Les petites plantes restent sous les arbres. Repasser ajoute des plantes là où il reste de la place.",
       "water": "Étendue : peins, remplis, dessine ou trace une rivière (Alt : efface). Profondeur et type : pinceau qui creuse ou remonte le fond (Alt : l'inverse), ou peint un type d'eau. Courants : glisse pour tracer un courant dans son sens, clic sur une rivière pour régler le sien."
     },
     "Panel": {
@@ -120,6 +122,7 @@
       "NoEdge": "Aucune",
       "SelPath": "Chemin",
       "PathClosed": "Chemin fermé (boucle)",
+      "Biome": "Biome",
       "TreeKind": "Essence",
       "TreeKinds": {
         "mix": "Mélange",
@@ -127,7 +130,13 @@
         "birch": "Bouleau",
         "palm": "Palmier",
         "pine": "Sapin",
-        "bush": "Buisson"
+        "bush": "Buisson",
+        "beech": "Hêtre",
+        "spruce": "Épicéa",
+        "bilberry": "Myrtilles",
+        "fern": "Fougère",
+        "stump": "Souche",
+        "mushrooms": "Champignons"
       },
       "TreeRadius": "Zone semée (rayon)",
       "TreeDensity": "Densité",
@@ -217,6 +226,10 @@
       },
       "River": "Rivière choisie"
     },
+    "Biomes": {
+      "broadleaf": "Forêt de feuillus",
+      "conifer": "Forêt de conifères"
+    },
     "Terrains": {
       "stone": "Dalles",
       "wood": "Plancher",
@@ -225,7 +238,9 @@
       "grass": "Herbe",
       "water": "Eau",
       "sand": "Sable",
-      "rock": "Roche"
+      "rock": "Roche",
+      "litter": "Litière de forêt",
+      "needles": "Aiguilles et mousse"
     },
     "Props": {
       "barrel": "Tonneau",

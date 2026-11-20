@@ -116,9 +116,20 @@ Vus de loin, les brins sont moins nombreux et plus larges, avec un fondu quand o
 
 Le réglage **Herbe : rendu** permet de revenir à l'herbe d'avant les optimisations (**Comme en 0.1.8** : brins en rectangles, vent calculé pour chaque brin, tous les brins dessinés même de loin). Plus lourd ; il vaut aussi pour l'éditeur (à rouvrir) et l'image exportée.
 
+## Biomes
+
+Le **pinceau Biome** (touche B) peint un biome d'un trait : son sol sous le pinceau, et sa végétation semée dedans, espacée naturellement (les petites plantes restent sous les arbres). Repasser ajoute des plantes là où il reste de la place ; le curseur **Densité** en met plus ou moins. Chaque plante reste un objet : sélection, déplacement, rotation, taille.
+
+| Biome | Sol | Végétation |
+|---|---|---|
+| Forêt de feuillus | Litière de forêt | Chênes, hêtres, bouleaux, buissons, fougères, souches, champignons |
+| Forêt de conifères | Aiguilles et mousse | Sapins, épicéas, myrtilles, fougères, souches, champignons |
+
+Les sols de forêt sont peints élément par élément à taille réelle (feuilles mortes, brindilles, glands, mousse, aiguilles, pommes de pin…) ; leur tuile est calculée à la première utilisation.
+
 ## Arbres
 
-Chêne, bouleau, sapin et buisson sont générés comme de vrais arbres vus de dessus : un squelette en 3D (tronc, charpentières, branches, rameaux), puis des feuilles à leur taille et en quantité réelles, chacune accrochée à un rameau. La graine de l'arbre (tirée au hasard quand on le pose) donne sa forme : deux arbres ne se ressemblent jamais. Le palmier garde un dessin simple.
+Chêne, hêtre, bouleau, sapin, épicéa, buisson, myrtilles, fougère, souche et champignons sont générés comme de vrais arbres vus de dessus : un squelette en 3D (tronc, charpentières, branches, rameaux), puis des feuilles à leur taille et en quantité réelles, chacune accrochée à un rameau. La graine de l'arbre (tirée au hasard quand on le pose) donne sa forme : deux arbres ne se ressemblent jamais. Le palmier garde un dessin simple.
 
 Dans l'éditeur, chaque arbre est calculé en arrière-plan ; sa silhouette s'affiche le temps du calcul. À l'export, les arbres sont envoyés avec la scène et seule leur ombre reste dans l'image de fond. Dans la scène, ils restent nets à tous les zooms : au-delà de la finesse envoyée avec la scène, les arbres à l'écran sont redessinés plus fins, à la volée, depuis leur graine.
 

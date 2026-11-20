@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.19
+
+- **Pinceau Biome** (touche B) : on choisit un biome et on peint. Le pinceau pose le sol du biome sous le trait et y sème sa végétation, espacée naturellement : arbres, sous-bois, souches, champignons. Les petites plantes restent sous les arbres (dans l'éditeur comme dans la scène). Repasser ajoute des plantes là où il reste de la place ; un curseur règle la densité. Chaque plante reste un objet retouchable.
+- **Forêt de feuillus** : sol de litière, chênes, hêtres et bouleaux, buissons, fougères, souches, champignons.
+- **Forêt de conifères** : sol d'aiguilles et de mousse, sapins et épicéas, myrtilles, fougères, souches, champignons.
+- **Nouvelles plantes** (aussi dans l'outil Arbres) : hêtre (couronne dense, écorce lisse et grise), épicéa (sombre, branches qui retombent), myrtilles (baies bleues), fougère (frondes en arceau), souche (cernes, mousse, racines ; immobile au vent), champignons (cèpes ou amanites ; immobiles).
+- **Nouveaux sols peints élément par élément**, à taille réelle :
+  - **Litière de forêt** : terre humide, trois couches de feuilles mortes (chêne, hêtre, bouleau ; les plus anciennes brunies et rongées), clairières de terre nue, brindilles, écorce, glands, faînes, cailloux, tapis de mousse, pousses et anémones des bois.
+  - **Aiguilles et mousse** : tapis d'aiguilles doux, coussins de mousse, pommes de pin et d'épicéa, brindilles, cailloux, lichens, pousses de myrtille.
+  - Chaque sol est une grande tuile (8 × 8 cases) qui se raccorde sur ses bords, calculée en arrière-plan à la première utilisation ; en attendant, un motif simple s'affiche.
+
 ## 0.1.18
 
 - **Arbres nets dans la scène** : ils étaient dessinés à la résolution de l'image de fond (100 px par case) et devenaient flous dès qu'on zoomait. Ils sont maintenant envoyés avec 2,5 fois cette finesse (250 px par case pour une grille de 100 px). La carte du vent, qui est lisse, est gardée à demi-résolution pour ne pas alourdir la scène.

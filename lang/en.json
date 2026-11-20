@@ -44,6 +44,7 @@
       "eraser": "Eraser (8)",
       "path": "Path (9)",
       "trees": "Trees (0)",
+      "biome": "Biome (B)",
       "water": "Water (W)"
     },
     "Hints": {
@@ -58,6 +59,7 @@
       "fill": "Click inside a room: lays the floor up to the walls (closed doors included). Outside, fills everything not enclosed.",
       "path": "Road, quay: trace the curve with the pen (click: corner, click-drag: curve, Enter: finish) or freehand. Width, floor and edge in the panel. With selection, drag its points to reshape it. Rivers are traced with the Water tool.",
       "trees": "Click: one tree. Drag: scatters trees within the brush, spaced by density. Every tree is unique; select one afterwards to move, rotate or resize it.",
+      "biome": "Drag to paint a biome: its ground, with its vegetation sown inside (trees, undergrowth, stumps, mushrooms), naturally spaced. Small plants stay under the trees. Painting again adds plants where there is room left.",
       "water": "Extent: paint, fill, draw or trace a river (Alt: erase). Depth and type: brush that deepens or raises the bed (Alt: the opposite), or paints a water type. Currents: drag to draw a current in its direction, click a river to set its own."
     },
     "Panel": {
@@ -120,6 +122,7 @@
       "NoEdge": "None",
       "SelPath": "Path",
       "PathClosed": "Closed path (loop)",
+      "Biome": "Biome",
       "TreeKind": "Kind",
       "TreeKinds": {
         "mix": "Mix",
@@ -127,7 +130,13 @@
         "birch": "Birch",
         "palm": "Palm",
         "pine": "Fir",
-        "bush": "Bush"
+        "bush": "Bush",
+        "beech": "Beech",
+        "spruce": "Spruce",
+        "bilberry": "Bilberries",
+        "fern": "Fern",
+        "stump": "Stump",
+        "mushrooms": "Mushrooms"
       },
       "TreeRadius": "Scatter area (radius)",
       "TreeDensity": "Density",
@@ -217,6 +226,10 @@
       },
       "River": "Selected river"
     },
+    "Biomes": {
+      "broadleaf": "Broadleaf forest",
+      "conifer": "Conifer forest"
+    },
     "Terrains": {
       "stone": "Flagstones",
       "wood": "Planks",
@@ -225,7 +238,9 @@
       "grass": "Grass",
       "water": "Water",
       "sand": "Sand",
-      "rock": "Rock"
+      "rock": "Rock",
+      "litter": "Forest litter",
+      "needles": "Needles and moss"
     },
     "Props": {
       "barrel": "Barrel",
