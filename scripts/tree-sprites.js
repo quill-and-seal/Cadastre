@@ -42,6 +42,8 @@ class SpritePool {
     while (this.queue.length) {
       if (this.noWorker) {
         const job = this.queue.shift();
+        // Une demande facultative (affinage au zoom) n'est jamais dessinée dans la page : elle la figerait.
+        if (job.background) { job.reject(new Error("Pas de worker")); continue; }
         setTimeout(() => this._here(job), 0);
         continue;
       }
@@ -96,7 +98,7 @@ class SpritePool {
     const key = JSON.stringify(r);
     let p = this.cache.get(key);
     if (!p) {
-      p = new Promise((resolve, reject) => { this.queue.push({ id: ++this.seq, req: r, resolve, reject }); });
+      p = new Promise((resolve, reject) => { this.queue.push({ id: ++this.seq, req: r, background: !!req.background, resolve, reject }); });
       // Les images d'export ne sont pas gardées (elles sont grandes) ; les aperçus, si.
       if (r.preview) this.cache.set(key, p);
       p.catch(() => this.cache.delete(key));

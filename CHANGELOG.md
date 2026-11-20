@@ -2,7 +2,13 @@
 
 ## 0.1.22
 
-- **Plus de scintillement au zoom** : les images des arbres ont maintenant des versions réduites (mipmaps) et un filtrage anisotrope. Quand on dézoome ou que les branches bougent, les feuilles ne « frisent » plus ; les morceaux sont aussi plus espacés dans les pages d'images pour que leurs bords ne se mélangent pas une fois réduits.
+- **Plus de gel au zoom** : en zoomant, les arbres à l'écran étaient tous redessinés plus fins en même temps, puis envoyés d'un bloc à la carte graphique (plusieurs centaines de Mo pour une forêt) : l'affichage se figeait. Désormais :
+  - la mémoire des arbres affinés est plafonnée (≈ 130 Mo), les plus gros arbres sont affinés un peu moins (2 048 px au plus) ;
+  - deux arbres au plus sont redessinés à la fois, en commençant par le centre de l'écran ;
+  - les images sont envoyées à la carte graphique par petites portions, image après image, et l'arbre n'est remplacé qu'une fois prêt ;
+  - en dézoomant, la mémoire est rendue tout de suite ;
+  - sans worker disponible, les arbres ne sont plus affinés dans la page (c'est ce qui la bloquait) : ils gardent les images de la scène.
+- **Arbres lissés au dézoom** : les images des arbres de la scène ont des versions réduites (mipmaps) et un filtrage anisotrope, les feuilles ne scintillent plus en mouvement ; les morceaux sont plus espacés dans les pages d'images pour que leurs bords ne se mélangent pas.
   - Pour en profiter sur une scène existante : la réexporter.
 
 ## 0.1.21

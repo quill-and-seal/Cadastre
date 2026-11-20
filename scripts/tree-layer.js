@@ -145,16 +145,23 @@ export function stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated = 
 /*  Netteté au zoom                             */
 /* -------------------------------------------- */
 
-/** Finesses possibles en zoomant (pixels par case), et nombre d'arbres gardés aussi fins. */
+/**
+ * Finesses possibles en zoomant (pixels par case). Les images affinées coûtent cher en mémoire
+ * graphique : leur total est plafonné (SHARP_BUDGET pixels), un seul arbre est redessiné à la fois
+ * et un seul est envoyé à la carte graphique par image, pour ne jamais figer l'affichage.
+ */
 const SHARP_LEVELS = [400, 560];
-const SHARP_KEEP = 16;
-const MAX_SPRITE = 4096;
+const SHARP_BUDGET = 32e6;
+/** Pixels envoyés à la carte graphique par image au plus (le reste attend l'image suivante). */
+const UPLOAD_PER_FRAME = 2e6;
+const MAX_SPRITE = 2048;
+const SHARP_BUSY = 2;
 
 /**
  * Comme Vellum pour les images vectorielles : quand on zoome plus loin que la finesse des images
  * envoyées avec la scène, les arbres à l'écran sont redessinés plus fins (en arrière-plan, depuis
- * leur graine), morceau par morceau, puis remplacés au vol ; en dézoomant, ils reprennent leurs
- * images d'origine.
+ * leur graine), du centre de l'écran vers les bords, puis remplacés au vol ; en dézoomant, ils
+ * reprennent leurs images d'origine.
  */
 export class TreeSharpener {
   constructor(trees, sceneSize, pages) {
@@ -164,21 +171,42 @@ export class TreeSharpener {
     this.lastPpc = 0;
     this.stableSince = 0;
     this.sharp = new Set();
+    this.used = 0;
+    this.busy = 0;
+    this.ready = [];
     this.dead = false;
   }
 
-  update(viewPpc, now) {
+  /** Pixels estimés d'un arbre affiné (les morceaux se chevauchent : environ deux fois la boîte). */
+  _cost(tr, ppc) {
+    const side = 2 * (tr.item.radius + 0.5) * ppc;
+    return 1.2 * side * side;
+  }
+
+  update(viewPpc, now, view) {
+    this._upload();
     if (Math.abs(viewPpc - this.lastPpc) > 1) { this.lastPpc = viewPpc; this.stableSince = now; return; }
     if (now - this.stableSince < 350) return;
-    for (const tr of this.trees) {
-      const base = tr.item.ppc, want = this._level(tr, viewPpc);
-      if (want <= base) { if (tr.ppc !== base && !tr.pending) this._restore(tr); continue; }
-      if (!tr.box.visible || want === tr.ppc || want === tr.pending) continue;
-      if (this.sharp.size >= SHARP_KEEP && !this.sharp.has(tr)) {
+    // Dézoom : on rend la mémoire tout de suite.
+    for (const tr of this.sharp) if (this._level(tr, viewPpc) <= tr.item.ppc) this._restore(tr);
+    // Affiner sans worker se ferait dans la page et la figerait : on garde alors les images de la scène.
+    if (this.busy >= SHARP_BUSY || treeSprites.noWorker) return;
+    const [x0, y0, x1, y1] = view ?? [0, 0, 0, 0], cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const todo = this.trees
+      .filter((tr) => tr.box.visible && !tr.pending)
+      .map((tr) => ({ tr, want: this._level(tr, viewPpc), d: (tr.x - cx) ** 2 + (tr.y - cy) ** 2 }))
+      .filter((o) => o.want > o.tr.item.ppc && o.want !== o.tr.ppc)
+      .sort((a, b) => a.d - b.d);
+    for (const { tr, want } of todo) {
+      if (this.busy >= SHARP_BUSY) break;
+      const cost = this._cost(tr, want) - (tr.sharpPx ?? 0);
+      // Place faite en libérant les arbres affinés sortis de l'écran.
+      while (this.used + cost > SHARP_BUDGET) {
         const old = [...this.sharp].find((x) => !x.box.visible);
-        if (!old) continue;
+        if (!old) break;
         this._restore(old);
       }
+      if (this.used + cost > SHARP_BUDGET) break;
       this._request(tr, want);
     }
   }
@@ -192,31 +220,72 @@ export class TreeSharpener {
 
   async _request(tr, ppc) {
     tr.pending = ppc;
+    this.busy++;
+    const reserved = this._cost(tr, ppc);
+    this.used += reserved;
+    let r = null;
     try {
       const it = tr.item;
-      const r = await treeSprites.get({ kind: it.kind, seed: it.seed, radius: it.radius, rotation: it.rot, ppc, detail: 1 });
+      r = await treeSprites.get({ kind: it.kind, seed: it.seed, radius: it.radius, rotation: it.rot, ppc, detail: 1, background: true });
       r.shadow?.close?.();
-      if (this.dead || tr.pending !== ppc) { for (const q of r.pieces) q.img?.close?.(); return; }
-      this._drop(tr);
-      tr.sharpTex = [];
-      const pieces = r.pieces.map((q) => {
-        const tex = PIXI.Texture.from(q.img, { mipmap: PIXI.MIPMAP_MODES?.ON ?? 1, anisotropicLevel: 4 });
-        smooth(tex.baseTexture);
-        tr.sharpTex.push(tex);
-        return { ...pieceRecord(q, r.half), tex };
-      });
-      setPieces(tr, pieces, ppc, this.size);
-      this.sharp.delete(tr); this.sharp.add(tr);
     } catch (error) {
       log("Arbre non affiné", error);
     } finally {
-      if (tr.pending === ppc) tr.pending = 0;
+      this.busy--;
+      this.used -= reserved;
     }
+    if (!r || this.dead || tr.pending !== ppc || !tr.box.visible) {
+      for (const q of r?.pieces ?? []) q.img?.close?.();
+      if (tr.pending === ppc) tr.pending = 0;
+      return;
+    }
+    const px = r.pieces.reduce((n, q) => n + q.w * q.h, 0);
+    this.used += px;
+    // Vu de près, pas besoin de réductions : images lissées simples, sans mipmaps.
+    const tex = r.pieces.map((q) => PIXI.Texture.from(q.img, { mipmap: PIXI.MIPMAP_MODES?.OFF ?? 0, scaleMode: PIXI.SCALE_MODES?.LINEAR ?? 1 }));
+    this.ready.push({ tr, ppc, r, px, tex, sent: 0 });
+  }
+
+  /**
+   * Envoie les images prêtes à la carte graphique par petites portions à chaque image : un gros
+   * arbre envoyé d'un coup figerait l'affichage. L'arbre n'est remplacé qu'une fois tout envoyé.
+   */
+  _upload() {
+    const job = this.ready[0];
+    if (!job) return;
+    const gl = this.renderer?.texture;
+    let budget = UPLOAD_PER_FRAME;
+    while (gl && job.sent < job.tex.length && budget > 0) {
+      const t = job.tex[job.sent++];
+      budget -= t.width * t.height;
+      try { gl.bind(t); } catch { /* envoyé au premier affichage */ }
+    }
+    if (gl && job.sent < job.tex.length) return;
+    this.ready.shift();
+    this._apply(job);
+  }
+
+  _apply({ tr, ppc, r, px, tex }) {
+    this.used -= px;
+    const stale = this.dead || tr.pending !== ppc || this._level(tr, this.lastPpc) !== ppc;
+    if (tr.pending === ppc) tr.pending = 0;
+    if (stale) { for (const t of tex) t.destroy(true); for (const q of r.pieces) q.img?.close?.(); return; }
+    this._drop(tr);
+    tr.sharpTex = tex;
+    tr.sharpImg = r.pieces.map((q) => q.img);
+    setPieces(tr, r.pieces.map((q, i) => ({ ...pieceRecord(q, r.half), tex: tex[i] })), ppc, this.size);
+    tr.sharpPx = px;
+    this.used += px;
+    this.sharp.add(tr);
   }
 
   _drop(tr) {
     for (const t of tr.sharpTex ?? []) t.destroy(true);
-    tr.sharpTex = null;
+    for (const i of tr.sharpImg ?? []) i?.close?.();
+    tr.sharpTex = tr.sharpImg = null;
+    if (this.sharp.has(tr)) this.used -= tr.sharpPx ?? 0;
+    tr.sharpPx = 0;
+    this.sharp.delete(tr);
   }
 
   _restore(tr) {
@@ -224,11 +293,12 @@ export class TreeSharpener {
     const pieces = tr.item.pieces.map((q) => ({ ...q, tex: page(q) ? new PIXI.Texture(page(q).color.baseTexture ?? page(q).color, new PIXI.Rectangle(q.u, q.v, q.w, q.h)) : null })).filter((q) => q.tex);
     setPieces(tr, pieces, tr.item.ppc, this.size);
     this._drop(tr);
-    this.sharp.delete(tr);
   }
 
   destroy() {
     this.dead = true;
+    for (const { r, tex } of this.ready) { for (const t of tex) t.destroy(true); for (const q of r.pieces) q.img?.close?.(); }
+    this.ready = [];
     for (const tr of this.trees) this._drop(tr);
   }
 }
@@ -295,6 +365,7 @@ async function refresh() {
 
     const trees = treeSprites2(root, expandItems(data), pages, { size, ox, oy, ppc });
     const sharpener = me.sharpener = new TreeSharpener(trees, size, pages);
+    sharpener.renderer = canvas.app.renderer;
     let last = windClock();
     me.tick = () => {
       const t = windClock(), dt = Math.max(0, Math.min(0.1, t - last));
@@ -305,7 +376,7 @@ async function refresh() {
       const x1 = (Math.max(p0.x, p1.x) - ox) / size, y1 = (Math.max(p0.y, p1.y) - oy) / size;
       const viewPpc = size * Math.abs(canvas.stage.scale.x);
       stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated, viewPpc);
-      sharpener.update(viewPpc * (r.resolution ?? 1), performance.now());
+      sharpener.update(viewPpc * (r.resolution ?? 1), performance.now(), [x0, y0, x1, y1]);
     };
     me.tick();
     canvas.app.ticker.add(me.tick);
