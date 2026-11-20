@@ -40,7 +40,8 @@ La façon la plus rapide de bâtir : pose l'emprise du bâtiment avec des **form
 | Mur | 5 | **Plume** : clic pour un coin, clic-glisser pour une courbe, **Entrée** ou double-clic pour finir, clic sur le premier point pour fermer. **Main levée** : le tracé est lissé en courbe retouchable. |
 | Porte | 6 | Clic sur un mur, droit ou courbe : porte, ou porte secrète, de la largeur choisie. Avec la sélection, une porte glisse le long de son mur. |
 | Objet | 7 | Tonneau, caisse, coffre, table, chaise, lit, pilier, escalier. Angle et échelle libres : **R** et **Maj+R** tournent de 15°. |
-| Arbres | 0 | Arbres générés branche par branche et feuille par feuille : chêne, bouleau, sapin, buisson, palmier, ou un mélange. Clic : un arbre ; glisser : sème des arbres dans la zone du pinceau, espacés selon la densité. Chaque arbre est unique (graine) et devient un objet : sélection, déplacement, rotation, taille. Dans la scène, ils bougent avec le vent de l'herbe. |
+| Arbres | 0 | Arbres générés branche par branche et feuille par feuille : chêne, hêtre, bouleau, sapin, épicéa, buisson, myrtilles, fougère, souche, champignons, palmier, ou un mélange. Clic : un arbre ; glisser : sème des arbres dans la zone du pinceau, espacés selon la densité. Chaque arbre est unique (graine) et devient un objet : sélection, déplacement, rotation, taille. Dans la scène, ils bougent avec le vent de l'herbe. |
+| Biome | B | Peint un biome : son sol et sa végétation semée dedans (voir **Biomes**). Taille du pinceau, densité. |
 | Gomme | 8 | Efface en glissant : tout, ou seulement les sols, les murs ou les objets. Un mur gommé est coupé proprement. |
 
 Navigation : clic droit, molette enfoncée ou **Espace** + clic pour déplacer la vue, molette pour zoomer. **Échap** annule le tracé en cours. **Ctrl+Z** / **Ctrl+Maj+Z** pour annuler et rétablir, **Ctrl+S** pour enregistrer.
