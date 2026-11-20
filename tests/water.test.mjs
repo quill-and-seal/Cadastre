@@ -280,3 +280,35 @@ test("outil Eau : la gomme retire l'eau et coupe les rivières, rien d'autre", (
   assert.ok(eraseWater(map, rectRings(0, 0, 4, 2)));
   assert.equal(map.terrains.water, undefined);
 });
+
+test("jonctions : jet à l'embouchure, aspiration à la sortie d'un lac, confluence sans saut", () => {
+  const R = (x0, y0, x1, y1) => [[x0, y0, x1, y0, x1, y1, x0, y1]];
+  const map = createMap({ width: 50, height: 20 });
+  paintArea(map, R(0, 0, 50, 20), "grass");
+  paintArea(map, R(20, 4, 32, 16), "water");
+  addPath(map, [{ x: 2, y: 10 }, { x: 20.5, y: 10 }], { width: 3, terrain: "water", flow: 1 });
+  addPath(map, [{ x: 31.5, y: 10 }, { x: 48, y: 10 }], { width: 3, terrain: "water", flow: 1 });
+  const f = buildField(waterFlag(map));
+  const at = (x, y) => sampleField(f, x, y);
+  assert.ok(at(23, 10).vx > 0.5, `le jet entre dans le lac : ${at(23, 10).vx}`);
+  assert.ok(at(23, 10).vx > at(26, 10).vx && at(26, 10).vx > 0.1, "puis ralentit");
+  assert.ok(at(29.5, 10).vx > 0.1, "l'eau du lac file vers la rivière qui en sort");
+  assert.ok(Math.abs(at(26, 13.5).vx) < 0.3, "loin du jet, le lac reste calme");
+
+  const m2 = createMap({ width: 30, height: 20 });
+  paintArea(m2, R(0, 0, 30, 20), "grass");
+  addPath(m2, [{ x: 2, y: 3 }, { x: 15, y: 10 }], { width: 2.5, terrain: "water", flow: 1 });
+  addPath(m2, [{ x: 2, y: 17 }, { x: 15, y: 10 }], { width: 2.5, terrain: "water", flow: 1 });
+  addPath(m2, [{ x: 15, y: 10 }, { x: 28, y: 10 }], { width: 3.5, terrain: "water", flow: 1 });
+  const flag = waterFlag(m2);
+  assert.ok(flag.rivers[2].speed > 1.3, "la rivière qui reçoit les deux autres accélère");
+  const g = buildField(flag);
+  const dir = (x, y) => { const s = sampleField(g, x, y); return Math.atan2(s.vy, s.vx); };
+  // Le long de l'arrivée, l'angle change peu à peu, sans saut.
+  let prev = dir(11, 7.8);
+  for (let x = 11.5; x <= 17; x += 0.5) {
+    const y = x < 15 ? 3 + (x - 2) * 7 / 13 : 10, a = dir(x, y);
+    assert.ok(Math.abs(a - prev) < 0.35, `saut de direction en ${x} : ${prev.toFixed(2)} → ${a.toFixed(2)}`);
+    prev = a;
+  }
+});

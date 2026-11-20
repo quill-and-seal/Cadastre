@@ -113,6 +113,18 @@ export function waterFlag(map) {
     const pts = riverLine(q);
     if (pts) rivers.push({ pts, half: q.width / 2, speed: q.speed });
   }
+  // Confluences : une rivière qui reçoit plus d'eau qu'elle n'en porte accélère.
+  for (let pass = 0; pass < 3; pass++) {
+    for (const r of rivers) {
+      let inflow = 0;
+      for (const o of rivers) {
+        if (o === r) continue;
+        const [ex, ey] = o.pts.at(-1);
+        if (r.pts.some(([x, y]) => Math.hypot(x - ex, y - ey) < r.half + 0.6)) inflow += o.speed * o.half;
+      }
+      if (inflow > r.speed * r.half) r.speed = r3(Math.min(3, inflow / r.half));
+    }
+  }
   let masks = [];
   const rocks = [];
   // Chemins (ponts, gués, quais) : par-dessus l'eau.
@@ -226,26 +238,88 @@ export function buildField(flag, { hideMasked = false } = {}) {
   const segB = bucketSegments(segs);
   const maxHalf = Math.max(0, ...flag.rivers.map((rv) => rv.half));
 
-  /** Rivière la plus proche : position en travers relative, vitesse. */
-  const riverAt = (x, y) => {
-    let best = null;
-    for (const si of new Set(near(segB, x, y, maxHalf + 0.2))) {
+  /**
+   * Courant des rivières en un point, rivières mêlées :
+   *   dans la rivière : rapide au milieu, presque nul contre une vraie berge ; là où le tracé
+   *     s'ouvre sur d'autre eau (lac, autre rivière), pas de berge, le courant déborde un peu ;
+   *   à l'embouchure : la rivière continue en jet qui s'élargit et ralentit ;
+   *   à la sortie d'un lac : l'eau converge vers l'entrée de la rivière ;
+   *   aux confluences : les courants se mêlent en douceur.
+   * Renvoie [vx, vy, profondeur relative (null hors des rivières)] ou null.
+   * @param {number} D  distance réelle à la berge (plafonnée à 2 cases)
+   */
+  const ends = flag.rivers.map((rv, ri) => {
+    const fr = frames[ri], n = rv.pts.length;
+    return { start: rv.pts[0], ts: fr.tang[0], end: rv.pts[n - 1], te: fr.tang[n - 1] };
+  });
+  const reachOf = (rv) => rv.half * JET_LENGTH * 2;
+  const riverFlowAt = (x, y, D) => {
+    // Pour chaque rivière proche : le segment le plus proche.
+    const nearest = new Map();
+    for (const si of new Set(near(segB, x, y, maxHalf * 2.2 + 0.2))) {
       const [ax, ay, bx, by, ri, i] = segs[si];
       const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1e-9;
-      const h = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L2));
+      const raw = ((x - ax) * dx + (y - ay) * dy) / L2, h = Math.max(0, Math.min(1, raw));
       const d = Math.hypot(x - ax - dx * h, y - ay - dy * h);
-      const rv = flag.rivers[ri];
-      if (d > rv.half * 1.05) continue;
-      const rel = d / rv.half;
-      if (best && rel >= best.rel) continue;
-      const fr = frames[ri], t0 = fr.tang[i], t1 = fr.tang[i + 1];
-      let tx = t0[0] + (t1[0] - t0[0]) * h, ty = t0[1] + (t1[1] - t0[1]) * h;
-      const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
-      const c = (x - ax - dx * h) * -ty + (y - ay - dy * h) * tx;
-      const k = fr.curv[i] + (fr.curv[i + 1] - fr.curv[i]) * h;
-      best = { rel, tx, ty, U: riverSpeed(c, rv.half, k, rv.speed) };
+      const best = nearest.get(ri);
+      if (!best || d < best.d) nearest.set(ri, { d, h, raw, i, ax, ay, dx, dy });
     }
-    return best;
+    // Dans le lit d'une rivière, c'est elle qui mène ; les jets et débordements des autres
+    // ne font que s'y mêler.
+    let sx = 0, sy = 0, sw = 0, bx0 = 0, by0 = 0, bw = 0, nOut = null;
+    const add = (vx, vy, w) => { sx += vx * w; sy += vy * w; sw += w; };
+    const addBed = (vx, vy) => { bx0 += vx; by0 += vy; bw += 1; };
+    flag.rivers.forEach((rv, ri) => {
+      const e = ends[ri], U0 = BASE_SPEED * rv.speed, half = rv.half, last = rv.pts.length - 2;
+      // Au-delà du bout aval : le jet.
+      const ax = (x - e.end[0]) * e.te[0] + (y - e.end[1]) * e.te[1];
+      const bx = -(x - e.end[0]) * e.te[1] + (y - e.end[1]) * e.te[0];
+      if (ax > 0 && ax < reachOf(rv) && Math.abs(bx) < half * 4) {
+        const hw = half * (1 + ax / (2 * half));
+        const u = U0 * Math.sqrt(half / hw) * Math.exp(-ax / (JET_LENGTH * half)) * Math.exp(-0.9 * (bx / hw) ** 2);
+        const spread = 0.35 * bx / hw;
+        let tx = e.te[0] - e.te[1] * spread, ty = e.te[1] + e.te[0] * spread;
+        const L = Math.hypot(tx, ty); tx /= L; ty /= L;
+        if (u > U0 * 0.01) add(tx * u, ty * u, u / U0);
+        return;
+      }
+      // Avant le bout amont : l'eau converge vers l'entrée de la rivière.
+      const as = (x - e.start[0]) * e.ts[0] + (y - e.start[1]) * e.ts[1];
+      if (as < 0) {
+        const q = Math.hypot(x - e.start[0], y - e.start[1]);
+        if (q < reachOf(rv) * 0.6) {
+          const u = U0 * 0.6 * Math.exp(-Math.max(0, q - half) / (1.5 * half));
+          let tx = (e.start[0] - x) / (q || 1), ty = (e.start[1] - y) / (q || 1);
+          const kk = Math.exp(-q / half);
+          tx = tx * (1 - kk) + e.ts[0] * kk; ty = ty * (1 - kk) + e.ts[1] * kk;
+          const L = Math.hypot(tx, ty) || 1;
+          if (u > U0 * 0.01) add(tx / L * u, ty / L * u, u / U0);
+        }
+        return;
+      }
+      const p = nearest.get(ri);
+      if (!p) return;
+      const fr = frames[ri], t0 = fr.tang[p.i], t1 = fr.tang[p.i + 1];
+      let tx = t0[0] + (t1[0] - t0[0]) * p.h, ty = t0[1] + (t1[1] - t0[1]) * p.h;
+      const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+      const c = (x - p.ax - p.dx * p.h) * -ty + (y - p.ay - p.dy * p.h) * tx;
+      const k = fr.curv[p.i] + (fr.curv[p.i + 1] - fr.curv[p.i]) * p.h;
+      const rel = p.d / half;
+      if (p.d <= half * 1.05) {
+        // Berge ouverte : la vraie berge est bien plus loin que le bord du tracé.
+        const open = Math.max(0, Math.min(1, (D - Math.min(2, half - Math.abs(c)) - 0.1) / 0.4));
+        const u = riverSpeed(c, half, k, rv.speed) * (1 - open) + U0 * Math.exp(-0.9 * rel * rel) * open;
+        addBed(tx * u, ty * u);
+        nOut = nOut == null ? Math.min(1, rel) : Math.min(nOut, rel);
+      } else {
+        // Hors du tracé, dans d'autre eau : le courant déborde un peu sur les côtés.
+        const u = U0 * 0.4 * Math.exp(-(((p.d - half) / (0.7 * half)) ** 2));
+        if (u > U0 * 0.01) add(tx * u, ty * u, u / U0);
+      }
+    });
+    if (bw) { const k = 0.25; return [(bx0 + sx * k) / (bw + sw * k), (by0 + sy * k) / (bw + sw * k), nOut]; }
+    if (!sw) return null;
+    return [sx / sw, sy / sw, nOut];
   };
   const shoreDist = (x, y) => {
     let d = 2;
@@ -306,9 +380,11 @@ export function buildField(flag, { hideMasked = false } = {}) {
         const x = (i + 0.5) / R, o = j * W + i;
         inWater[o] = 1;
         const D = shoreDist(x, y);
-        const rv = riverAt(x, y);
-        field.n[o] = rv ? Math.min(1, rv.rel) : 1 - Math.min(1, D / 1.5);
-        let vx = rv ? rv.tx * rv.U : 0, vy = rv ? rv.ty * rv.U : 0;
+        const rv = flag.rivers.length ? riverFlowAt(x, y, D) : null;
+        const lake = 1 - Math.min(1, D / 1.5);
+        // Profondeur relative : celle de la rivière, mais là où elle s'ouvre sur un lac, celle du lac.
+        field.n[o] = rv?.[2] != null ? Math.min(rv[2], lake) : lake;
+        let vx = rv ? rv[0] : 0, vy = rv ? rv[1] : 0;
         const drawn = flows.length ? drawnAt(x, y) : null;
         if (drawn) {
           // Contre la berge, le courant tracé s'éteint.
@@ -364,6 +440,8 @@ export function buildField(flag, { hideMasked = false } = {}) {
   return field;
 }
 
+/** Longueur du jet d'une rivière à son embouchure, en demi-largeurs. */
+const JET_LENGTH = 7;
 /** Portée d'un courant tracé et largeur de son influence (cases). */
 const CURRENT_REACH = 3;
 const CURRENT_SIGMA = 1.1;
