@@ -50,11 +50,20 @@ export async function packTrees(map, ppc, { shadowPpc = map.gridSize, onProgress
     x += w + gap; rowH = Math.max(rowH, h + gap);
     return at;
   };
-  await Promise.all(props.map(async (p) => {
+  // Plantes identiques (mêmes essence, graine, taille et orientation : les variantes du
+  // sous-bois) : dessinées une seule fois, et leurs morceaux partagés dans les pages.
+  const groups = new Map();
+  for (const p of props) {
     const def = TREE_BY_TYPE.get(p.type);
     const radius = treeRadius(def, p.k);
     const tp = Math.min(ppc, Math.floor((TREE_PAGE - 8) / (2 * (radius + 0.5))));
-    const r = await treeSprites.get({ kind: def.proc, seed: p.s ?? 0, radius, rotation: p.a, ppc: tp, detail: 1 });
+    const req = { kind: def.proc, seed: p.s ?? 0, radius: Math.round(radius * 100) / 100, rotation: def.spin ? 0 : Math.round(p.a ?? 0), ppc: tp, detail: 1 };
+    const key = JSON.stringify(req);
+    if (!groups.has(key)) groups.set(key, { req, props: [] });
+    groups.get(key).props.push({ p, spin: def.spin ? Math.round(p.a ?? 0) : 0 });
+  }
+  await Promise.all([...groups.values()].map(async ({ req, props: same }) => {
+    const r = await treeSprites.get(req);
     const pieces = [];
     for (const q of r.pieces) {
       if (q.w + gap <= TREE_PAGE && q.h + gap <= TREE_PAGE) {
@@ -64,15 +73,18 @@ export async function packTrees(map, ppc, { shadowPpc = map.gridSize, onProgress
       }
       q.img?.close?.();
     }
-    // kind, seed, radius, rot : de quoi le redessiner plus fin quand on zoome (tree-layer.js).
-    out.items.push({ x: p.x, y: p.y, ppc: tp, half: r.half, radius, kind: def.proc, seed: p.s ?? 0, rot: p.a, conifer: r.conifer, rigid: r.rigid, pieces });
     // L'ombre est gardée à la résolution de l'image de fond, où elle sera peinte.
-    const f = shadowPpc / tp;
+    const f = shadowPpc / req.ppc;
     const sw = Math.max(1, Math.ceil(r.shadowW * f)), sh = Math.max(1, Math.ceil(r.shadowH * f)), shadow = makeCanvas(sw, sh);
     shadow.getContext("2d").drawImage(r.shadow, 0, 0, sw, sh);
-    out.shadows.push({ x: p.x, y: p.y, half: r.half * f, img: shadow });
     r.shadow?.close?.();
-    onProgress?.(++done);
+    for (const { p, spin } of same) {
+      // kind, seed, radius, rot : de quoi le redessiner plus fin quand on zoome (tree-layer.js) ;
+      // spin : rotation appliquée à l'affichage (petites plantes).
+      out.items.push({ x: p.x, y: p.y, ppc: req.ppc, half: r.half, radius: req.radius, kind: req.kind, seed: req.seed, rot: req.rotation, spin, conifer: r.conifer, rigid: r.rigid, pieces });
+      out.shadows.push({ x: p.x, y: p.y, half: r.half * f, img: shadow });
+      onProgress?.(++done);
+    }
   }));
   // Dans la scène, les plus petites plantes sont posées d'abord : le sous-bois reste sous les arbres.
   out.items.sort((a, b) => a.radius - b.radius);

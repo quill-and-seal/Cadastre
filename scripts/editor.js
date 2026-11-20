@@ -320,11 +320,11 @@ export class MapEditor {
    */
   _treeArt(p, def) {
     const ppc = TREE_PREVIEW_PPC;
-    const req = { kind: def.proc, seed: p.s ?? 0, radius: treeRadius(def, p.k), rotation: p.a, ppc, detail: TREE_PREVIEW_DETAIL, preview: true };
+    const req = { kind: def.proc, seed: p.s ?? 0, radius: treeRadius(def, p.k), rotation: def.spin ? 0 : p.a, ppc, detail: TREE_PREVIEW_DETAIL, preview: true };
     const key = JSON.stringify(req);
     this._treeImgs ??= new Map();
     const img = this._treeImgs.get(key);
-    if (img) return img.svg;
+    if (img) return def.spin && p.a ? `<g transform="rotate(${p.a})">${img.svg}</g>` : img.svg;
     if (img === undefined) {
       this._treeImgs.set(key, null);
       treeSprites.get(req).then((r) => {

@@ -13,22 +13,23 @@ export const CASE_M = 1.5;
 export const MAX_LEAVES = 60000;
 
 /**
- * Essences. form : « broad » (feuillu) ou « conifer ». lai : indice foliaire (m² de feuilles par
+ * Essences. form : « broad » (feuillu) ou « conifer ». single : petite plante d'un seul morceau
+ * (immobile au vent dans la scène : trop petite pour que ça se voie, et bien plus léger). lai : indice foliaire (m² de feuilles par
  * m² au sol sous la couronne, 3 à 6 en pleine feuille). leafM : longueur d'une feuille, en mètres.
  */
 export const SPECIES = {
   oak: {
     form: "broad", depth: 5, fork: 2.6, spread: 0.62, lai: 4.5, leaf: "oak", leafM: 0.11, perTwig: 12,
-    trunkH: 1.0, gnarl: 0.13, rise: 0.12, taper: 0.72, laterals: 2.5, rootL: 0.4, trunkW: 0.13,
+    trunkH: 1.0, gnarl: 0.13, rise: 0.12, taper: 0.72, laterals: 2.5, rootL: 0.4, trunkW: 0.13, split: 2,
     bark: ["#3a281a", "#6b4a2e"], leaves: { dark: "#1b4320", mid: "#337434", light: "#86c25a" }
   },
   birch: {
     form: "broad", depth: 6, fork: 2.2, spread: 0.45, lai: 3.5, leaf: "birch", leafM: 0.06, perTwig: 16,
-    trunkH: 1.5, gnarl: 0.05, rise: 0.25, taper: 0.8, laterals: 3, rootL: 0.2, trunkW: 0.13, spreadK: 0.85,
+    trunkH: 1.5, gnarl: 0.05, rise: 0.25, taper: 0.8, laterals: 3, rootL: 0.2, trunkW: 0.13, spreadK: 0.85, split: 3,
     bark: ["#8d877c", "#e6e1d6"], leaves: { dark: "#2a5a22", mid: "#4a8a34", light: "#a4cf62" }, birchBark: true
   },
   bush: {
-    form: "broad", depth: 4, fork: 2.8, spread: 0.95, lai: 4, leaf: "birch", leafM: 0.05, perTwig: 12,
+    form: "broad", single: true, depth: 4, fork: 2.8, spread: 0.95, lai: 4, leaf: "birch", leafM: 0.05, perTwig: 12,
     trunkH: 0.15, gnarl: 0.1, rise: 0.2, taper: 0.75, laterals: 2.5, rootL: 0, trunkW: 0.08,
     bark: ["#3b2a1d", "#634733"], leaves: { dark: "#1d4a22", mid: "#3a7d38", light: "#7fbb55" }
   },
@@ -40,7 +41,7 @@ export const SPECIES = {
   // Hêtre : couronne en dôme très dense, écorce lisse et grise, feuilles ovales au bord ondulé.
   beech: {
     form: "broad", depth: 5, fork: 2.5, spread: 0.55, lai: 5.5, leaf: "beech", leafM: 0.08, perTwig: 14,
-    trunkH: 1.2, gnarl: 0.06, rise: 0.16, taper: 0.76, laterals: 2.5, rootL: 0.35, trunkW: 0.12,
+    trunkH: 1.2, gnarl: 0.06, rise: 0.16, taper: 0.76, laterals: 2.5, rootL: 0.35, trunkW: 0.12, split: 2,
     bark: ["#5e6264", "#a8aaa6"], leaves: { dark: "#1c4a1f", mid: "#2f7a2e", light: "#7cc04c" }, smoothBark: true
   },
   // Épicéa : plus sombre, étages serrés, branches qui retombent, aiguilles courtes.
@@ -51,13 +52,13 @@ export const SPECIES = {
   },
   // Myrtille : touffe basse de tiges fines, petites feuilles, baies bleues.
   bilberry: {
-    form: "broad", depth: 3, fork: 2.4, spread: 1.0, lai: 3, leaf: "birch", leafM: 0.025, perTwig: 8,
+    form: "broad", single: true, depth: 3, fork: 2.4, spread: 1.0, lai: 3, leaf: "birch", leafM: 0.025, perTwig: 8,
     trunkH: 0.04, gnarl: 0.12, rise: 0.15, taper: 0.8, laterals: 2, rootL: 0, trunkW: 0.05, limbs: 9,
     bark: ["#3d5a2c", "#6f8f4a"], leaves: { dark: "#24521f", mid: "#3f8236", light: "#8fc45d" },
     fruit: { colors: ["#2c3a7a", "#3b4c9a", "#22305f"], m: 0.008, prob: 0.5, cluster: [1, 3] }
   },
   // Fougère : frondes en arceau partant du centre, folioles alternées.
-  fern: { form: "fern", fronds: [8, 14], pinnaM: 0.12, trunkW: 0.02, bark: ["#3c5a24", "#6c8c3c"], leaves: { dark: "#1e5222", mid: "#3d8a32", light: "#93cc5a" } },
+  fern: { form: "fern", single: true, fronds: [8, 14], pinnaM: 0.12, trunkW: 0.02, bark: ["#3c5a24", "#6c8c3c"], leaves: { dark: "#1e5222", mid: "#3d8a32", light: "#93cc5a" } },
   // Souche : bois coupé, cernes, racines, un peu de mousse. Ne bouge pas au vent.
   stump: { form: "stump", trunkW: 0.32, rigid: true, bark: ["#3a2a1c", "#6a4c32"], wood: ["#b58a5c", "#d8b483"], leaves: { dark: "#2f5a22", mid: "#4f8a34", light: "#8cbf55" } },
   // Champignons : quelques chapeaux en grappe (cèpes bruns ou amanites rouges à points blancs).
@@ -86,7 +87,7 @@ function growBroadleaf(rand, sp) {
   // Morceaux rigides pour le vent : chaque branche du niveau `split` (et tout ce qu'elle porte)
   // pivote autour de son point d'attache ; le tronc et les grosses branches restent le morceau 0.
   const pieces = [{ id: 0, at: null }];
-  const split = Math.max(1, sp.depth - 2);
+  const split = sp.split ?? Math.max(1, sp.depth - 2);
   let cur = 0;
   // Une branche n'est pas un bâton : plusieurs morceaux qui serpentent un peu, s'affinent
   // régulièrement et ploient sous leur poids quand elles sont longues et couchées.
@@ -179,7 +180,6 @@ function growConifer(rand, sp) {
   const H = 4.2;
   for (let k = 0; k < 6; k++) segs.push({ a: [0, 0, H * k / 6], b: [0, 0, H * (k + 1) / 6], w: 1 - k / 6 * 0.85, w2: 1 - (k + 1) / 6 * 0.85, d: 0 });
   function shoot(p, dir, L, w, level, piece = 0) {
-    if (level === 1) { piece = pieces.length; pieces.push({ id: piece, at: p }); }
     const end = [p[0] + dir[0] * L, p[1] + dir[1] * L, p[2] + dir[2] * L];
     segs.push({ a: p, b: end, w, w2: w * 0.45, d: level, piece });
     tips.push({ p: end, dir, d: level + 1, len: L, base: p, piece });
@@ -202,10 +202,13 @@ function growConifer(rand, sp) {
     // Un verticille complet tous les deux étages, une ou deux branches isolées entre les deux.
     const n = k % 2 ? 1 + Math.floor(rand() * 2) : Math.max(5, Math.round(sp.fork * 2.5 + rand() * 2));
     const az0 = rand() * Math.PI * 2;
+    // Un morceau par étage : ses branches glissent ensemble sous le vent.
+    const at = [0, 0, z], piece = pieces.length;
+    pieces.push({ id: piece, at });
     for (let i = 0; i < n; i++) {
       const az = az0 + (i / n) * Math.PI * 2 + (rand() - 0.5) * 0.6;
       const dir = norm([Math.cos(az), Math.sin(az), -0.05 - sp.spread * 0.2 - (sp.droop ?? 0) + f * 0.25]);
-      shoot([0, 0, z], dir, Lmax * (0.72 + rand() * 0.38) * (k % 2 ? 0.8 : 1), 0.3 * (1 - f * 0.75), 1);
+      shoot(at, dir, Lmax * (0.72 + rand() * 0.38) * (k % 2 ? 0.8 : 1), 0.3 * (1 - f * 0.75), 1, piece);
     }
   }
   tips.push({ p: [0, 0, H], dir: [0, 0, 1], d: 3, len: 0.15, base: [0, 0, H - 0.15], piece: 0 });

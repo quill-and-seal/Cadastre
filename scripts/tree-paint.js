@@ -239,7 +239,7 @@ export function paintTree(built, ppc, { wind = true } = {}) {
   /* Morceaux rigides : chacun dans son image, juste à sa taille. */
   const groups = new Map();
   for (const it of items) {
-    const id = (it.g ?? it.l).piece ?? 0;
+    const id = sp.single ? 0 : (it.g ?? it.l).piece ?? 0;
     if (!groups.has(id)) groups.set(id, []);
     groups.get(id).push(it);
   }

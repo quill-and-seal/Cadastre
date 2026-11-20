@@ -36,6 +36,9 @@ export const BIOMES = [
 ];
 export const BIOME_BY_ID = new Map(BIOMES.map((b) => [b.id, b]));
 
+/** Nombre de variantes de chaque plante du sous-bois, et leurs graines. */
+const SMALL_VARIANTS = 10, SMALL_SEEDS = 7001;
+
 const pickWeighted = (list, rand) => {
   let x = rand() * list.reduce((a, [, w]) => a + w, 0);
   for (const [id, w] of list) { if ((x -= w) <= 0) return id; }
@@ -99,9 +102,18 @@ function sowLayers(map, rings, biome, rand, density, mark) {
       const x = x0 + rand() * (x1 - x0), y = y0 + rand() * (y1 - y0);
       if (!poly.pointInRings(rings, x, y)) continue;
       const kind = pickWeighted(layer.kinds, rand), type = `${TREE_PREFIX}${kind}`, def = TREE_BY_TYPE.get(type);
-      const k = layer.size[0] + rand() * (layer.size[1] - layer.size[0]), r = treeRadius(def, k);
+      // Sous-bois (fougères, myrtilles, buissons, souches, champignons) : quelques variantes
+      // d'une même plante (graine, taille), dessinées une seule fois chacune et réutilisées,
+      // tournées au hasard à l'affichage ; personne ne reconnaît deux fougères identiques et tournées.
+      // Les arbres restent tous uniques.
+      const small = layer !== biome.layers.at(-1);
+      let k = layer.size[0] + rand() * (layer.size[1] - layer.size[0]);
+      if (small) k = layer.size[0] + Math.round((k - layer.size[0]) / (layer.size[1] - layer.size[0]) * 3) / 3 * (layer.size[1] - layer.size[0]);
+      const r = treeRadius(def, k);
       if (near.some((q) => Math.hypot(q.x - x, q.y - y) < (q.r + r) * layer.spacing)) continue;
-      const prop = M.addProp(map, type, x, y, Math.round(rand() * 360), k, Math.floor(rand() * 2 ** 32));
+      const angle = Math.round(rand() * 360);
+      const seed = small ? SMALL_SEEDS + Math.floor(rand() * SMALL_VARIANTS) : Math.floor(rand() * 2 ** 32);
+      const prop = M.addProp(map, type, x, y, angle, k, seed);
       if (!prop) continue;
       if (mark) prop.b = 1;
       near.push({ x, y, r });

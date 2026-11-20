@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.21
+
+- **Beaucoup plus rapide** (éditeur, export, scène), surtout avec un biome sur toute la carte :
+  - **Sous-bois en variantes** : fougères, myrtilles, buissons, souches et champignons existent en quelques variantes par plante (graine et taille), dessinées une seule fois et réutilisées, tournées au hasard à l'affichage. Sur une forêt de 80 × 60 cases (≈ 1 100 plantes), il ne reste que ≈ 360 dessins à faire au lieu de 1 100 ; les arbres, eux, restent tous uniques.
+  - **Export** : les plantes identiques sont dessinées une fois et partagent leurs images dans la scène (envoi plus léger).
+  - **Plus de calculs en parallèle** : jusqu'à 7 workers selon le processeur (4 avant).
+  - **Scène** : moins de morceaux par arbre (chêne et hêtre ≈ 20, bouleau ≈ 50, sapins un par étage) ; le sous-bois est d'un seul tenant (immobile, trop petit pour qu'un balancement se voie) ; les arbres trop petits à l'écran ne sont pas animés.
+  - Pour en profiter sur une carte existante : réappliquer son biome (outil Biome), puis réexporter.
+
 ## 0.1.20
 
 - **Nouveau vent dans les arbres** : l'arbre n'est plus une image que le vent déforme (les feuilles s'étiraient et la couronne ondulait comme de la gelée). Il est découpé en morceaux rigides : le tronc et les grosses branches d'un côté, chaque branche avec ses rameaux et ses feuilles de l'autre. Chaque branche pivote autour de son point d'attache, comme du bois : rien n'est déformé, chaque feuille garde sa forme.

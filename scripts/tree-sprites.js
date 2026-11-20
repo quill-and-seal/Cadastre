@@ -16,7 +16,7 @@ class SpritePool {
     this.queue = [];
     this.jobs = new Map();
     this.seq = 0;
-    this.max = Math.max(1, Math.min(4, (globalThis.navigator?.hardwareConcurrency ?? 2) - 1));
+    this.max = Math.max(1, Math.min(8, (globalThis.navigator?.hardwareConcurrency ?? 2) - 1));
     this.noWorker = typeof OffscreenCanvas === "undefined" || typeof Worker === "undefined";
   }
 

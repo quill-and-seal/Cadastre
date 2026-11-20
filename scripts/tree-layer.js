@@ -72,6 +72,7 @@ export function treeSprites2(root, items, pages, { size, ox, oy, ppc }) {
   return items.map((t) => {
     const box = new PIXI.Container();
     box.position.set(ox + t.x * size, oy + t.y * size);
+    box.rotation = ((t.spin ?? 0) * Math.PI) / 180;
     root.addChild(box);
     const tp = t.ppc ?? ppc;
     const tr = { box, x: t.x, y: t.y, r: t.half / tp, item: t, seed: (t.seed ?? 0) % 997 };
@@ -86,15 +87,18 @@ export function treeSprites2(root, items, pages, { size, ox, oy, ppc }) {
  * Une image : le vent lu de part et d'autre de chaque arbre visible (view : rectangle en cases),
  * puis chaque branche avance d'un pas de ressort vers l'angle que lui donne le vent.
  */
-export function stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated = true) {
-  const [dx, dy] = dir;
+export function stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated = true, viewPpc = 100) {
   for (const tr of trees) {
+    // Direction du vent dans le repère de la plante (petites plantes tournées à l'affichage).
+    const sr = -tr.box.rotation, dx = dir[0] * Math.cos(sr) - dir[1] * Math.sin(sr), dy = dir[0] * Math.sin(sr) + dir[1] * Math.cos(sr);
     const vis = tr.x + tr.r >= x0 && tr.x - tr.r <= x1 && tr.y + tr.r >= y0 && tr.y - tr.r <= y1;
     tr.box.visible = vis;
-    if (!vis || !animated || tr.item.rigid) continue;
+    if (!vis || !animated || tr.item.rigid || tr.parts.length < 2) continue;
+    // Trop petit à l'écran pour qu'un balancement se voie : on ne calcule rien.
+    if (tr.r * viewPpc < 18) continue;
     // La rafale traverse la couronne : vent lu au vent, au centre et sous le vent.
     const k = tr.r * 0.8;
-    const g0 = gustAt(tr.x - dx * k, tr.y - dy * k, t, wind), g1 = gustAt(tr.x, tr.y, t, wind), g2 = gustAt(tr.x + dx * k, tr.y + dy * k, t, wind);
+    const g0 = gustAt(tr.x - dir[0] * k, tr.y - dir[1] * k, t, wind), g1 = gustAt(tr.x, tr.y, t, wind), g2 = gustAt(tr.x + dir[0] * k, tr.y + dir[1] * k, t, wind);
     const conifer = tr.item.conifer, ppc = tr.ppc;
     for (const p of tr.parts) {
       if (p.base) continue;
@@ -105,7 +109,7 @@ export function stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated = 
       const push = treePush(wind.strength, g);
       // Couple du vent sur la branche : maximal quand elle est de travers, nul dans l'axe du vent.
       const cross = p.ux * dy - p.uy * dx;
-      const turn = conifer ? 0.35 : 1;
+      const turn = conifer ? 0 : 1;
       const target = push * (MAX_TURN * turn * cross + SWAY * turn * Math.sin(t * p.w + p.ph));
       // Ressort amorti (pas de temps borné) : la branche a du poids.
       const h = Math.min(dt, 0.05);
@@ -114,7 +118,7 @@ export function stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated = 
       p.sp.rotation = p.th;
       if (conifer) {
         // Le sapin plie d'un bloc : chaque étage glisse sous le vent, d'autant plus qu'il est haut.
-        const shift = push * CONIFER_SHIFT * ppc * Math.min(1, p.hz / Math.max(0.5, tr.r * 2.5));
+        const shift = push * CONIFER_SHIFT * ppc * Math.min(1, p.hz / Math.max(0.5, tr.r * 2.5)) * (0.8 + 0.2 * Math.sin(t * p.w * 0.6 + p.ph));
         p.dx += (dx * shift - p.dx) * Math.min(1, h * 2.5);
         p.dy += (dy * shift - p.dy) * Math.min(1, h * 2.5);
         const q = p.rest ?? (p.rest = [p.sp.position.x, p.sp.position.y]);
@@ -274,8 +278,9 @@ async function refresh() {
       const p0 = inv.apply(new PIXI.Point(0, 0)), p1 = inv.apply(new PIXI.Point(r.screen.width, r.screen.height));
       const x0 = (Math.min(p0.x, p1.x) - ox) / size, y0 = (Math.min(p0.y, p1.y) - oy) / size;
       const x1 = (Math.max(p0.x, p1.x) - ox) / size, y1 = (Math.max(p0.y, p1.y) - oy) / size;
-      stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated);
-      sharpener.update(size * Math.abs(canvas.stage.scale.x) * (r.resolution ?? 1), performance.now());
+      const viewPpc = size * Math.abs(canvas.stage.scale.x);
+      stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated, viewPpc);
+      sharpener.update(viewPpc * (r.resolution ?? 1), performance.now());
     };
     me.tick();
     canvas.app.ticker.add(me.tick);
