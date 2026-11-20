@@ -8,6 +8,9 @@ import { usedAssetSources } from "./library.js";
 import { windFlag, grassZone, normalizeWind } from "./wind.js";
 import { bladeField } from "./grass.js";
 import { paintStillGrass } from "./grass-gl.js";
+import { bladeField as bladeFieldLegacy } from "./grass-legacy.js";
+import { paintStillGrass as paintStillGrassLegacy } from "./grass-gl-legacy.js";
+import { legacyGrass } from "./wind-layer.js";
 import { waterFlag, buildField, normalizeWater } from "./water.js";
 import { paintStillWater } from "./water-gl.js";
 import { buildWallData, textureScale } from "./walls.js";
@@ -150,7 +153,8 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
   const { resolve, missing } = await inlineAssets(map);
   // L'herbe en traits, figée, est peinte par-dessus le rendu SVG : la même que le calque animé.
   const grassWind = normalizeWind(map.wind);
-  const field = bladeField(grassZone(map), grassWind);
+  const legacy = legacyGrass();
+  const field = (legacy ? bladeFieldLegacy : bladeField)(grassZone(map), grassWind);
   // L'eau, figée, aussi : la même que celle que le calque anime.
   const water = waterFlag(map);
   const waterField = water ? buildField(water) : null;
@@ -158,7 +162,7 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
   const { blob, ext } = await rasterize([
     renderSVG(map, { scale, resolve, part: "ground" }),
     (ctx) => { if (waterField) paintStillWater(ctx, waterField, normalizeWater(water.water), scale); },
-    (ctx) => paintStillGrass(ctx, field, grassWind, scale),
+    (ctx) => (legacy ? paintStillGrassLegacy : paintStillGrass)(ctx, field, grassWind, scale),
     renderSVG(map, { scale, resolve, part: "top" })
   ]);
   const src = await uploadImage(blob, ext, map.name);

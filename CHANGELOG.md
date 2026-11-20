@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.14
+
+- **Herbe : rendu** (réglage du module, propre à chaque joueur) : « Optimisé » (par défaut) ou « Comme en 0.1.8 », l'herbe d'avant les optimisations, gardée telle quelle (brins en rectangles, vent calculé pour chaque brin, tous les brins dessinés même de loin). Plus lourd. Le choix vaut pour la scène, pour l'éditeur (à rouvrir) et pour l'image exportée.
+
 ## 0.1.13
 
 - **Correctif important : l'eau et l'herbe s'animent enfin dans les scènes.** Sous Foundry v13 et v14, l'entrée « Bibliothèque » des réglages du module était refusée au démarrage, ce qui empêchait aussi d'enregistrer les réglages de l'eau et du vent : aucune animation dans les scènes exportées, et pas de section Cadastre dans les réglages du jeu. Chaque partie s'enregistre maintenant à part, et l'entrée de la bibliothèque est acceptée.

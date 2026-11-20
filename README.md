@@ -106,6 +106,8 @@ Dans Foundry, chaque joueur choisit son niveau dans les réglages du module (**V
 
 Vus de loin, les brins sont moins nombreux et plus larges, avec un fondu quand on zoome : la prairie garde le même aspect sans ralentir la scène. Le réglage **Compteur de performances (herbe et eau)** affiche en bas à gauche ce qui est dessiné et le temps de calcul par image. Les brins ne poussent que sur le sol **herbe**, jamais sur l'eau, les chemins, les pièces ni sous ce qui est posé (arbres, objets, tentes de ta bibliothèque). Une scène prend son vent à l'export ; une scène exportée avant la 0.1.7 doit être réexportée pour avoir la nouvelle herbe.
 
+Le réglage **Herbe : rendu** permet de revenir à l'herbe d'avant les optimisations (**Comme en 0.1.8** : brins en rectangles, vent calculé pour chaque brin, tous les brins dessinés même de loin). Plus lourd ; il vaut aussi pour l'éditeur (à rouvrir) et l'image exportée.
+
 ## Bibliothèque d'assets
 
 Les sols et objets intégrés ne suffisent pas : la bibliothèque ajoute tes propres images, ou celles d'un pack d'assets (Forgotten Adventures, 2-Minute Tabletop…), comme **objets** ou comme **textures de sol** qui se répètent.

@@ -11,6 +11,7 @@
  * par image, pour comparer d'une version à l'autre.
  */
 import { MODULE_ID, log } from "./constants.js";
+import { startLegacyGrass, stopLegacyGrass } from "./wind-layer-legacy.js";
 import { normalizeWind, WIND_LEVELS } from "./wind.js";
 import {
   bladeField, lod, windUniforms, packPushers, PushTrail, grassVert, GRASS_FRAG, BLADE_CORNERS, BLADE_BYTES,
@@ -40,6 +41,19 @@ export function registerWind() {
     default: WIND_LEVELS.FULL,
     onChange: () => refresh()
   });
+  game.settings.register(MODULE_ID, "grassRender", {
+    name: "CADASTRE.Settings.GrassRender",
+    hint: "CADASTRE.Settings.GrassRenderHint",
+    scope: "client",
+    config: true,
+    type: String,
+    choices: {
+      optimized: "CADASTRE.Settings.GrassRenders.optimized",
+      legacy: "CADASTRE.Settings.GrassRenders.legacy"
+    },
+    default: "optimized",
+    onChange: () => refresh()
+  });
   game.settings.register(MODULE_ID, "grassStats", {
     name: "CADASTRE.Settings.GrassStats",
     hint: "CADASTRE.Settings.GrassStatsHint",
@@ -56,7 +70,11 @@ export function registerWind() {
   });
 }
 
+/** Herbe « comme en 0.1.8 » choisie dans les réglages du module ? */
+export const legacyGrass = () => { try { return game.settings.get(MODULE_ID, "grassRender") === "legacy"; } catch { return false; } };
+
 function teardown() {
+  stopLegacyGrass();
   document.getElementById("cadastre-grass-stats")?.remove();
   if (!state) return;
   canvas.app?.ticker?.remove(state.tick);
@@ -79,6 +97,8 @@ function viewRect(size, ox, oy) {
 
 function refresh() {
   teardown();
+  // Herbe « comme en 0.1.8 » : l'ancien calque, tel quel.
+  if (legacyGrass()) return startLegacyGrass();
   const data = canvas.scene?.getFlag(MODULE_ID, "wind");
   const level = Number(game.settings.get(MODULE_ID, "windLevel"));
   // Les scènes exportées avant la 0.1.7 ont l'ancienne herbe dans leur fond : on n'y ajoute rien.

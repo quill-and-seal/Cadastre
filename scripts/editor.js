@@ -10,6 +10,8 @@ import { flattenNodes, rectNodes, ellipseNodes, smoothNodes, rdp, cleanNode, pol
 import { ringsPath as ringsPathD } from "./render.js";
 import { renderPaths, renderWater } from "./render.js";
 import { WindPreview } from "./wind-preview.js";
+import { WindPreviewLegacy } from "./wind-preview-legacy.js";
+import { legacyGrass } from "./wind-layer.js";
 import { WaterPreview } from "./water-preview.js";
 import { normalizeWater, WATER_TEXTURES } from "./water.js";
 import { normalizeWind } from "./wind.js";
@@ -143,7 +145,8 @@ export class MapEditor {
 
     this._build();
     this.waterPreview = new WaterPreview(this);
-    this.windPreview = new WindPreview(this);
+    // Herbe « comme en 0.1.8 » si ce joueur l'a choisie dans les réglages du module.
+    this.windPreview = legacyGrass() ? new WindPreviewLegacy(this) : new WindPreview(this);
     this.renderMap(true);
     this._renderPanel();
     this._syncMapFields();

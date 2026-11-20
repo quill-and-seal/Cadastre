@@ -272,7 +272,13 @@
         "2": "Full (foam, leaves, current)"
       },
       "GrassStats": "Performance counter (grass and water)",
-      "GrassStatsHint": "Shows, bottom left, what is drawn for grass and water and the computing time per frame."
+      "GrassStatsHint": "Shows, bottom left, what is drawn for grass and water and the computing time per frame.",
+      "GrassRender": "Grass: rendering",
+      "GrassRenderHint": "“As in 0.1.8”: the grass from before the optimizations (rectangular blades, wind computed for each blade, every blade drawn even from afar). Heavier. Per-player setting; it also applies to the editor (reopen it) and the exported image.",
+      "GrassRenders": {
+        "optimized": "Optimized",
+        "legacy": "As in 0.1.8"
+      }
     }
   }
 }
