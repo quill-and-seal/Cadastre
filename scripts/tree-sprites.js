@@ -60,7 +60,7 @@ class SpritePool {
   async _here(job) {
     try {
       const { kind, seed, radius, rotation, ppc, detail, preview } = job.req;
-      const sprite = paintTree(buildTree(kind, seed, radius, { detail, rotation }), ppc);
+      const sprite = paintTree(buildTree(kind, seed, radius, { detail, rotation }), ppc, { wind: !preview });
       if (preview) {
         const img = previewImage(sprite);
         const blob = img.convertToBlob ? await img.convertToBlob({ type: "image/webp", quality: 0.9 })

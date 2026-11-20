@@ -8,10 +8,13 @@
 import * as poly from "./poly.js";
 import * as M from "./model.js";
 import { TREE_BY_TYPE, TREE_PREFIX, treeRadius } from "./trees.js";
+import { BIOME_SOILS } from "./catalog.js";
+import { waterRings } from "./render.js";
+import { flattenNodes } from "./curves.js";
 
 export const BIOMES = [
   {
-    id: "broadleaf", soil: "litter", swatch: ["#7a5428", "#2f6a2c"],
+    id: "broadleaf", soil: BIOME_SOILS.broadleaf, swatch: ["#7a5428", "#2f6a2c"],
     layers: [
       { kinds: [["mushrooms", 1]], density: 0.03, size: [0.8, 1.3], spacing: 1.5 },
       { kinds: [["stump", 1]], density: 0.008, size: [0.8, 1.2], spacing: 2 },
@@ -21,7 +24,7 @@ export const BIOMES = [
     ]
   },
   {
-    id: "conifer", soil: "needles", swatch: ["#6e4a28", "#17442d"],
+    id: "conifer", soil: BIOME_SOILS.conifer, swatch: ["#6e4a28", "#17442d"],
     layers: [
       { kinds: [["mushrooms", 1]], density: 0.04, size: [0.8, 1.3], spacing: 1.5 },
       { kinds: [["stump", 1]], density: 0.012, size: [0.8, 1.2], spacing: 2 },
@@ -48,6 +51,39 @@ export function sowBiome(map, rings, biomeId, rand, { density = 1 } = {}) {
   const biome = BIOME_BY_ID.get(biomeId);
   if (!biome || !rings?.length) return -1;
   M.paintArea(map, rings, biome.soil);
+  return sowLayers(map, rings, biome, rand, density, false);
+}
+
+/** Sols où rien ne pousse : eau, sols construits, plages et roche. */
+const BARE = ["water", "stone", "wood", "cobble", "sand", "rock"];
+
+/** Là où le biome de la carte peut semer : toute la carte, moins l'eau, les pièces, les chemins, les murs et les sols nus. */
+export function biomeArea(map) {
+  let blocked = [...waterRings(map), ...map.rooms, ...M.wallBarrier(map, 0.3)];
+  for (const t of BARE) blocked.push(...(map.terrains[t] ?? []));
+  for (const q of map.paths ?? []) {
+    const pts = flattenNodes(q.nodes, q.closed, 0.05);
+    blocked.push(...poly.strokeRings(q.closed ? [...pts, pts[0]] : pts, q.width / 2 + 0.1));
+  }
+  const all = poly.rectRings(0, 0, map.width, map.height);
+  return blocked.length ? poly.difference(all, poly.union([], blocked)) : all;
+}
+
+/**
+ * Toute la carte devient le biome : son sol en fond (sous les sols peints), sa végétation semée
+ * partout où elle peut pousser. Les plantes d'un biome précédent sont retirées d'abord ; celles
+ * posées à la main restent. Biome null : retire le biome et ses plantes.
+ * @returns {number}  plantes posées
+ */
+export function applyBiome(map, biomeId, rand, { density = 1 } = {}) {
+  map.props = map.props.filter((p) => !p.b);
+  const biome = BIOME_BY_ID.get(biomeId);
+  if (!biome) { map.biome = null; return 0; }
+  map.biome = { id: biome.id, density };
+  return sowLayers(map, biomeArea(map), biome, rand, density, true);
+}
+
+function sowLayers(map, rings, biome, rand, density, mark) {
   const b = poly.ringsBounds(rings);
   if (!b) return 0;
   const { x0, y0, x1, y1 } = b;
@@ -65,7 +101,9 @@ export function sowBiome(map, rings, biomeId, rand, { density = 1 } = {}) {
       const kind = pickWeighted(layer.kinds, rand), type = `${TREE_PREFIX}${kind}`, def = TREE_BY_TYPE.get(type);
       const k = layer.size[0] + rand() * (layer.size[1] - layer.size[0]), r = treeRadius(def, k);
       if (near.some((q) => Math.hypot(q.x - x, q.y - y) < (q.r + r) * layer.spacing)) continue;
-      if (!M.addProp(map, type, x, y, Math.round(rand() * 360), k, Math.floor(rand() * 2 ** 32))) continue;
+      const prop = M.addProp(map, type, x, y, Math.round(rand() * 360), k, Math.floor(rand() * 2 ** 32));
+      if (!prop) continue;
+      if (mark) prop.b = 1;
       near.push({ x, y, r });
       n++; placed++;
     }

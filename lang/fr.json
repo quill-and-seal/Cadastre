@@ -59,7 +59,7 @@
       "fill": "Clic dans une pièce : pose le sol jusqu'aux murs (portes fermées comprises). Dehors, remplit tout ce qui n'est pas enclos.",
       "path": "Route, quai : trace la courbe à la plume (clic : coin, clic-glisser : courbe, Entrée : finir) ou à main levée. Largeur, sol et bordure dans le panneau. Avec la sélection, glisse ses points pour le redessiner. Les rivières se tracent avec l'outil Eau.",
       "trees": "Clic : un arbre. Glisser : sème des arbres dans la zone du pinceau, espacés selon la densité. Chaque arbre est unique ; la sélection permet ensuite de le déplacer, le tourner, le redimensionner.",
-      "biome": "Glisse pour peindre un biome : son sol, et sa végétation semée dedans (arbres, sous-bois, souches, champignons), espacée naturellement. Les petites plantes restent sous les arbres. Repasser ajoute des plantes là où il reste de la place.",
+      "biome": "Choisis un biome puis « Appliquer à toute la carte » : son sol devient le fond de la carte et sa végétation est semée partout où elle peut pousser (pas dans l'eau, les pièces, les chemins ni sur les sols construits). Les petites plantes restent sous les arbres. Glisser sur la carte peint le biome sur une seule zone.",
       "water": "Étendue : peins, remplis, dessine ou trace une rivière (Alt : efface). Profondeur et type : pinceau qui creuse ou remonte le fond (Alt : l'inverse), ou peint un type d'eau. Courants : glisse pour tracer un courant dans son sens, clic sur une rivière pour régler le sien."
     },
     "Panel": {
@@ -123,6 +123,11 @@
       "SelPath": "Chemin",
       "PathClosed": "Chemin fermé (boucle)",
       "Biome": "Biome",
+      "BiomeWhole": "Toute la carte",
+      "BiomeApply": "Appliquer à toute la carte",
+      "BiomeClear": "Retirer",
+      "BiomeCurrent": "Biome de la carte : {name}. L'appliquer à nouveau ressème sa végétation (après avoir tracé de l'eau, des chemins ou des pièces, par exemple).",
+      "BiomeBrush": "Pinceau : une seule zone",
       "TreeKind": "Essence",
       "TreeKinds": {
         "mix": "Mélange",

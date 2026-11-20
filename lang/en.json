@@ -59,7 +59,7 @@
       "fill": "Click inside a room: lays the floor up to the walls (closed doors included). Outside, fills everything not enclosed.",
       "path": "Road, quay: trace the curve with the pen (click: corner, click-drag: curve, Enter: finish) or freehand. Width, floor and edge in the panel. With selection, drag its points to reshape it. Rivers are traced with the Water tool.",
       "trees": "Click: one tree. Drag: scatters trees within the brush, spaced by density. Every tree is unique; select one afterwards to move, rotate or resize it.",
-      "biome": "Drag to paint a biome: its ground, with its vegetation sown inside (trees, undergrowth, stumps, mushrooms), naturally spaced. Small plants stay under the trees. Painting again adds plants where there is room left.",
+      "biome": "Pick a biome then “Apply to the whole map”: its ground becomes the map background and its vegetation is sown wherever it can grow (not in water, rooms, paths or on built floors). Small plants stay under the trees. Dragging on the map paints the biome on a single area.",
       "water": "Extent: paint, fill, draw or trace a river (Alt: erase). Depth and type: brush that deepens or raises the bed (Alt: the opposite), or paints a water type. Currents: drag to draw a current in its direction, click a river to set its own."
     },
     "Panel": {
@@ -123,6 +123,11 @@
       "SelPath": "Path",
       "PathClosed": "Closed path (loop)",
       "Biome": "Biome",
+      "BiomeWhole": "Whole map",
+      "BiomeApply": "Apply to the whole map",
+      "BiomeClear": "Remove",
+      "BiomeCurrent": "Map biome: {name}. Applying it again re-sows its vegetation (after drawing water, paths or rooms, for example).",
+      "BiomeBrush": "Brush: a single area",
       "TreeKind": "Kind",
       "TreeKinds": {
         "mix": "Mix",

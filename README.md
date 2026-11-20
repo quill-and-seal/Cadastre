@@ -41,7 +41,7 @@ La façon la plus rapide de bâtir : pose l'emprise du bâtiment avec des **form
 | Porte | 6 | Clic sur un mur, droit ou courbe : porte, ou porte secrète, de la largeur choisie. Avec la sélection, une porte glisse le long de son mur. |
 | Objet | 7 | Tonneau, caisse, coffre, table, chaise, lit, pilier, escalier. Angle et échelle libres : **R** et **Maj+R** tournent de 15°. |
 | Arbres | 0 | Arbres générés branche par branche et feuille par feuille : chêne, hêtre, bouleau, sapin, épicéa, buisson, myrtilles, fougère, souche, champignons, palmier, ou un mélange. Clic : un arbre ; glisser : sème des arbres dans la zone du pinceau, espacés selon la densité. Chaque arbre est unique (graine) et devient un objet : sélection, déplacement, rotation, taille. Dans la scène, ils bougent avec le vent de l'herbe. |
-| Biome | B | Peint un biome : son sol et sa végétation semée dedans (voir **Biomes**). Taille du pinceau, densité. |
+| Biome | B | Fait de toute la carte un biome : son sol en fond et sa végétation semée partout où elle peut pousser ; glisser le peint sur une seule zone (voir **Biomes**). |
 | Gomme | 8 | Efface en glissant : tout, ou seulement les sols, les murs ou les objets. Un mur gommé est coupé proprement. |
 
 Navigation : clic droit, molette enfoncée ou **Espace** + clic pour déplacer la vue, molette pour zoomer. **Échap** annule le tracé en cours. **Ctrl+Z** / **Ctrl+Maj+Z** pour annuler et rétablir, **Ctrl+S** pour enregistrer.
@@ -119,7 +119,7 @@ Le réglage **Herbe : rendu** permet de revenir à l'herbe d'avant les optimisat
 
 ## Biomes
 
-Le **pinceau Biome** (touche B) peint un biome d'un trait : son sol sous le pinceau, et sa végétation semée dedans, espacée naturellement (les petites plantes restent sous les arbres). Repasser ajoute des plantes là où il reste de la place ; le curseur **Densité** en met plus ou moins. Chaque plante reste un objet : sélection, déplacement, rotation, taille.
+L'**outil Biome** (touche B) fait de toute la carte un biome : choisis-le puis **Appliquer à toute la carte**. Son sol devient le fond de la carte (sous les sols peints) et sa végétation est semée partout où elle peut pousser, espacée naturellement — pas dans l'eau, les pièces, les chemins, contre les murs ni sur les sols construits, les plages et la roche. Les petites plantes restent sous les arbres. Le curseur **Densité** en met plus ou moins. Réappliquer ressème la végétation (après avoir tracé de l'eau ou des chemins, par exemple), **Retirer** enlève le biome ; les plantes posées à la main restent, et celles du biome restent des objets retouchables. Glisser sur la carte peint le biome sur une seule zone.
 
 | Biome | Sol | Végétation |
 |---|---|---|

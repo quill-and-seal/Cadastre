@@ -43,7 +43,7 @@ export function spriteLayout(built, ppc) {
  * Dessine un arbre. ppc : pixels par case.
  * @returns {{color, data, shadow, half:number, shadowW:number, shadowH:number}}
  */
-export function paintTree(built, ppc) {
+export function paintTree(built, ppc, { wind = true } = {}) {
   const { tree, leaves, sp, seed } = built;
   const L = spriteLayout(built, ppc);
   const S = ppc, cx = L.half, cy = L.half;
@@ -222,6 +222,9 @@ export function paintTree(built, ppc) {
   }
   flushWood();
   if (tree.stumpR) paintStumpTop(ctx, cx, cy, tree.stumpR * S, sp, seed);
+
+  // Aperçu de l'éditeur : pas besoin de la carte du vent.
+  if (!wind) return { color, data: null, shadow, half: L.half, shadowW: L.shadow.w, shadowH: L.shadow.h };
 
   /* Carte du vent : mêmes formes (simplifiées), même ordre. */
   const sharp = makeCanvas(L.size, L.size), D = sharp.getContext("2d");

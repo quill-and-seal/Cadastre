@@ -2,7 +2,7 @@
  * Rendu SVG d'une carte. Le même rendu sert à l'éditeur et à l'image exportée.
  * Coordonnées SVG en cases : une case = 1 unité.
  */
-import { TERRAINS, PROP_BY_ID, mulberry32 } from "./catalog.js";
+import { TERRAINS, PROP_BY_ID, mulberry32, BIOME_SOILS } from "./catalog.js";
 import { groundTile } from "./ground-tiles.js";
 import { wallPoints, doorEnds } from "./model.js";
 import { flattenNodes } from "./curves.js";
@@ -106,7 +106,9 @@ export function renderDefs(map, prefix = "cad", resolve = defaultResolve) {
  * (dalles, plancher, pavés) gardent un bord net.
  */
 export function renderTerrains(map, prefix = "cad", { feather = true } = {}) {
-  let base = "", soft = "";
+  // Biome de la carte : son sol couvre toute la carte, sous les sols peints.
+  const soil = map.biome && BIOME_SOILS[map.biome.id];
+  let base = soil ? `<rect width="${map.width}" height="${map.height}" fill="${terrainFill(prefix, soil)}"/>` : "", soft = "";
   for (const { key, def: t } of terrainList(map)) {
     const d = ringsPath(map.terrains[key]);
     if (!d) continue;

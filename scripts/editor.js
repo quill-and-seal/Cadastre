@@ -5,7 +5,7 @@
 import { TERRAINS, PROPS, mulberry32 } from "./catalog.js";
 import { TREES, TREE_PREFIX, TREE_BY_TYPE, pickTreeKind, treeRadius } from "./trees.js";
 import { treeSprites } from "./tree-sprites.js";
-import { BIOMES, sowBiome } from "./biomes.js";
+import { BIOMES, sowBiome, applyBiome } from "./biomes.js";
 import { onGroundTile } from "./ground-tiles.js";
 import * as M from "./model.js";
 import * as P from "./poly.js";
@@ -77,7 +77,7 @@ const ERASE_MODES = ["all", "floor", "walls", "props"];
 const MIN_SCALE = 4, MAX_SCALE = 260;
 const SNAP_STEP = 0.5;
 /** Aperçu des arbres générés : pixels par case, et part des feuilles dessinées (plus grandes). */
-const TREE_PREVIEW_PPC = 48, TREE_PREVIEW_DETAIL = 0.35;
+const TREE_PREVIEW_PPC = 48, TREE_PREVIEW_DETAIL = 0.15;
 const HIT_PX = 8;
 const SVG_NS = "http://www.w3.org/2000/svg";
 /** Nombre maximal d'assets de bibliothèque affichés dans une palette (la recherche affine). */
@@ -332,7 +332,8 @@ export class MapEditor {
         r.url ??= URL.createObjectURL(r.blob);
         const f = (n) => Math.round(n / ppc * 1000) / 1000;
         this._treeImgs.set(key, { svg: `<image href="${r.url}" x="${f(-r.half)}" y="${f(-r.half)}" width="${f(r.shadowW)}" height="${f(r.shadowH)}"/>` });
-        if (!this._treeRedraw) this._treeRedraw = requestAnimationFrame(() => { this._treeRedraw = 0; if (!this._destroyed) this._renderProps(); });
+        // Les arbres arrivent un par un : les objets sont redessinés au plus deux fois par seconde.
+        if (!this._treeRedraw) this._treeRedraw = setTimeout(() => { this._treeRedraw = 0; if (!this._destroyed) this._renderProps(); }, 400);
       }).catch((error) => { log("Arbre non dessiné", error); });
     }
     return null;
@@ -341,7 +342,7 @@ export class MapEditor {
   destroy() {
     this._destroyed = true;
     this._offGround?.();
-    if (this._treeRedraw) cancelAnimationFrame(this._treeRedraw);
+    if (this._treeRedraw) clearTimeout(this._treeRedraw);
     this.windPreview?.destroy();
     this.waterPreview?.destroy();
     for (const [target, type, fn, opts] of this._listeners) target.removeEventListener(type, fn, opts);
@@ -676,8 +677,12 @@ export class MapEditor {
           <button type="button" data-opt="biome" data-val="${b.id}" class="${o.biome === b.id ? "active" : ""}">
             <svg viewBox="0 0 2 2"><rect width="2" height="2" fill="url(#${this.prefix}-t-${b.soil})"/><circle cx="1.25" cy="0.8" r="0.55" fill="${b.swatch[1]}" stroke="#13221a" stroke-width="0.06"/><circle cx="0.6" cy="1.35" r="0.32" fill="${b.swatch[1]}" stroke="#13221a" stroke-width="0.05" opacity="0.85"/></svg>
             <span>${esc(t(`CADASTRE.Biomes.${b.id}`))}</span></button>`).join("")}</div>`
-          + title("CADASTRE.Panel.BrushSize") + slider("biomeRadius", o.biomeRadius, 0.5, 10, 0.25)
-          + title("CADASTRE.Panel.TreeDensity") + slider("biomeDensity", o.biomeDensity, 0.2, 3, 0.1);
+          + title("CADASTRE.Panel.TreeDensity") + slider("biomeDensity", o.biomeDensity, 0.2, 3, 0.1)
+          + title("CADASTRE.Panel.BiomeWhole")
+          + (this.map.biome ? `<p class="cad-note">${esc(t("CADASTRE.Panel.BiomeCurrent").replace("{name}", t(`CADASTRE.Biomes.${this.map.biome.id}`)))}</p>` : "")
+          + `<div class="cad-row"><button type="button" data-action="biome-apply"><i class="fa-solid fa-earth-europe"></i> ${esc(t("CADASTRE.Panel.BiomeApply"))}</button>`
+          + (this.map.biome ? `<button type="button" data-action="biome-clear" class="cad-danger"><i class="fa-solid fa-xmark"></i> ${esc(t("CADASTRE.Panel.BiomeClear"))}</button>` : "") + `</div>`
+          + title("CADASTRE.Panel.BiomeBrush") + slider("biomeRadius", o.biomeRadius, 0.5, 10, 0.25);
         break;
       case "trees": {
         const kinds = ["mix", ...TREES.map((x) => x.id)];
@@ -1098,6 +1103,16 @@ export class MapEditor {
       case "delete": return this._deleteSelection();
       case "duplicate": return this._duplicateSelection();
       case "open-library": return this.onOpenLibrary?.();
+      case "biome-apply":
+      case "biome-clear": {
+        // Toute la carte : sol du biome en fond, végétation semée partout où elle peut pousser
+        // (les plantes d'un biome précédent sont remplacées, celles posées à la main restent).
+        this._begin();
+        const id = b.dataset.action === "biome-apply" ? this.opts.biome : null;
+        applyBiome(this.map, id, mulberry32((Date.now() ^ (Math.random() * 2 ** 32)) >>> 0), { density: this.opts.biomeDensity });
+        this._commit(true);
+        return this._renderPanel();
+      }
     }
   }
 

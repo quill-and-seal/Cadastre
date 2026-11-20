@@ -2,10 +2,13 @@
 
 ## 0.1.19
 
-- **Pinceau Biome** (touche B) : on choisit un biome et on peint. Le pinceau pose le sol du biome sous le trait et y sème sa végétation, espacée naturellement : arbres, sous-bois, souches, champignons. Les petites plantes restent sous les arbres (dans l'éditeur comme dans la scène). Repasser ajoute des plantes là où il reste de la place ; un curseur règle la densité. Chaque plante reste un objet retouchable.
+- **Outil Biome** (touche B) : on choisit un biome et on clique **Appliquer à toute la carte**. Son sol devient le fond de toute la carte (sous les sols peints) et sa végétation est semée partout où elle peut pousser, espacée naturellement : arbres, sous-bois, souches, champignons. Rien ne pousse dans l'eau, les pièces, les chemins, contre les murs ni sur les sols construits, les plages et la roche. Les petites plantes restent sous les arbres (dans l'éditeur comme dans la scène). Un curseur règle la densité.
+  - Réappliquer le biome (après avoir tracé de l'eau, des chemins ou des pièces) ressème sa végétation ; changer de biome remplace ses plantes ; **Retirer** enlève le biome et ses plantes. Les plantes posées à la main restent toujours, et celles du biome restent des objets retouchables.
+  - Glisser sur la carte peint aussi le biome sur une seule zone.
 - **Forêt de feuillus** : sol de litière, chênes, hêtres et bouleaux, buissons, fougères, souches, champignons.
 - **Forêt de conifères** : sol d'aiguilles et de mousse, sapins et épicéas, myrtilles, fougères, souches, champignons.
 - **Nouvelles plantes** (aussi dans l'outil Arbres) : hêtre (couronne dense, écorce lisse et grise), épicéa (sombre, branches qui retombent), myrtilles (baies bleues), fougère (frondes en arceau), souche (cernes, mousse, racines ; immobile au vent), champignons (cèpes ou amanites ; immobiles).
+- Aperçus des arbres dans l'éditeur plus rapides à calculer.
 - **Nouveaux sols peints élément par élément**, à taille réelle :
   - **Litière de forêt** : terre humide, trois couches de feuilles mortes (chêne, hêtre, bouleau ; les plus anciennes brunies et rongées), clairières de terre nue, brindilles, écorce, glands, faînes, cailloux, tapis de mousse, pousses et anémones des bois.
   - **Aiguilles et mousse** : tapis d'aiguilles doux, coussins de mousse, pommes de pin et d'épicéa, brindilles, cailloux, lichens, pousses de myrtille.

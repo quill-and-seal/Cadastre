@@ -25,7 +25,7 @@
 import {
   FORMAT_VERSION, MIN_CELLS, MAX_CELLS, DEFAULT_GRID_SIZE, MIN_GRID_SIZE, MAX_GRID_SIZE
 } from "./constants.js";
-import { TERRAIN_IDS, PROP_BY_ID } from "./catalog.js";
+import { TERRAIN_IDS, PROP_BY_ID, BIOME_SOILS } from "./catalog.js";
 import { normalizeAsset, mapAsset, pruneAssets } from "./library.js";
 import { TREE_BY_TYPE } from "./trees.js";
 import { normalizeWind } from "./wind.js";
@@ -66,6 +66,8 @@ export function createMap({ name = "", width = 30, height = 20, gridSize = DEFAU
     wind: normalizeWind(null),
     water: normalizeWater(null),
     waterData: emptyWaterData(),
+    // Biome de toute la carte : son sol en fond, sa végétation semée (objets marqués b).
+    biome: null,
     seq: 0,
     sceneId: null
   };
@@ -119,6 +121,8 @@ export function normalizeMap(raw) {
   map.wind = normalizeWind(src.wind);
   map.water = normalizeWater(src.water);
   map.waterData = normalizeWaterData(src.waterData);
+  map.biome = src.biome && typeof src.biome.id === "string" && BIOME_SOILS[src.biome.id]
+    ? { id: src.biome.id, density: round3(clamp(src.biome.density, 0.2, 3, 1)) } : null;
   map.seq = clampInt(src.seq, 0, Number.MAX_SAFE_INTEGER, 0);
   const ids = new Set();
   const uid = (id, prefix) => {
@@ -171,7 +175,8 @@ export function normalizeMap(raw) {
     map.props.push({
       id: uid(p.id, "p"), type: p.type, x: round3(p.x), y: round3(p.y),
       a: round3(((Number(p.a) || 0) % 360 + 360) % 360), k: round3(clamp(p.k, 0.25, 4, 1)),
-      ...(Number.isInteger(p.s) ? { s: p.s >>> 0 } : {})
+      ...(Number.isInteger(p.s) ? { s: p.s >>> 0 } : {}),
+      ...(p.b ? { b: 1 } : {})
     });
   }
   pruneAssets(map);
@@ -181,7 +186,7 @@ export function normalizeMap(raw) {
 export const cloneMap = (map) => JSON.parse(JSON.stringify(map));
 
 export function isEmpty(map) {
-  return !Object.keys(map.terrains).length && !map.walls.length && !map.props.length && !map.paths?.length;
+  return !Object.keys(map.terrains).length && !map.walls.length && !map.props.length && !map.paths?.length && !map.biome;
 }
 
 /* -------------------------------------------- */

@@ -237,6 +237,9 @@ function rockCracks() {
 
 export const TERRAIN_IDS = new Set(TERRAINS.map((t) => t.id));
 
+/** Sol de fond de chaque biome (biomes.js). */
+export const BIOME_SOILS = { broadleaf: "litter", conifer: "needles" };
+
 /**
  * Objets : `svg` est dessiné dans un rectangle de `w`×`h` cases (orientation 0).
  */
