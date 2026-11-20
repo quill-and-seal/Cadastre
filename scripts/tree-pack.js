@@ -38,7 +38,8 @@ export async function packTrees(map, ppc, { shadowPpc = map.gridSize, onProgress
   const props = map.props.filter((p) => TREE_BY_TYPE.get(p.type)?.proc);
   const out = { items: [], models: [], pages: [], shadows: [] };
   let page = null, x = 0, y = 0, rowH = 0, done = 0;
-  const gap = 2;
+  // Marge entre deux morceaux : assez pour que les réductions (mipmaps) ne mélangent pas leurs bords.
+  const gap = 8;
   const newPage = () => {
     page = { color: makeCanvas(TREE_PAGE, TREE_PAGE), used: 0 };
     out.pages.push(page);

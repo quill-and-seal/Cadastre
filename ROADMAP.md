@@ -31,6 +31,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - 0.1.19 : outil Biome (toute la carte ou une zone), forêts de feuillus et de conifères (plantes et sols peints élément par élément).
 - 0.1.20 : nouveau vent dans les arbres (branches rigides articulées), correctif de fin d'export.
 - 0.1.21 : forêts beaucoup plus rapides (variantes du sous-bois, dessins partagés, plus de workers, moins de morceaux).
+- 0.1.22 : plus de scintillement des arbres au zoom (mipmaps).
 
 ## Biomes (V1 : 20 biomes, un par issue)
 

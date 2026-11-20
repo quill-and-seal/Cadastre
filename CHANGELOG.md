@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.22
+
+- **Plus de scintillement au zoom** : les images des arbres ont maintenant des versions réduites (mipmaps) et un filtrage anisotrope. Quand on dézoome ou que les branches bougent, les feuilles ne « frisent » plus ; les morceaux sont aussi plus espacés dans les pages d'images pour que leurs bords ne se mélangent pas une fois réduits.
+  - Pour en profiter sur une scène existante : la réexporter.
+
 ## 0.1.21
 
 - **Beaucoup plus rapide** (éditeur, export, scène), surtout avec un biome sur toute la carte :

@@ -29,6 +29,19 @@ const MAX_TURN = 0.11, SWAY = 0.035, STIFF = 9, DAMP = 3.2, CONIFER_SHIFT = 0.09
 /** Poussée du vent sur l'arbre : la force réglée, modulée par la rafale locale (0..1 de l'herbe). */
 export const treePush = (strength, g) => strength * (0.35 + 0.9 * g);
 
+/**
+ * Images d'arbres lissées à toutes les échelles : des réductions calculées d'avance (mipmaps)
+ * évitent que les feuilles scintillent (« frisent ») dès que l'arbre est affiché plus petit que
+ * son image, surtout quand les branches bougent.
+ */
+function smooth(base) {
+  if (!base) return;
+  base.mipmap = PIXI.MIPMAP_MODES?.ON ?? 1;
+  base.scaleMode = PIXI.SCALE_MODES?.LINEAR ?? 1;
+  base.anisotropicLevel = 4;
+  base.update?.();
+}
+
 const hash = (n) => { const s = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return s - Math.floor(s); };
 
 /**
@@ -187,7 +200,8 @@ export class TreeSharpener {
       this._drop(tr);
       tr.sharpTex = [];
       const pieces = r.pieces.map((q) => {
-        const tex = PIXI.Texture.from(q.img);
+        const tex = PIXI.Texture.from(q.img, { mipmap: PIXI.MIPMAP_MODES?.ON ?? 1, anisotropicLevel: 4 });
+        smooth(tex.baseTexture);
         tr.sharpTex.push(tex);
         return { ...pieceRecord(q, r.half), tex };
       });
@@ -261,6 +275,7 @@ async function refresh() {
   try {
     const pages = await Promise.all(data.pages.map(async (p) => ({ ...p, color: await loadTex(p.color) })));
     if (me.dead) return;
+    for (const p of pages) smooth(p.color?.baseTexture);
     const d = canvas.dimensions;
     const size = d.size, ox = d.sceneX ?? d.sceneRect?.x ?? 0, oy = d.sceneY ?? d.sceneRect?.y ?? 0;
     const ppc = data.ppc || size;
