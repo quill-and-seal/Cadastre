@@ -134,7 +134,7 @@ Chêne, hêtre, bouleau, sapin, épicéa, buisson, myrtilles, fougère, souche e
 
 Dans l'éditeur, chaque arbre est calculé en arrière-plan ; sa silhouette s'affiche le temps du calcul. À l'export, les arbres sont envoyés avec la scène et seule leur ombre reste dans l'image de fond. Dans la scène, ils restent nets à tous les zooms : au-delà de la finesse envoyée avec la scène, les arbres à l'écran sont redessinés plus fins, à la volée, depuis leur graine.
 
-Dans la scène, ils bougent avec **le même vent que l'herbe** (direction, force, vagues et rafales réglées dans **Vent dans l'herbe**), à la même horloge : une rafale qui couche l'herbe passe dans l'arbre au même moment. La couronne se couche un peu sous le vent et balance, les feuilles frémissent, le sapin plie d'un bloc. Avec le niveau **Aucun**, les arbres restent immobiles.
+Dans la scène, ils bougent avec **le même vent que l'herbe** (direction, force, vagues et rafales réglées dans **Vent dans l'herbe**), à la même horloge : une rafale qui couche l'herbe passe dans l'arbre au même moment. Chaque branche est un morceau rigide qui pivote autour de son point d'attache, avec du poids (retard, léger dépassement, retour) et son propre rythme ; rien n'est déformé. Le sapin plie d'un bloc. Avec le niveau **Aucun**, les arbres restent immobiles.
 
 ## Bibliothèque d'assets
 

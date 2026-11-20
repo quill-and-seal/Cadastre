@@ -2,6 +2,11 @@
 
 ## 0.1.20
 
+- **Nouveau vent dans les arbres** : l'arbre n'est plus une image que le vent déforme (les feuilles s'étiraient et la couronne ondulait comme de la gelée). Il est découpé en morceaux rigides : le tronc et les grosses branches d'un côté, chaque branche avec ses rameaux et ses feuilles de l'autre. Chaque branche pivote autour de son point d'attache, comme du bois : rien n'est déformé, chaque feuille garde sa forme.
+  - Une branche de travers au vent est poussée sous le vent ; une branche dans l'axe du vent bouge à peine.
+  - Chaque branche a du poids : elle suit la rafale avec un peu de retard, la dépasse légèrement et revient, et balance à son propre rythme (lent pour les grosses, plus vif pour les petites).
+  - Le sapin plie d'un bloc : ses étages glissent sous le vent, d'autant plus qu'ils sont hauts.
+  - Toujours le même vent que l'herbe, à la même horloge ; toujours nets à tous les zooms. Les scènes déjà exportées gardent leurs arbres, immobiles, jusqu'à leur prochain export.
 - **Correctif** : « Export impossible : Cannot read properties of null (reading 'map') ». L'export était bien fait (la scène était à jour), mais si la fenêtre de l'éditeur avait été fermée pendant l'export (qui peut être long avec beaucoup d'arbres), l'enregistrement du lien vers la scène échouait à la fin. Il est maintenant enregistré même fenêtre fermée, sans toucher au reste de la carte.
 
 ## 0.1.19

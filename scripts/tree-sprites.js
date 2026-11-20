@@ -67,7 +67,8 @@ class SpritePool {
           : await new Promise((res) => img.toBlob(res, "image/webp", 0.9));
         job.resolve({ half: sprite.half, shadowW: sprite.shadowW, shadowH: sprite.shadowH, blob });
       } else {
-        job.resolve({ half: sprite.half, shadowW: sprite.shadowW, shadowH: sprite.shadowH, color: sprite.color, data: sprite.data, shadow: sprite.shadow });
+        const pieces = sprite.pieces.map(({ canvas, ...p }) => ({ ...p, z: Number.isFinite(p.z) ? p.z : -1e9, img: canvas }));
+        job.resolve({ half: sprite.half, shadowW: sprite.shadowW, shadowH: sprite.shadowH, shadow: sprite.shadow, pieces, conifer: sprite.conifer, rigid: sprite.rigid });
       }
     } catch (error) {
       job.reject(error);
@@ -88,7 +89,7 @@ class SpritePool {
   /**
    * Images d'un arbre.
    * @param {{kind:string, seed:number, radius:number, rotation?:number, ppc:number, detail?:number, preview?:boolean}} req
-   * @returns {Promise<object>}  preview : { blob, half, shadowW, shadowH } ; sinon { color, data, shadow, half, shadowW, shadowH }
+   * @returns {Promise<object>}  preview : { blob, half, shadowW, shadowH } ; sinon { pieces, shadow, half, shadowW, shadowH, conifer, rigid }
    */
   get(req) {
     const r = { kind: req.kind, seed: req.seed >>> 0, radius: r2(req.radius), rotation: Math.round(req.rotation ?? 0), ppc: Math.round(req.ppc), detail: req.detail ?? 1, preview: !!req.preview };

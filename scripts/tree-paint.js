@@ -41,19 +41,27 @@ export function spriteLayout(built, ppc) {
 
 /**
  * Dessine un arbre. ppc : pixels par case.
- * @returns {{color, data, shadow, half:number, shadowW:number, shadowH:number}}
+ * wind = false (aperçu de l'éditeur) : l'arbre d'une seule image (color).
+ * wind = true (scène) : l'arbre en morceaux rigides (pieces), chacun dans sa propre image, qui
+ *   pivotent au vent autour de leur point d'attache (tree-layer.js) :
+ *   { canvas, x0, y0 (coin de l'image), ax, ay (point d'attache), lx, ly (du point d'attache au
+ *   centre du feuillage), h (hauteur moyenne, cases), z (ordre de dessin) } — en pixels de l'arbre,
+ *   pied du tronc en (half, half).
+ * @returns {{color?, pieces?, shadow, half:number, shadowW:number, shadowH:number}}
  */
 export function paintTree(built, ppc, { wind = true } = {}) {
   const { tree, leaves, sp, seed } = built;
   const L = spriteLayout(built, ppc);
   const S = ppc, cx = L.half, cy = L.half;
-  const color = makeCanvas(L.size, L.size), ctx = color.getContext("2d");
+  let OX = 0, OY = 0;
+  const color = wind ? null : makeCanvas(L.size, L.size);
+  let ctx = color?.getContext("2d");
   const pal = sp.leaves;
   const vr = mulberry32((seed + 17) >>> 0);
   const tone = 1 + (vr() - 0.5) * 0.12;
   const cDark = hex(pal.dark).map((v) => v * tone), cMid = hex(pal.mid).map((v) => v * tone), cLight = hex(pal.light).map((v) => v * tone);
   const [barkD, barkL] = sp.bark.map(hex);
-  const X = (p) => cx + p[0] * S, Y = (p) => cy + p[1] * S;
+  const X = (p) => cx + OX + p[0] * S, Y = (p) => cy + OY + p[1] * S;
   const trunkW = tree.R * sp.trunkW * S;
   const zmax = tree.zmax;
 
@@ -163,11 +171,12 @@ export function paintTree(built, ppc, { wind = true } = {}) {
     }
     batch.length = 0;
   }
+  function draw(list, stump) {
   // Charpente d'un seul lot, sous le feuillage ; les rameaux suivent l'ordre de hauteur.
-  for (const it of items) if (it.g && !it.g.twig) batch.push(it.g);
+  for (const it of list) if (it.g && !it.g.twig) batch.push(it.g);
   flushWood();
   ctx.lineJoin = "round";
-  for (const it of items) {
+  for (const it of list) {
     if (it.g) { if (it.g.twig) batch.push(it.g); continue; }
     flushWood();
     const l = it.l, x = X(l.p), y = Y(l.p), Lp = l.L * S, h = l.p[2] / zmax;
@@ -221,44 +230,54 @@ export function paintTree(built, ppc, { wind = true } = {}) {
     if (big) { const m0 = W(0.02, 0), m1 = W(0.88, 0); ctx.strokeStyle = rgb(mix(base, cLight, 0.6), 0.6); ctx.lineWidth = Math.max(0.5, Lp * 0.025); ctx.beginPath(); ctx.moveTo(m0[0], m0[1]); ctx.lineTo(m1[0], m1[1]); ctx.stroke(); }
   }
   flushWood();
-  if (tree.stumpR) paintStumpTop(ctx, cx, cy, tree.stumpR * S, sp, seed);
-
-  // Aperçu de l'éditeur : pas besoin de la carte du vent.
-  if (!wind) return { color, data: null, shadow, half: L.half, shadowW: L.shadow.w, shadowH: L.shadow.h };
-
-  /* Carte du vent : mêmes formes (simplifiées), même ordre. */
-  const sharp = makeCanvas(L.size, L.size), D = sharp.getContext("2d");
-  D.fillStyle = "#000"; D.fillRect(0, 0, L.size, L.size);
-  const bmax = zmax + tree.R;
-  // Le sapin plie d'un bloc (tronc souple, branches raides) ; le feuillu par ses branches.
-  const bend = sp.rigid ? () => 0 : tree.pine
-    ? (p) => Math.min(1, 0.25 + 0.55 * Math.max(0, p[2]) / zmax + 0.2 * Math.hypot(p[0], p[1]) / tree.R)
-    : (p) => Math.pow(Math.min(1, Math.max(0, (Math.max(0, p[2]) + Math.hypot(p[0], p[1])) / bmax)), 1.4);
-  // Phase continue tout autour de l'arbre (aucune couture qui déchirerait l'image).
-  const grp = (p) => { const a = Math.atan2(p[1], p[0]), k = tree.pine ? 0.3 : 1; return 0.5 + k * (0.24 * Math.sin(a) + 0.14 * Math.cos(2 * a + 1.3)); };
-  const dcol = (p, b) => `rgb(${Math.round(bend(p) * 255)},${Math.round(grp(p) * 255)},${b})`;
-  for (const it of items) if (it.g && !it.g.twig) { D.fillStyle = it.g.root ? "#000" : dcol(it.g.b, 0); D.fill(woodPath(it.g, 1)); }
-  for (const it of items) {
-    if (it.g) { if (it.g.twig) { D.fillStyle = dcol(it.g.b, 0); D.fill(woodPath(it.g, 1)); } continue; }
-    const l = it.l, Lp = l.L * S, r = Lp * 0.6;
-    D.fillStyle = dcol(l.p, l.needle ? 0 : 20 + Math.round(235 * l.tp));
-    D.beginPath(); D.ellipse(X(l.p) + Math.cos(l.ang) * r, Y(l.p) + Math.sin(l.ang) * r, r + 0.8, (l.needle ? r : Lp * l.W * l.f) + 0.8, l.ang, 0, Math.PI * 2); D.fill();
+  if (stump && tree.stumpR) paintStumpTop(ctx, cx + OX, cy + OY, tree.stumpR * S, sp, seed);
   }
-  // Souplesse et phase élargies et adoucies (les feuilles du bord peuvent sortir de leur place
-  // sans être coupées) ; la phase des rameaux reste nette.
-  const data = makeCanvas(L.size, L.size), wd = data.getContext("2d"), rad = Math.max(3, S * 0.08);
-  wd.fillStyle = "#000"; wd.fillRect(0, 0, L.size, L.size);
-  wd.globalCompositeOperation = "lighten";
-  for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; for (const f of [0.5, 1]) wd.drawImage(sharp, Math.cos(a) * rad * f, Math.sin(a) * rad * f); }
-  wd.drawImage(sharp, 0, 0);
-  wd.globalCompositeOperation = "source-over";
-  const soft = makeCanvas(L.size, L.size), sc = soft.getContext("2d");
-  sc.filter = `blur(${rad * 0.5}px)`; sc.drawImage(data, 0, 0);
-  const A = sc.getImageData(0, 0, L.size, L.size), B = D.getImageData(0, 0, L.size, L.size);
-  for (let i = 0; i < A.data.length; i += 4) { A.data[i + 2] = B.data[i + 2]; A.data[i + 3] = 255; }
-  wd.putImageData(A, 0, 0);
 
-  return { color, data, shadow, half: L.half, shadowW: L.shadow.w, shadowH: L.shadow.h };
+  const out = { shadow, half: L.half, shadowW: L.shadow.w, shadowH: L.shadow.h };
+  if (!wind) { draw(items, true); return { ...out, color }; }
+
+  /* Morceaux rigides : chacun dans son image, juste à sa taille. */
+  const groups = new Map();
+  for (const it of items) {
+    const id = (it.g ?? it.l).piece ?? 0;
+    if (!groups.has(id)) groups.set(id, []);
+    groups.get(id).push(it);
+  }
+  if (tree.stumpR && !groups.has(0)) groups.set(0, []);
+  const info = new Map((tree.pieces ?? []).map((q) => [q.id, q]));
+  const pieces = [];
+  for (const [id, list] of groups) {
+    // Cadre : tout ce que dessine le morceau, encre et feuilles comprises.
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, zs = 0, n = 0, fx = 0, fy = 0, nf = 0;
+    const grow = (x, y, r) => { x0 = Math.min(x0, x - r); y0 = Math.min(y0, y - r); x1 = Math.max(x1, x + r); y1 = Math.max(y1, y + r); };
+    for (const it of list) {
+      if (it.g) {
+        const r = Math.max(trunkW * Math.max(it.g.w, it.g.w2) / 2, 0.5) + 3;
+        grow(cx + it.g.a[0] * S, cy + it.g.a[1] * S, r); grow(cx + it.g.b[0] * S, cy + it.g.b[1] * S, r);
+      } else {
+        const r = it.l.L * S * 1.25 + 3, x = cx + it.l.p[0] * S, y = cy + it.l.p[1] * S;
+        grow(x, y, r);
+        fx += x; fy += y; nf++;
+      }
+      zs += it.z; n++;
+    }
+    if (id === 0 && tree.stumpR) grow(cx, cy, tree.stumpR * S * 1.15 + 3);
+    if (!Number.isFinite(x0)) continue;
+    x0 = Math.floor(x0); y0 = Math.floor(y0);
+    const w = Math.max(1, Math.ceil(x1) - x0), h = Math.max(1, Math.ceil(y1) - y0);
+    const canvas = makeCanvas(w, h);
+    ctx = canvas.getContext("2d");
+    OX = -x0; OY = -y0;
+    draw(list, id === 0);
+    OX = 0; OY = 0;
+    const at = info.get(id)?.at;
+    const ax = at ? cx + at[0] * S : cx, ay = at ? cy + at[1] * S : cy;
+    const mx = nf ? fx / nf : (x0 + x1) / 2, my = nf ? fy / nf : (y0 + y1) / 2;
+    pieces.push({ canvas, x0, y0, w, h, ax, ay, lx: mx - ax, ly: my - ay, h3: n ? zs / n : 0, z: id === 0 ? -Infinity : (n ? zs / n : 0), id });
+  }
+  // Le morceau 0 (tronc, charpentières) en dessous, puis les branches de la plus basse à la plus haute.
+  pieces.sort((a, b) => a.z - b.z);
+  return { ...out, pieces, rigid: !!sp.rigid, conifer: !!tree.pine };
 }
 
 /** Dessus d'une souche : écorce, bois coupé, cernes, fentes et mousse. */

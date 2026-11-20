@@ -16,7 +16,7 @@ import { paintStillWater } from "./water-gl.js";
 import { buildWallData, textureScale } from "./walls.js";
 import { isEmpty } from "./model.js";
 import { TREE_BY_TYPE } from "./trees.js";
-import { packTrees, TREE_PAGE, DATA_SCALE, treePpc } from "./tree-pack.js";
+import { packTrees, TREE_PAGE, treePpc } from "./tree-pack.js";
 import { makeCanvas } from "./tree-paint.js";
 import { TERRAINS, BIOME_SOILS } from "./catalog.js";
 import { loadGroundTile } from "./ground-tiles.js";
@@ -170,12 +170,11 @@ async function uploadTrees(map, trees) {
   for (const [i, p] of trees.pages.entries()) {
     // Seule la partie remplie de la page est gardée.
     const h = Math.max(1, p.used);
-    const crop = (src, k) => { const c = makeCanvas(TREE_PAGE * k, Math.ceil(h * k)); c.getContext("2d").drawImage(src, 0, 0); return c; };
-    const color = await uploadImage(await canvasBlob(crop(p.color, 1), "image/webp", 0.95), "webp", map.name, `-arbres${i}`);
-    const data = await uploadImage(await canvasBlob(crop(p.data, DATA_SCALE), "image/png"), "png", map.name, `-vent${i}`);
-    pages.push({ color, data, w: TREE_PAGE, h });
+    const c = makeCanvas(TREE_PAGE, h);
+    c.getContext("2d").drawImage(p.color, 0, 0);
+    pages.push({ color: await uploadImage(await canvasBlob(c, "image/webp", 0.95), "webp", map.name, `-arbres${i}`), w: TREE_PAGE, h });
   }
-  return { v: 2, wind: normalizeWind(map.wind), pages, items: trees.items };
+  return { v: 3, wind: normalizeWind(map.wind), pages, items: trees.items };
 }
 
 /**
