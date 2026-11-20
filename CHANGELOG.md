@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.20
+
+- **Correctif** : « Export impossible : Cannot read properties of null (reading 'map') ». L'export était bien fait (la scène était à jour), mais si la fenêtre de l'éditeur avait été fermée pendant l'export (qui peut être long avec beaucoup d'arbres), l'enregistrement du lien vers la scène échouait à la fin. Il est maintenant enregistré même fenêtre fermée, sans toucher au reste de la carte.
+
 ## 0.1.19
 
 - **Outil Biome** (touche B) : on choisit un biome et on clique **Appliquer à toute la carte**. Son sol devient le fond de toute la carte (sous les sols peints) et sa végétation est semée partout où elle peut pousser, espacée naturellement : arbres, sous-bois, souches, champignons. Rien ne pousse dans l'eau, les pièces, les chemins, contre les murs ni sur les sols construits, les plages et la roche. Les petites plantes restent sous les arbres (dans l'éditeur comme dans la scène). Un curseur règle la densité.

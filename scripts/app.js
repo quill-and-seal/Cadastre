@@ -114,11 +114,19 @@ export class CadastreEditorApp extends ApplicationV2 {
       if (reduced) ui.notifications.warn(t("CADASTRE.Export.Reduced", { size: MAX_TEXTURE }));
       if (missing?.length) ui.notifications.warn(t("CADASTRE.Export.Missing", { list: missing.map(esc).join(", ") }), { permanent: true });
       // Le lien vers la scène est enregistré avec la carte (et les modifications en cours avec lui).
-      this.editor.map.sceneId = scene.id;
-      const saved = this.editor.getMap();
-      await saveMap(this.entry, saved);
-      this.editor.markSaved(saved);
-      this._refreshTitle();
+      // L'export peut être long (arbres) : si la fenêtre a été fermée entre-temps, seul le lien
+      // vers la scène est enregistré, sans toucher au reste de la carte.
+      if (this.editor) {
+        this.editor.map.sceneId = scene.id;
+        const saved = this.editor.getMap();
+        await saveMap(this.entry, saved);
+        this.editor.markSaved(saved);
+        this._refreshTitle();
+      } else {
+        let readable = false;
+        try { readable = !!JSON.parse(this.entry.flags?.[MODULE_ID]?.map ?? "null"); } catch { readable = false; }
+        if (readable) { const stored = readMap(this.entry); stored.sceneId = scene.id; await saveMap(this.entry, stored); }
+      }
       ui.notifications.info(t(created ? "CADASTRE.Export.Created" : "CADASTRE.Export.Updated", { scene: scene.name }));
     } catch (error) {
       console.error(`${MODULE_ID} | Export impossible`, error);
