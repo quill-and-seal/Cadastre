@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.13
+
+- **Correctif important : l'eau et l'herbe s'animent enfin dans les scènes.** Sous Foundry v13 et v14, l'entrée « Bibliothèque » des réglages du module était refusée au démarrage, ce qui empêchait aussi d'enregistrer les réglages de l'eau et du vent : aucune animation dans les scènes exportées, et pas de section Cadastre dans les réglages du jeu. Chaque partie s'enregistre maintenant à part, et l'entrée de la bibliothèque est acceptée.
+
 ## 0.1.12
 
 - **Plages, eau plus naturelle** :

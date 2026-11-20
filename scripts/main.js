@@ -13,7 +13,7 @@
  *   renderSVG(map, opts)   : rendu SVG d'une carte
  *   model                  : fonctions du modèle de carte (voir model.js)
  */
-import { MODULE_ID } from "./constants.js";
+import { MODULE_ID, log } from "./constants.js";
 import { CadastreEditorApp, CadastreManagerApp } from "./app.js";
 import {
   registerLibrarySettings, CadastreLibraryApp, getLibrary, saveLibrary, assetsFromPaths, scanFolder
@@ -27,9 +27,14 @@ import { renderSVG } from "./render.js";
 import * as model from "./model.js";
 
 Hooks.once("init", () => {
-  registerLibrarySettings();
-  registerWater();
-  registerWind();
+  // Chaque partie s'enregistre à part : si l'une échoue, les autres (eau, vent) restent actives.
+  for (const [name, register] of [["bibliothèque", registerLibrarySettings], ["eau", registerWater], ["vent", registerWind]]) {
+    try {
+      register();
+    } catch (error) {
+      log(`Réglages (${name}) non enregistrés`, error);
+    }
+  }
   game.modules.get(MODULE_ID).api = {
     openManager: () => CadastreManagerApp.open(),
     openLibrary: () => CadastreLibraryApp.open(),

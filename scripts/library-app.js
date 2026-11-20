@@ -44,9 +44,12 @@ export function registerLibrarySettings() {
   });
 }
 
-/** Entrée des réglages : Foundry appelle render(). */
-class LibraryMenu {
-  render() {
+/**
+ * Entrée des réglages. Foundry v13+ exige une fenêtre (ApplicationV2) : celle-ci ne s'affiche
+ * pas elle-même, elle ouvre la bibliothèque.
+ */
+class LibraryMenu extends ApplicationV2 {
+  async render() {
     CadastreLibraryApp.open();
     return this;
   }
