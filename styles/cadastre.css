@@ -108,6 +108,15 @@
 .cad-overlay .cad-brush { fill: rgba(255, 255, 255, 0.06); stroke: #ffffff; stroke-opacity: 0.8; }
 .cad-overlay .cad-brush-erase { fill: rgba(224, 96, 78, 0.12); stroke: var(--cad-danger); }
 .cad-overlay .cad-stroke-erase { fill: none; stroke: var(--cad-danger); stroke-opacity: 0.35; stroke-linecap: round; stroke-linejoin: round; }
+/* Outil Eau : courants tracés, rivières, eau calme. */
+.cad-overlay .cad-current { stroke: #fff6c2; fill: none; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.8)); }
+.cad-overlay .cad-river { stroke: #b9f1ff; fill: none; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.8)); }
+.cad-overlay .cad-arrow { fill: currentColor; }
+.cad-overlay .cad-current.cad-arrow { fill: #fff6c2; }
+.cad-overlay .cad-river.cad-arrow { fill: #b9f1ff; }
+.cad-overlay .cad-river.cad-still { stroke-dasharray: 0.3 0.25; }
+.cad-overlay .cad-current.cad-preview { opacity: 0.7; }
+.cad-overlay .cad-calm { fill: rgba(200, 215, 220, 0.28); stroke: rgba(230, 240, 245, 0.7); stroke-dasharray: 0.25 0.2; }
 .cad-overlay .cad-door-preview { stroke: #5fc8e8; stroke-linecap: round; fill: none; }
 
 /* Panneau de droite */

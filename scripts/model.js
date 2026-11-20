@@ -30,6 +30,7 @@ import { normalizeAsset, mapAsset, pruneAssets } from "./library.js";
 import { TREE_BY_TYPE } from "./trees.js";
 import { normalizeWind } from "./wind.js";
 import { normalizeWater } from "./water.js";
+import { normalizeWaterData, emptyWaterData } from "./water-data.js";
 import { flattenNodes, flattenWithParams, subNodes, cleanNode, project, polylineLength, round3 } from "./curves.js";
 import * as poly from "./poly.js";
 
@@ -64,6 +65,7 @@ export function createMap({ name = "", width = 30, height = 20, gridSize = DEFAU
     assets: {},
     wind: normalizeWind(null),
     water: normalizeWater(null),
+    waterData: emptyWaterData(),
     seq: 0,
     sceneId: null
   };
@@ -116,6 +118,7 @@ export function normalizeMap(raw) {
   map.sceneId = typeof src.sceneId === "string" ? src.sceneId : null;
   map.wind = normalizeWind(src.wind);
   map.water = normalizeWater(src.water);
+  map.waterData = normalizeWaterData(src.waterData);
   map.seq = clampInt(src.seq, 0, Number.MAX_SAFE_INTEGER, 0);
   const ids = new Set();
   const uid = (id, prefix) => {
@@ -389,6 +392,25 @@ function clipPaths(map, rings) {
     for (const nodes of pieces) next.push({ ...q, id: nextId(map, "c"), closed: false, nodes });
   }
   if (changed) map.paths = next;
+  return changed;
+}
+
+/** Gomme d'eau : retire l'eau peinte et coupe les rivières sous la gomme, rien d'autre. */
+export function eraseWater(map, rings) {
+  if (!rings?.length) return false;
+  let changed = false;
+  if (map.terrains.water) {
+    const rest = poly.difference(map.terrains.water, rings);
+    changed = JSON.stringify(rest) !== JSON.stringify(map.terrains.water);
+    if (rest.length) map.terrains.water = rest; else delete map.terrains.water;
+  }
+  const others = map.paths.filter((q) => q.terrain !== "water");
+  const rivers = { paths: map.paths.filter((q) => q.terrain === "water"), seq: map.seq };
+  if (clipPaths(rivers, rings)) {
+    changed = true;
+    map.seq = rivers.seq;
+    map.paths = [...others, ...rivers.paths];
+  }
   return changed;
 }
 

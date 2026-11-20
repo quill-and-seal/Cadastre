@@ -209,3 +209,74 @@ test("côtes : écume avec les vagues, gerbes contre la falaise, rien par temps 
   assert.ok(wavePhase(5, 3, 2.5, 7, [0, 1]) > wavePhase(5, 4, 2.5, 7, [0, 1]));
   assert.match(SURFACE_FRAG, /uniform sampler2D uCoast/);
 });
+
+/* -------------------------------------------- */
+/*  Outil Eau                                   */
+/* -------------------------------------------- */
+
+import { normalizeWaterData, paintDepth, depthGrid, paintZone, paintCalm, addCurrent, eraseCurrents, DEPTH_RES } from "../scripts/water-data.js";
+import { eraseWater, normalizeMap as normMap } from "../scripts/model.js";
+
+function lakeMap() {
+  const map = createMap({ width: 20, height: 12 });
+  paintArea(map, rectRings(0, 0, 20, 12), "grass");
+  paintArea(map, rectRings(2, 2, 18, 10), "water");
+  return map;
+}
+
+test("outil Eau : données gardées, bornées, et relues telles quelles", () => {
+  const map = lakeMap();
+  assert.ok(paintDepth(map.waterData, 10, 6, 1.5, 0.5, { width: 20, height: 12 }));
+  paintZone(map.waterData, rectRings(3, 3, 8, 9), "muddy");
+  paintCalm(map.waterData, rectRings(14, 3, 17, 9));
+  addCurrent(map.waterData, [[4, 6], [12, 6]], 9);
+  const back = normMap(JSON.parse(JSON.stringify(map)));
+  assert.deepEqual(back.waterData, map.waterData);
+  assert.equal(back.waterData.currents[0].speed, 3, "vitesse bornée");
+  assert.ok(depthGrid(back.waterData).at(10, 6) > 0.3, "creusé au centre du pinceau");
+  assert.equal(depthGrid(back.waterData).at(1, 1), 0);
+  assert.deepEqual(normalizeWaterData({ depth: { "0,0": "abc" }, zones: { lave: [[0, 0, 1, 0, 1, 1]] } }), { depth: {}, zones: {}, currents: [], calm: [] });
+  // Remonter puis revenir à l'automatique.
+  paintDepth(map.waterData, 10, 6, 1.5, 1, { reset: true });
+  assert.ok(Math.abs(depthGrid(map.waterData).at(10, 6)) < 0.05);
+  // Peindre le type par défaut efface la zone.
+  assert.ok(paintZone(map.waterData, rectRings(0, 0, 20, 12), null));
+  assert.deepEqual(map.waterData.zones, {});
+  assert.ok(eraseCurrents(map.waterData, rectRings(3, 5, 5, 7)));
+  assert.equal(map.waterData.currents.length, 0);
+  assert.equal(DEPTH_RES, 4);
+});
+
+test("outil Eau : courants tracés, eau calme, profondeur et types dans le champ", () => {
+  const map = lakeMap();
+  addCurrent(map.waterData, [[3, 6], [17, 6]], 1);
+  paintCalm(map.waterData, rectRings(13, 2, 18, 10));
+  paintDepth(map.waterData, 6, 6, 1, 1, { width: 20, height: 12 });
+  paintZone(map.waterData, rectRings(2, 2, 6, 10), "tropical");
+  const field = buildField(waterFlag(map));
+  const on = sampleField(field, 9, 6), off = sampleField(field, 9, 9.5), calm = sampleField(field, 15, 6);
+  assert.ok(on.vx > BASE_SPEED * 0.5 && Math.abs(on.vy) < 0.1, `le long du trait : ${on.vx}`);
+  assert.ok(off.vx < on.vx * 0.5, "contre la berge, il s'éteint");
+  assert.equal(calm.vx, 0, "eau calme");
+  const o = Math.floor(6 * FIELD_RES) * field.W + Math.floor(6 * FIELD_RES);
+  assert.ok(field.adj[o] > 0.5, "profondeur retouchée");
+  const trop = Math.floor(6 * FIELD_RES) * field.W + Math.floor(4 * FIELD_RES);
+  assert.ok(field.types[trop * 3 + 2] > 200, "eau tropicale peinte");
+  const far = Math.floor(6 * FIELD_RES) * field.W + Math.floor(12 * FIELD_RES);
+  assert.equal(field.types[far * 3 + 2], 0, "ailleurs, le type par défaut");
+  const deep = buildField(waterFlag({ ...map, water: { ...map.water, texture: "deep" } }));
+  assert.equal(deep.types[far * 3], 255, "type par défaut de la carte");
+  assert.match(SURFACE_FRAG, /uniform sampler2D uWater/);
+});
+
+test("outil Eau : la gomme retire l'eau et coupe les rivières, rien d'autre", () => {
+  const map = riverMap({ rock: false });
+  paintArea(map, rectRings(0, 0, 4, 2), "water");
+  const grass = JSON.stringify(map.terrains.grass);
+  assert.ok(eraseWater(map, rectRings(9, 0, 11, 10)));
+  const rivers = map.paths.filter((q) => q.terrain === "water");
+  assert.equal(rivers.length, 2, "la rivière est coupée en deux");
+  assert.equal(JSON.stringify(map.terrains.grass), grass, "l'herbe ne bouge pas");
+  assert.ok(eraseWater(map, rectRings(0, 0, 4, 2)));
+  assert.equal(map.terrains.water, undefined);
+});

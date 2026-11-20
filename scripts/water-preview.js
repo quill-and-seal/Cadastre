@@ -72,7 +72,7 @@ export class WaterPreview {
     if (!flag) { this._lastKey = null; return this._received({ id: this._job, empty: true }, true); }
     const settings = normalizeWater(flag.water);
     const { water, ...shape } = flag;
-    const key = JSON.stringify(shape) + JSON.stringify([settings.strokes, settings.particles, settings.density]);
+    const key = JSON.stringify(shape) + JSON.stringify([settings.strokes, settings.particles, settings.density, settings.texture]);
     if (key === this._lastKey) return this._received({ id: this._job, same: true, settings }, true);
     this._lastKey = key;
     const field = buildField(flag);
@@ -96,6 +96,7 @@ export class WaterPreview {
         this.sim = new WaterSim(msg.field, msg.settings, { state: msg.state });
       }
       this._key = "";
+      this.editor._onWaterField?.();
     }
     if (!here && this._again) { this._again = false; this.rebuild(); }
   }

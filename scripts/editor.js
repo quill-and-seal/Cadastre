@@ -14,6 +14,7 @@ import { WindPreviewLegacy } from "./wind-preview-legacy.js";
 import { legacyGrass } from "./wind-layer.js";
 import { WaterPreview } from "./water-preview.js";
 import { normalizeWater, WATER_TEXTURES } from "./water.js";
+import { WATER_TYPES, paintDepth, paintZone, paintCalm, addCurrent, eraseCurrents, currentSamples, CURRENT_SPEED } from "./water-data.js";
 import { normalizeWind } from "./wind.js";
 
 /** Réglages du vent dans le panneau Carte : champ, clé, bornes, pas, affichage. */
@@ -54,12 +55,19 @@ export const TOOLS = [
   { id: "fill", icon: "fa-fill-drip", key: "3" },
   { id: "shape", icon: "fa-draw-polygon", key: "4" },
   { id: "path", icon: "fa-route", key: "9" },
+  { id: "water", icon: "fa-water", key: "w" },
   { id: "wall", icon: "fa-pen-nib", key: "5" },
   { id: "door", icon: "fa-door-open", key: "6" },
   { id: "prop", icon: "fa-chair", key: "7" },
   { id: "trees", icon: "fa-tree", key: "0" },
   { id: "eraser", icon: "fa-eraser", key: "8" }
 ];
+/** Couleurs des types d'eau dans la palette (bord, large). */
+const WATER_SWATCH = { clear: ["#5f9e93", "#1f5a66"], deep: ["#3a6e78", "#0b2236"], muddy: ["#7a7346", "#3d3a22"], tropical: ["#5fd1c3", "#0a5c79"], "": ["#666", "#333"] };
+/** Couleur de la profondeur dans l'outil Eau : peu profond → profond. */
+/** Profondeur automatique au plus profond (la retouche peut aller au-delà) : même valeur que la carte graphique. */
+const AUTO_DEPTH = 0.8;
+const DEPTH_RAMP = [[214, 240, 226], [120, 200, 205], [40, 120, 170], [12, 42, 90]];
 const isCurve = (sel) => sel?.type === "wall" || sel?.type === "path";
 const ERASE_MODES = ["all", "floor", "walls", "props"];
 const MIN_SCALE = 4, MAX_SCALE = 260;
@@ -112,6 +120,15 @@ export class MapEditor {
       pathEdgeWidth: 0.35,
       pathFlow: 1,
       pathSpeed: 1,
+      // Outil Eau : mode, puis réglages de chaque mode.
+      waterMode: "extent",
+      waterExtent: "brush",
+      riverWidth: 2,
+      depthMode: "deeper",
+      depthStrength: 0.5,
+      waterType: "deep",
+      currentMode: "draw",
+      currentSpeed: 1,
       treeKind: "mix",
       treeRadius: 2,
       treeSize: 1,
@@ -402,6 +419,9 @@ export class MapEditor {
         else if (p && !drag && o.pathMode === "pen") out += dot(this._snap(p), "cad-dot");
         break;
       }
+      case "water":
+        out += this._waterOverlay(px, p, drag, { dot, disc });
+        break;
       case "wall": {
         if (drag?.kind === "freewall" && drag.points.length > 1) out += pathEl(polylinePath(drag.points), "cad-preview", 3);
         if (this.pen) out += this._penPreview(px);
@@ -543,7 +563,7 @@ export class MapEditor {
       `<label>${esc(t(label))}<input type="number" data-field="${field}" min="${min}" max="${max}" step="${step}" value="${value}"></label>`;
     const terrains = (opt = "terrain", label = "CADASTRE.Panel.Terrain", none = false) => title(label) + `<div class="cad-swatches">${
       none ? `<button type="button" data-opt="${opt}" data-val="" class="${!o[opt] ? "active" : ""}"><span class="cad-thumb cad-none"></span><span>${esc(t("CADASTRE.Panel.NoEdge"))}</span></button>` : ""
-    }${TERRAINS.map((x) => `
+    }${TERRAINS.filter((x) => !x.water).map((x) => `
         <button type="button" data-opt="${opt}" data-val="${x.id}" class="${x.id === o[opt] ? "active" : ""}" title="${esc(t(`CADASTRE.Terrains.${x.id}`))}">
           <svg viewBox="0 0 1 1"><rect width="1" height="1" fill="url(#${this.prefix}-t-${x.id})"/></svg>
           <span>${esc(t(`CADASTRE.Terrains.${x.id}`))}</span>
@@ -579,6 +599,9 @@ export class MapEditor {
             : "")
           + title("CADASTRE.Panel.EdgeWidth") + slider("pathEdgeWidth", o.pathEdgeWidth, 0.05, 2, 0.05)
           + terrains("pathEdge", "CADASTRE.Panel.PathEdge", true);
+        break;
+      case "water":
+        html = this._waterPanel({ title, segmented, slider });
         break;
       case "door":
         html = title("CADASTRE.Panel.Door") + segmented("doorKind", ["door", "secret"], "CADASTRE.Panel.DoorKinds")
@@ -616,6 +639,50 @@ export class MapEditor {
         break;
     }
     this.el.toolOptions.innerHTML = html;
+  }
+
+  /** Panneau de l'outil Eau : étendue, profondeur et type, courants. */
+  _waterPanel({ title, segmented, slider }) {
+    const t = this.t, o = this.opts;
+    let html = segmented("waterMode", ["extent", "depth", "currents"], "CADASTRE.Panel.WaterModes");
+    const radius = () => title("CADASTRE.Panel.BrushSize") + slider("brushRadius", o.brushRadius, 0.1, 5, 0.05);
+    const note = (key) => `<p class="cad-note">${esc(t(key))}</p>`;
+    if (o.waterMode === "extent") {
+      html += segmented("waterExtent", ["brush", "fill", "shape", "river", "erase"], "CADASTRE.Panel.WaterExtents");
+      if (o.waterExtent === "brush" || o.waterExtent === "erase") html += radius();
+      if (o.waterExtent === "shape") html += title("CADASTRE.Panel.Shape") + segmented("shapeMode", ["rect", "ellipse", "pen"], "CADASTRE.Panel.ShapeModes");
+      if (o.waterExtent === "river") html += title("CADASTRE.Panel.RiverWidth") + slider("riverWidth", o.riverWidth, 0.5, 12, 0.1);
+      html += note(`CADASTRE.Panel.WaterExtentNotes.${o.waterExtent}`);
+    } else if (o.waterMode === "depth") {
+      html += segmented("depthMode", ["deeper", "shallower", "reset", "type"], "CADASTRE.Panel.DepthModes") + radius();
+      if (o.depthMode === "type") {
+        const swatch = (type) => {
+          const c = WATER_SWATCH[type] ?? ["#555", "#333"];
+          return `<button type="button" data-opt="waterType" data-val="${type}" class="${o.waterType === type ? "active" : ""}">
+            <span class="cad-thumb" style="background:linear-gradient(135deg, ${c[0]}, ${c[1]})"></span>
+            <span>${esc(t(type ? `CADASTRE.Panel.WaterTextures.${type}` : "CADASTRE.Panel.WaterTypeDefault"))}</span></button>`;
+        };
+        html += title("CADASTRE.Panel.WaterType") + `<div class="cad-swatches">${[...WATER_TYPES, ""].map(swatch).join("")}</div>`;
+      } else if (o.depthMode !== "reset") {
+        html += title("CADASTRE.Panel.DepthStrength") + slider("depthStrength", o.depthStrength, 0.05, 1, 0.05);
+      }
+      html += note(`CADASTRE.Panel.DepthNotes.${o.depthMode}`);
+    } else {
+      html += segmented("currentMode", ["draw", "calm", "erase"], "CADASTRE.Panel.CurrentModes");
+      if (o.currentMode === "draw") html += title("CADASTRE.Panel.FlowSpeed") + slider("currentSpeed", o.currentSpeed, CURRENT_SPEED[0], CURRENT_SPEED[1], 0.1);
+      else html += radius();
+      html += note(`CADASTRE.Panel.CurrentNotes.${o.currentMode}`);
+      // Rivière choisie d'un clic : sens et vitesse de son courant.
+      const q = this.selection?.type === "path" && this.map.paths.find((x) => x.id === this.selection.id && x.terrain === "water");
+      if (q) {
+        html += title("CADASTRE.Panel.River") + `<label>${esc(t("CADASTRE.Panel.Flow"))}<select data-field="selPathFlow">${[1, -1, 0].map((v) =>
+            `<option value="${v}" ${q.flow === v ? "selected" : ""}>${esc(t(`CADASTRE.Panel.FlowModes.${v}`))}</option>`).join("")}</select></label>
+          <div class="cad-row"><label>${esc(t("CADASTRE.Panel.FlowSpeed"))}<input type="number" data-field="selPathSpeed" min="0.2" max="3" step="0.1" value="${q.speed}"></label>
+          <label>${esc(t("CADASTRE.Panel.PathWidth"))}<input type="number" data-field="selPathWidth" min="0.2" max="20" step="0.1" value="${q.width}"></label>
+        </div>`;
+      }
+    }
+    return html;
   }
 
   _selectionPanel() {
@@ -940,7 +1007,7 @@ export class MapEditor {
     if (b.dataset.tool) return this._setTool(b.dataset.tool);
     if (b.dataset.opt) {
       this.opts[b.dataset.opt] = b.dataset.opt === "pathFlow" ? Number(b.dataset.val) : b.dataset.val;
-      if (["wallMode", "shapeMode", "pathMode"].includes(b.dataset.opt)) this.pen = null;
+      if (["wallMode", "shapeMode", "pathMode", "waterMode", "waterExtent"].includes(b.dataset.opt)) this.pen = null;
       this._renderPanel();
       return this._renderOverlay();
     }
@@ -1200,6 +1267,9 @@ export class MapEditor {
         if (o.pathMode === "pen") this._penDown(p, "path");
         else this.drag = { kind: "freepath", points: [p] };
         break;
+      case "water":
+        this._waterDown(p, event);
+        break;
       case "door": {
         const target = this._doorTarget(p);
         if (!target) break;
@@ -1249,10 +1319,14 @@ export class MapEditor {
         drag.end = this._snap(p);
         break;
       case "freewall":
-      case "freepath": {
+      case "freepath":
+      case "current": {
         if (dist(drag.points.at(-1), p) > 0.08) drag.points.push(p);
         break;
       }
+      case "depth":
+        this._depthDab(p, event.altKey);
+        break;
       case "trees": {
         const step = Math.max(0.35, this.opts.treeRadius * 0.5);
         drag.travel += dist(drag.last, p);
@@ -1340,6 +1414,7 @@ export class MapEditor {
       case "stroke": {
         const r = this.tool === "eraser" ? o.eraserRadius : o.brushRadius;
         const rings = P.strokeRings(drag.points, r);
+        if (drag.water) { this._waterStroke(drag.water, rings); break; }
         this._begin();
         let changed;
         if (this.tool === "eraser") {
@@ -1376,11 +1451,28 @@ export class MapEditor {
       case "freepath": {
         const pts = rdp(drag.points, 0.05);
         if (pts.length < 2 || polylineLength(pts) < 0.3) break;
-        const closed = pts.length > 3 && dist(pts[0], pts.at(-1)) < Math.max(0.35, o.pathWidth / 2);
+        const closed = pts.length > 3 && dist(pts[0], pts.at(-1)) < Math.max(0.35, (drag.river ? o.riverWidth : o.pathWidth) / 2);
         if (closed) pts.pop();
-        this._createPath(smoothNodes(pts, closed), closed);
+        if (drag.river) this._createRiver(smoothNodes(pts, closed), closed);
+        else this._createPath(smoothNodes(pts, closed), closed);
         break;
       }
+      case "current": {
+        const pts = rdp(drag.points, 0.1);
+        if (pts.length < 2 || polylineLength(pts) < 0.4) {
+          // Un clic : choisir une rivière pour régler son courant.
+          const hit = M.nearestPath(this.map, drag.start[0], drag.start[1], 0);
+          this._select(hit?.path.terrain === "water" ? { type: "path", id: hit.path.id } : null);
+          this._renderPanel();
+          break;
+        }
+        this._begin();
+        this._commit(!!addCurrent(this.map.waterData, pts, o.currentSpeed), { terrain: false });
+        break;
+      }
+      case "depth":
+        this._commit(drag.changed, { terrain: false });
+        break;
       case "rotate":
       case "scale":
       case "node":
@@ -1421,7 +1513,7 @@ export class MapEditor {
   _cancelDrag() {
     const drag = this.drag;
     this.drag = null;
-    if (drag && ["node", "handle", "move", "rotate", "scale", "trees"].includes(drag.kind)) this._rollback();
+    if (drag && ["node", "handle", "move", "rotate", "scale", "trees", "depth"].includes(drag.kind)) this._rollback();
     this._renderOverlay();
   }
 
@@ -1446,7 +1538,7 @@ export class MapEditor {
     this.pen = null;
     if (!pen) return;
     const nodes = pen.nodes.map(cleanNode);
-    if (pen.purpose === "shape") {
+    if (pen.purpose === "shape" || pen.purpose === "water") {
       if (nodes.length >= 3) this._createShape(nodes);
     } else if (pen.purpose === "path") {
       if (nodes.length >= 2) this._createPath(nodes, closed && nodes.length >= 3);
@@ -1636,6 +1728,192 @@ export class MapEditor {
     input?.setSelectionRange(pos, pos);
   }
 
+  /* -------------------------------------------- */
+  /*  Outil Eau                                   */
+  /* -------------------------------------------- */
+
+  _waterDown(p, event) {
+    const o = this.opts;
+    if (o.waterMode === "extent") {
+      switch (o.waterExtent) {
+        case "brush":
+        case "erase":
+          this.drag = { kind: "stroke", points: [p], water: o.waterExtent === "erase" || event.altKey ? "erase" : "paint" };
+          return;
+        case "fill": {
+          this._begin();
+          this._commit(M.fillAt(this.map, p[0], p[1], "water", this._barrier()));
+          this._fillPreview = null;
+          return;
+        }
+        case "shape":
+          if (o.shapeMode === "pen") this._penDown(p, "water");
+          else this.drag = { kind: "shape", start: this._snap(p), end: null };
+          return;
+        case "river":
+          this.drag = { kind: "freepath", points: [p], river: true };
+          return;
+      }
+      return;
+    }
+    if (o.waterMode === "depth") {
+      if (o.depthMode === "type") {
+        this.drag = { kind: "stroke", points: [p], water: event.altKey ? "untype" : "type" };
+        return;
+      }
+      this._begin();
+      this.drag = { kind: "depth", last: null, changed: false };
+      this._depthDab(p, event.altKey);
+      return;
+    }
+    if (o.currentMode === "draw") this.drag = { kind: "current", points: [p], start: p };
+    else this.drag = { kind: "stroke", points: [p], water: o.currentMode === "calm" ? (event.altKey ? "uncalm" : "calm") : "uncurrent" };
+  }
+
+  /** Une touche du pinceau de profondeur (Alt : l'inverse). */
+  _depthDab(p, invert) {
+    const o = this.opts, d = this.drag;
+    if (d.last && dist(d.last, p) < o.brushRadius * 0.25) return;
+    d.last = p;
+    const reset = o.depthMode === "reset";
+    const sign = (o.depthMode === "shallower") !== invert ? -1 : 1;
+    const amount = reset ? 0.35 : sign * o.depthStrength * 0.12;
+    if (paintDepth(this.map.waterData, p[0], p[1], o.brushRadius, amount, { width: this.map.width, height: this.map.height, reset })) {
+      d.changed = true;
+      this.waterPreview?.invalidate();
+    }
+  }
+
+  /** Fin d'un coup de pinceau de l'outil Eau. */
+  _waterStroke(op, rings) {
+    const o = this.opts, data = this.map.waterData;
+    this._begin();
+    let changed = false;
+    switch (op) {
+      case "paint": changed = M.paintArea(this.map, rings, "water"); break;
+      case "erase": changed = M.eraseWater(this.map, rings); break;
+      case "type": changed = paintZone(data, rings, o.waterType || null); break;
+      case "untype": changed = paintZone(data, rings, null); break;
+      case "calm": changed = paintCalm(data, rings); break;
+      case "uncalm": changed = paintCalm(data, rings, true); break;
+      case "uncurrent": changed = eraseCurrents(data, rings); break;
+    }
+    this._commit(changed, { terrain: op === "paint" || op === "erase" });
+  }
+
+  _createRiver(nodes, closed) {
+    this._begin();
+    const path = M.addPath(this.map, nodes, { closed, width: this.opts.riverWidth, terrain: "water", edge: null, flow: 1, speed: 1 });
+    this._commit(!!path, { terrain: false });
+  }
+
+  /** Nouveau champ d'eau calculé : la carte des profondeurs suit. */
+  _onWaterField() {
+    if (this.tool === "water") this._renderOverlay();
+  }
+
+  /** Carte des profondeurs (image), recalculée quand l'eau change. */
+  _depthImage() {
+    const f = this.waterPreview?.field;
+    if (!f) return "";
+    if (this._depthImg?.field !== f) {
+      const c = document.createElement("canvas");
+      c.width = f.W; c.height = f.H;
+      const ctx = c.getContext("2d"), img = ctx.createImageData(f.W, f.H);
+      for (let o = 0; o < f.W * f.H; o++) {
+        if (f.a[o] < 0.05 && f.n[o] >= 1) continue;
+        const n = f.n[o], d = Math.min(1, Math.max(0, AUTO_DEPTH * (1 - n * n) + (f.adj?.[o] ?? 0)));
+        const x = d * (DEPTH_RAMP.length - 1), i = Math.min(DEPTH_RAMP.length - 2, Math.floor(x)), u = x - i;
+        for (let k = 0; k < 3; k++) img.data[o * 4 + k] = DEPTH_RAMP[i][k] * (1 - u) + DEPTH_RAMP[i + 1][k] * u;
+        img.data[o * 4 + 3] = 200;
+      }
+      ctx.putImageData(img, 0, 0);
+      this._depthImg = { field: f, url: c.toDataURL() };
+    }
+    return `<image href="${this._depthImg.url}" x="0" y="0" width="${f.W / f.R}" height="${f.H / f.R}" preserveAspectRatio="none" opacity="0.8"/>`;
+  }
+
+  /** Flèches le long d'une ligne (sens du courant). */
+  _arrows(pts, px, cls, step = 1.4) {
+    let out = `<path class="${cls}" d="${polylinePath(pts)}" stroke-width="${2 * px}" fill="none"/>`;
+    for (const [x, y, tx, ty] of currentSamples({ pts }, step).slice(1)) {
+      const s = 0.22, nx = -ty, ny = tx;
+      out += `<path class="${cls} cad-arrow" d="M${x + tx * s} ${y + ty * s}L${x - tx * s * 0.6 + nx * s * 0.7} ${y - ty * s * 0.6 + ny * s * 0.7}L${x - tx * s * 0.6 - nx * s * 0.7} ${y - ty * s * 0.6 - ny * s * 0.7}Z" stroke-width="${px}"/>`;
+    }
+    return out;
+  }
+
+  _waterOverlay(px, p, drag, { dot, disc }) {
+    const o = this.opts, data = this.map.waterData;
+    const r = o.brushRadius;
+    let out = "";
+    const strokePreview = (color, cls = "") => {
+      if (drag?.kind !== "stroke" || !drag.points.length) return "";
+      const d = polylinePath(drag.points.length > 1 ? drag.points : [drag.points[0], [drag.points[0][0] + 0.001, drag.points[0][1]]]);
+      return cls ? `<path d="${d}" class="${cls}" stroke-width="${2 * r}"/>`
+        : `<path d="${d}" fill="none" stroke="${color}" stroke-opacity="0.7" stroke-width="${2 * r}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    };
+    if (o.waterMode === "extent") {
+      const erase = o.waterExtent === "erase" || this.mods.alt;
+      switch (o.waterExtent) {
+        case "brush":
+        case "erase":
+          out += strokePreview(this._fill("water"), drag?.water === "erase" ? "cad-stroke-erase" : "");
+          if (p) out += disc(p, r, erase ? "cad-brush-erase" : "cad-brush");
+          break;
+        case "shape":
+          if (drag?.kind === "shape" && drag.end) {
+            const nodes = this._shapeNodes(drag.start, drag.end);
+            if (nodes) {
+              const pts = flattenNodes(nodes, true, 0.01);
+              out += `<path d="${polylinePath([...pts, pts[0]])}" fill="${this._fill("water")}" fill-opacity="0.6" class="cad-preview" stroke-width="${2 * px}"/>`;
+            }
+          }
+          if (this.pen) out += this._penPreview(px);
+          else if (p && !drag) out += dot(this._snap(p), "cad-dot");
+          break;
+        case "river":
+          if (drag?.kind === "freepath" && drag.points.length > 1) {
+            out += `<path d="${polylinePath(drag.points)}" fill="none" stroke="${this._fill("water")}" stroke-opacity="0.75" stroke-width="${o.riverWidth}" stroke-linecap="round" stroke-linejoin="round"/>`;
+          } else if (p) out += disc(p, o.riverWidth / 2, "cad-brush");
+          break;
+        default:
+          if (p) out += dot(p, "cad-dot", 3);
+      }
+      return out;
+    }
+    if (o.waterMode === "depth") {
+      if (o.depthMode === "type") {
+        for (const [type, rings] of Object.entries(data.zones)) {
+          out += `<path d="${ringsPathD(rings)}" fill="${WATER_SWATCH[type][0]}" fill-opacity="0.45" stroke="${WATER_SWATCH[type][1]}" stroke-width="${1.5 * px}"/>`;
+        }
+        out += strokePreview((WATER_SWATCH[o.waterType] ?? WATER_SWATCH[""])[0], drag?.water === "untype" ? "cad-stroke-erase" : "");
+      } else {
+        out += this._depthImage();
+      }
+      if (p) out += disc(p, r, this.mods.alt ? "cad-brush-erase" : "cad-brush");
+      return out;
+    }
+    // Courants : eau calme, traits tracés, rivières.
+    if (data.calm.length) out += `<path d="${ringsPathD(data.calm)}" class="cad-calm" stroke-width="${1.5 * px}"/>`;
+    for (const c of data.currents) out += this._arrows(c.pts, px, "cad-current");
+    for (const q of this.map.paths) {
+      if (q.terrain !== "water") continue;
+      let pts = flattenNodes(q.nodes, q.closed, 0.05);
+      if (q.closed) pts = [...pts, pts[0]];
+      const chosen = this.selection?.id === q.id;
+      if (chosen) out += `<path class="cad-sel" d="${polylinePath(pts)}" stroke-width="${q.width}" stroke-opacity="0.18" stroke-linecap="round" fill="none"/>`;
+      if (!q.flow) out += `<path class="cad-river cad-still" d="${polylinePath(pts)}" stroke-width="${2 * px}" fill="none"/>`;
+      else out += this._arrows(q.flow < 0 ? pts.slice().reverse() : pts, px, "cad-river");
+    }
+    if (drag?.kind === "current" && drag.points.length > 1) out += this._arrows(drag.points, px, "cad-current cad-preview");
+    if (o.currentMode !== "draw") {
+      out += strokePreview("#9aa", o.currentMode === "erase" || drag?.water === "uncalm" ? "cad-stroke-erase" : "");
+      if (p) out += disc(p, r, o.currentMode === "erase" ? "cad-brush-erase" : "cad-brush");
+    } else if (p && !drag) out += dot(p, "cad-dot", 3);
+    return out;
+  }
+
   _createPath(nodes, closed) {
     const o = this.opts;
     const edge = o.pathEdge || null;
@@ -1648,6 +1926,10 @@ export class MapEditor {
   _createShape(nodes) {
     const o = this.opts;
     this._begin();
+    if (this.tool === "water") {
+      const ring = P.pointsRing(flattenNodes(nodes, true, 0.005));
+      return this._commit(M.paintArea(this.map, P.normalizeRings([ring]), "water"));
+    }
     let changed;
     if (!this._useAsset(o.terrain)) return this._commit(false);
     if (o.shapeTarget === "room") {

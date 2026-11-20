@@ -290,11 +290,19 @@ export class CoastSim {
   _edge(x, y, t) {
     const s = this.s, dir = this.f.coast.dir, sa = alongS(x, y);
     const c = wavePhase(x, y, t, s.period, dir);
-    const R = runPx(s.waves) * (0.8 + 0.2 * Math.sin(sa / 133 + t * 0.37) * Math.sin(t * 0.23 + sa / 71)) / PX;
+    const R = runPx(s.waves) * (0.8 + 0.2 * Math.sin(sa / 133 + t * 0.37) * Math.sin(t * 0.23 + sa / 71)) / PX * this._runK(x, y);
     return { e: R * pulse(c), de: R * dpulse(c) / s.period, c };
   }
 
   /** L'écume naît où une vague arrive, au bord de l'eau ; sinon elle attend la suivante. */
+  /** Plus le fond plonge près du bord, moins l'eau monte sur le sable (même formule que la carte graphique). */
+  _runK(x, y) {
+    const f = this.f;
+    if (!f.adj) return 1;
+    const i = Math.min(f.W - 1, Math.max(0, Math.floor(x * f.R))), j = Math.min(f.H - 1, Math.max(0, Math.floor(y * f.R)));
+    return Math.min(1.7, Math.max(0.4, 1 - f.adj[j * f.W + i] * 0.7));
+  }
+
   _spawnBubble(i, t, inView) {
     const B = this.B, o = i * BF, S = this.f.coast.samples;
     if (!this.sand.length) return;

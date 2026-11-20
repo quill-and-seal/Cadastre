@@ -27,10 +27,11 @@ import { waterRings } from "./render.js";
 import { propDef } from "./model.js";
 import { propRings } from "./wind.js";
 import { coastSegments, buildCoast, CoastSim, COAST_GLSL, WAVE_SPEED, coastPixels } from "./coast.js";
+import { WATER_TYPES, depthGrid, currentSamples, normalizeWaterData } from "./water-data.js";
 export { coastPixels };
 
 export const WATER_DEFAULT = { texture: "clear", glow: 0.6, strokes: false, particles: true, density: 60, turbulence: 0.35, eddies: 0.6, waves: 0.6, period: 7, spray: 0.6 };
-export const WATER_TEXTURES = ["clear", "deep", "muddy"];
+export const WATER_TEXTURES = WATER_TYPES;
 export const WATER_LIMITS = { glow: [0, 1], density: [0, 160], turbulence: [0, 1], eddies: [0, 1], waves: [0, 1], period: [3, 14], spray: [0, 1] };
 
 /** Niveaux d'effet, choisis par chaque joueur. */
@@ -131,7 +132,9 @@ export function waterFlag(map) {
   }
   // Plages et falaises : rivages de sable et de roche.
   const coast = coastSegments(map, water);
-  return { v: 1, width: map.width, height: map.height, water: normalizeWater(map.water), rings: water, rivers, masks, rocks, coast };
+  // Outil Eau : profondeur retouchée, types d'eau par zones, courants tracés, eau calme.
+  const data = normalizeWaterData(map.waterData);
+  return { v: 1, width: map.width, height: map.height, water: normalizeWater(map.water), rings: water, rivers, masks, rocks, coast, data };
 }
 
 /* -------------------------------------------- */
@@ -257,6 +260,37 @@ export function buildField(flag, { hideMasked = false } = {}) {
   const masks = flag.masks.map((ring) => ({ ring: [ring], box: poly.ringsBounds([ring]) }));
   const masked = (x, y) => masks.some((m) => x >= m.box.x0 && x <= m.box.x1 && y >= m.box.y0 && y <= m.box.y1 && poly.pointInRings(m.ring, x, y));
   const inWater = new Uint8Array(size);
+  // Outil Eau : profondeur retouchée, courants tracés, eau calme, types d'eau.
+  const data = flag.data ?? normalizeWaterData(null);
+  const depth = depthGrid(data);
+  field.adj = new Float32Array(size);
+  const flows = [];
+  for (const c of data.currents) for (const p of currentSamples(c)) flows.push([...p, c.speed]);
+  const flowB = new Map();
+  flows.forEach((p, k) => {
+    for (let y = Math.floor(p[1] - CURRENT_REACH); y <= Math.floor(p[1] + CURRENT_REACH); y++) {
+      for (let x = Math.floor(p[0] - CURRENT_REACH); x <= Math.floor(p[0] + CURRENT_REACH); x++) {
+        const key = x * 65536 + y;
+        if (!flowB.has(key)) flowB.set(key, []);
+        flowB.get(key).push(k);
+      }
+    }
+  });
+  /** Courant tracé en un point : moyenne des traits proches, qui s'efface en s'en éloignant. */
+  const drawnAt = (x, y) => {
+    const list = flowB.get(Math.floor(x) * 65536 + Math.floor(y));
+    if (!list) return null;
+    let ax = 0, ay = 0, sw = 0;
+    for (const k of list) {
+      const [px, py, tx, ty, sp] = flows[k], d2 = (x - px) ** 2 + (y - py) ** 2;
+      if (d2 > CURRENT_REACH * CURRENT_REACH) continue;
+      const w = Math.exp(-d2 / (2 * CURRENT_SIGMA * CURRENT_SIGMA));
+      ax += w * tx * sp; ay += w * ty * sp; sw += w;
+    }
+    return sw > 0 ? [ax / (sw + 0.15) * BASE_SPEED, ay / (sw + 0.15) * BASE_SPEED] : null;
+  };
+  const calm = data.calm.length ? { rings: data.calm, box: poly.ringsBounds(data.calm) } : null;
+  const isCalm = (x, y) => !!calm && x >= calm.box.x0 && x <= calm.box.x1 && y >= calm.box.y0 && y <= calm.box.y1 && poly.pointInRings(calm.rings, x, y);
 
   // Lignes de la grille : intervalles dans l'eau (règle pair-impair sur les contours).
   for (let j = 0; j < H; j++) {
@@ -274,7 +308,19 @@ export function buildField(flag, { hideMasked = false } = {}) {
         const D = shoreDist(x, y);
         const rv = riverAt(x, y);
         field.n[o] = rv ? Math.min(1, rv.rel) : 1 - Math.min(1, D / 1.5);
-        if (rv) { field.vx[o] = rv.tx * rv.U; field.vy[o] = rv.ty * rv.U; }
+        let vx = rv ? rv.tx * rv.U : 0, vy = rv ? rv.ty * rv.U : 0;
+        const drawn = flows.length ? drawnAt(x, y) : null;
+        if (drawn) {
+          // Contre la berge, le courant tracé s'éteint.
+          const bank = Math.sqrt(Math.min(1, D / 0.5));
+          vx += drawn[0] * bank; vy += drawn[1] * bank;
+        }
+        // Plus vif là où c'est peu profond, plus lent là où c'est profond.
+        const adj = depth.empty ? 0 : depth.at(x, y);
+        field.adj[o] = adj;
+        const k = Math.min(1.5, Math.max(0.5, 1 - adj * 0.5));
+        if (isCalm(x, y)) { vx = 0; vy = 0; }
+        field.vx[o] = vx * k; field.vy[o] = vy * k;
         // La berge dessinée dans le fond s'arrête au bord de l'eau : l'eau animée la rejoint.
         const vis = Math.min(1, Math.max(0, D / 0.08));
         const hidden = masked(x, y);
@@ -286,9 +332,12 @@ export function buildField(flag, { hideMasked = false } = {}) {
   }
   // Plages et falaises : distance au rivage de part et d'autre, jusque sur la terre.
   field.coast = buildCoast(field, flag.coast, shore, inWater);
+  // Types d'eau : peints par zones, le type par défaut ailleurs ; fondus à leurs limites.
+  field.types = waterTypes(field, data, flag.water?.texture);
+  // Un rocher garde le courant qui l'aborde (rivière ou courant tracé).
   field.rocks = flag.rocks.map((r, i) => {
-    const rv = riverAt(r.x, r.y);
-    return { ...r, tx: rv?.tx ?? 1, ty: rv?.ty ?? 0, U: rv?.U ?? 0, seed: (i * 7.31) % 10 };
+    const s = sampleField(field, r.x, r.y), U = Math.hypot(s.vx, s.vy);
+    return { ...r, tx: U > 1e-4 ? s.vx / U : 1, ty: U > 1e-4 ? s.vy / U : 0, U, seed: (i * 7.31) % 10 };
   });
   field.area = field.cells.length / (R * R);
   field.cells = Int32Array.from(field.cells);
@@ -313,6 +362,69 @@ export function buildField(flag, { hideMasked = false } = {}) {
   field.quads = Float32Array.from(quads);
   field.bounds = quads.length ? { x0: bx0, y0: by0, x1: bx1, y1: by1 } : { x0: 0, y0: 0, x1: 0, y1: 0 };
   return field;
+}
+
+/** Portée d'un courant tracé et largeur de son influence (cases). */
+const CURRENT_REACH = 3;
+const CURRENT_SIGMA = 1.1;
+/** Fondu entre deux types d'eau voisins, en échantillons de chaque côté. */
+const TYPE_BLEND = 3;
+
+/**
+ * Poids des types d'eau profonde, boueuse et tropicale (l'eau claire est le reste) pour chaque
+ * échantillon : 3 octets par échantillon, fondus à la limite des zones.
+ */
+function waterTypes(field, data, fallback) {
+  const { W, H, R } = field, size = W * H;
+  const def = Math.max(0, WATER_TYPES.indexOf(fallback));
+  const zones = Object.entries(data.zones).map(([t, rings]) => ({ t: WATER_TYPES.indexOf(t), rings, box: poly.ringsBounds(rings) })).filter((z) => z.t >= 0);
+  const out = new Uint8Array(size * 3);
+  if (!zones.length) {
+    if (def) for (let o = 0; o < size; o++) out[o * 3 + def - 1] = 255;
+    return out;
+  }
+  const idx = new Uint8Array(size).fill(def);
+  for (const z of zones) {
+    const i0 = Math.max(0, Math.floor(z.box.x0 * R)), i1 = Math.min(W - 1, Math.ceil(z.box.x1 * R));
+    const j0 = Math.max(0, Math.floor(z.box.y0 * R)), j1 = Math.min(H - 1, Math.ceil(z.box.y1 * R));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      if (poly.pointInRings(z.rings, (i + 0.5) / R, (j + 0.5) / R)) idx[j * W + i] = z.t;
+    }
+  }
+  // Fondu : moyenne sur un carré de (2 TYPE_BLEND + 1) échantillons, en deux passes.
+  const a = new Float32Array(size), b = new Float32Array(size), r = TYPE_BLEND, n = 2 * r + 1;
+  for (let t = 1; t < WATER_TYPES.length; t++) {
+    for (let o = 0; o < size; o++) a[o] = idx[o] === t ? 1 : 0;
+    for (let j = 0; j < H; j++) {
+      let acc = 0;
+      for (let i = -r; i <= r; i++) acc += a[j * W + Math.min(W - 1, Math.max(0, i))];
+      for (let i = 0; i < W; i++) {
+        b[j * W + i] = acc / n;
+        acc += a[j * W + Math.min(W - 1, i + r + 1)] - a[j * W + Math.max(0, i - r)];
+      }
+    }
+    for (let i = 0; i < W; i++) {
+      let acc = 0;
+      for (let j = -r; j <= r; j++) acc += b[Math.min(H - 1, Math.max(0, j)) * W + i];
+      for (let j = 0; j < H; j++) {
+        out[(j * W + i) * 3 + t - 1] = Math.round((acc / n) * 255);
+        acc += b[Math.min(H - 1, j + r + 1) * W + i] - b[Math.max(0, j - r) * W + i];
+      }
+    }
+  }
+  return out;
+}
+
+/** Profondeur retouchée et types d'eau, pour la carte graphique (RGBA). */
+export function waterPixels(f) {
+  const size = f.W * f.H, out = new Uint8Array(size * 4);
+  for (let o = 0; o < size; o++) {
+    out[o * 4] = Math.round(Math.min(1, Math.max(0, (f.adj?.[o] ?? 0) * 0.5 + 0.5)) * 255);
+    out[o * 4 + 1] = f.types?.[o * 3] ?? 0;
+    out[o * 4 + 2] = f.types?.[o * 3 + 1] ?? 0;
+    out[o * 4 + 3] = f.types?.[o * 3 + 2] ?? 0;
+  }
+  return out;
 }
 
 /** Les morceaux d'eau en triangles (deux par morceau), pour la carte graphique. */
@@ -807,10 +919,10 @@ precision highp float;
 varying vec2 vPos;
 uniform sampler2D uField;
 uniform sampler2D uBed;
+uniform sampler2D uWater;
 uniform vec2 uMapSize;
 uniform vec4 uBedRect;
 uniform float uTime, uGlow, uAlpha, uPPC;
-uniform int uMode;
 ${COMMON}
 ${COAST_GLSL}
 float caustic(vec2 q, float fine) {
@@ -818,10 +930,10 @@ float caustic(vec2 q, float fine) {
   float r2 = mix(0.75, 1.0 - abs(noise(q / 9.0 + 7.3) * 2.0 - 1.0), fine);
   return pow(r1 * r2, 5.0);
 }
-void waterColors(out vec3 deep, out vec3 shallow) {
-  if (uMode == 0) { deep = vec3(0.04, 0.20, 0.26); shallow = vec3(0.30, 0.55, 0.52); }
-  else if (uMode == 1) { deep = vec3(0.02, 0.09, 0.15); shallow = vec3(0.12, 0.33, 0.38); }
-  else { deep = vec3(0.22, 0.22, 0.13); shallow = vec3(0.40, 0.38, 0.24); }
+// Types d'eau (poids : claire, profonde, boueuse, tropicale) : couleurs fondues.
+void waterColors(vec4 w, out vec3 deep, out vec3 shallow) {
+  deep = vec3(0.04, 0.20, 0.26) * w.x + vec3(0.02, 0.09, 0.15) * w.y + vec3(0.22, 0.22, 0.13) * w.z + vec3(0.02, 0.30, 0.42) * w.w;
+  shallow = vec3(0.30, 0.55, 0.52) * w.x + vec3(0.12, 0.33, 0.38) * w.y + vec3(0.40, 0.38, 0.24) * w.z + vec3(0.30, 0.74, 0.70) * w.w;
 }
 void main() {
   vec4 f = texture2D(uField, vPos / uMapSize);
@@ -834,15 +946,21 @@ void main() {
   if (a < 0.004 && (cw < 0.01 || cd <= 0.0)) { gl_FragColor = vec4(0.0); return; }
   float t = uTime;
   vec2 px = vPos * ${PX.toFixed(1)};
+  // Outil Eau : profondeur retouchée (-1 à 1) et types d'eau.
+  vec4 wt = texture2D(uWater, vPos / uMapSize);
+  float adj = wt.r * 2.0 - 1.0;
+  vec4 tw = vec4(max(0.0, 1.0 - wt.g - wt.b - wt.a), wt.g, wt.b, wt.a);
   vec3 deep, shallow;
-  waterColors(deep, shallow);
+  waterColors(tw, deep, shallow);
 
   // Vagues : phase au point du rivage, bord de l'eau qui monte et se retire (px du prototype).
   float k = cw > 0.01 ? rockW / cw : 0.0;
   vec2 ps = vPos - cn * cd;
   float sA = cAlongS(ps);
   float cc = cPhase(ps, t);
-  float Rpx = mix(cRunPx(sA, t), 4.0, k);
+  // Plus le fond plonge près du bord, moins l'eau monte sur le sable.
+  float adjShore = texture2D(uWater, ps / uMapSize).r * 2.0 - 1.0;
+  float Rpx = mix(cRunPx(sA, t), 4.0, k) * clamp(1.0 - adjShore * 0.7, 0.4, 1.7);
   float epx = Rpx * cPulse(cc);
   float dpx = cd * ${PX.toFixed(1)};
   float hpx = epx - dpx;
@@ -900,7 +1018,8 @@ void main() {
 
   float n = f.r;
   vec2 vel = (f.gb - 0.5) * 8.0 * ${PX.toFixed(1)};
-  float depth = 1.0 - n * n;
+  // Profondeur automatique (le fond descend en s'éloignant du bord), puis retouchée au pinceau.
+  float depth = clamp(0.8 * (1.0 - n * n) + adj, 0.0, 1.0);
   // Près d'une côte : la houle avance vers elle, la surface monte et redescend avec chaque vague,
   // et les reflets s'éteignent là où l'eau n'est qu'une mince pellicule.
   float hd = hpx * mix(1.0, 2.5, k);
@@ -922,10 +1041,8 @@ void main() {
   vec2 bp = px + vec2(rip) * 3.0 * depth * refl;
   vec4 bedT = texture2D(uBed, (bp / ${PX.toFixed(1)} - uBedRect.xy) / uBedRect.zw);
   vec3 bed = mix(bedT.rgb, mix(vec3(0.66, 0.57, 0.42), vec3(0.60, 0.52, 0.39), noise(bp / 5.0)), sandW * exp(dpx / 45.0));
-  float absorb, causticK;
-  if (uMode == 0) { absorb = 0.04 + 0.62 * depth; causticK = 0.7; }
-  else if (uMode == 1) { absorb = 0.55 + 0.45 * depth; causticK = 0.25; }
-  else { absorb = 0.6 + 0.35 * depth; causticK = 0.12; }
+  float absorb = dot(tw, vec4(0.04 + 0.62 * depth, 0.55 + 0.45 * depth, 0.6 + 0.35 * depth, 0.04 + 0.5 * depth));
+  float causticK = dot(tw, vec4(0.7, 0.25, 0.12, 0.75));
   // Au bord d'une plage, l'eau n'est qu'une mince pellicule : presque transparente.
   absorb *= mix(1.0, smoothstep(0.0, 60.0, hd), cwk);
   vec3 water = mix(shallow, deep, smoothstep(0.0, 1.0, depth));
@@ -1060,7 +1177,6 @@ export function surfaceUniforms(field, settings, bedRect) {
     uMapSize: new Float32Array([field.W / field.R, field.H / field.R]),
     uBedRect: bedRect,
     uGlow: settings.glow,
-    uMode: WATER_TEXTURES.indexOf(settings.texture),
     // Vagues : seulement s'il y a une côte de sable ou de roche.
     uWaves: field.coast ? settings.waves : 0,
     uPeriod: settings.period,

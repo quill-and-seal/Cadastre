@@ -15,7 +15,7 @@ self.onmessage = (event) => {
     if (!flag) { lastKey = null; self.postMessage({ id, empty: true }); return; }
     const settings = normalizeWater(flag.water);
     const { water, ...shape } = flag;
-    const key = JSON.stringify(shape) + JSON.stringify([settings.strokes, settings.particles, settings.density]);
+    const key = JSON.stringify(shape) + JSON.stringify([settings.strokes, settings.particles, settings.density, settings.texture]);
     if (!force && key === lastKey) { self.postMessage({ id, same: true, settings }); return; }
     lastKey = key;
     const field = buildField(flag);

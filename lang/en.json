@@ -43,7 +43,8 @@
       "prop": "Object (7)",
       "eraser": "Eraser (8)",
       "path": "Path (9)",
-      "trees": "Trees (0)"
+      "trees": "Trees (0)",
+      "water": "Water (W)"
     },
     "Hints": {
       "select": "Click: select, drag: move. Selected wall: drag nodes and handles (Alt: independent handles), double-click a node: corner ↔ curve, double-click the wall: new node. Del: delete, Ctrl+D: duplicate. Selected object: corners to scale, circle to rotate (by 15°, Alt: free).",
@@ -55,8 +56,9 @@
       "eraser": "Drag to erase.",
       "pan": "Right click, middle button or Space + click: pan. Wheel: zoom. Esc: cancel the path.",
       "fill": "Click inside a room: lays the floor up to the walls (closed doors included). Outside, fills everything not enclosed.",
-      "path": "Road, quay, river: draw the curve with the pen (click: corner, click-drag: curve, Enter: finish) or freehand. Width, floor and edge in the panel. With the select tool, drag its points to reshape it.",
-      "trees": "Click: one tree. Drag: scatters trees within the brush, spaced by density. Every tree is unique; select one afterwards to move, rotate or resize it."
+      "path": "Road, quay: trace the curve with the pen (click: corner, click-drag: curve, Enter: finish) or freehand. Width, floor and edge in the panel. With selection, drag its points to reshape it. Rivers are traced with the Water tool.",
+      "trees": "Click: one tree. Drag: scatters trees within the brush, spaced by density. Every tree is unique; select one afterwards to move, rotate or resize it.",
+      "water": "Extent: paint, fill, draw or trace a river (Alt: erase). Depth and type: brush that deepens or raises the bed (Alt: the opposite), or paints a water type. Currents: drag to draw a current in its direction, click a river to set its own."
     },
     "Panel": {
       "Terrain": "Floor",
@@ -151,11 +153,12 @@
       "WindAngle": "Blade angle",
       "WindJitter": "Grid disorder",
       "Water": "Water",
-      "WaterTexture": "Water texture",
+      "WaterTexture": "Default water type",
       "WaterTextures": {
         "clear": "Clear: pebble bed visible",
         "deep": "Deep",
-        "muddy": "Muddy"
+        "muddy": "Muddy",
+        "tropical": "Tropical (turquoise)"
       },
       "WaterGlow": "Light reflections",
       "WaterStrokes": "Current strokes",
@@ -165,7 +168,53 @@
       "WaterEddies": "Eddies behind rocks",
       "WaterWaves": "Wave strength (beaches and cliffs)",
       "WaterPeriod": "Seconds between waves",
-      "WaterSpray": "Spray height"
+      "WaterSpray": "Spray height",
+      "WaterModes": {
+        "extent": "Extent",
+        "depth": "Depth and type",
+        "currents": "Currents"
+      },
+      "WaterExtents": {
+        "brush": "Brush",
+        "fill": "Fill",
+        "shape": "Shape",
+        "river": "River",
+        "erase": "Eraser"
+      },
+      "WaterExtentNotes": {
+        "brush": "Paint water freehand. Alt: erase water.",
+        "fill": "Click: fills the enclosed area with water (walls included).",
+        "shape": "Draw a pool: rectangle, ellipse or pen.",
+        "river": "Trace a river freehand; it gets a current along the stroke, adjustable in Currents.",
+        "erase": "Erases painted water and cuts rivers under the eraser; the rest of the map is untouched."
+      },
+      "RiverWidth": "River width",
+      "DepthModes": {
+        "deeper": "Deepen",
+        "shallower": "Raise",
+        "reset": "Automatic",
+        "type": "Water type"
+      },
+      "DepthStrength": "Strength",
+      "DepthNotes": {
+        "deeper": "The bed sinks under the brush (Alt: raises). Colour shows depth: light, shallow; dark, deep.",
+        "shallower": "The bed rises under the brush (Alt: sinks). Shallow: clearer water, faster current, waves run further up a beach.",
+        "reset": "Restores automatic depth: the bed sinks away from the shore.",
+        "type": "Paint a water type; “Default” (or Alt) restores the map's type, set in the Map panel. Types blend at their edges."
+      },
+      "WaterType": "Water type",
+      "WaterTypeDefault": "Default",
+      "CurrentModes": {
+        "draw": "Draw",
+        "calm": "Calm water",
+        "erase": "Eraser"
+      },
+      "CurrentNotes": {
+        "draw": "Drag in the current's direction; it spreads between strokes and fades against the banks. Click a river: its current.",
+        "calm": "Paint an area with no current (Alt: erase it).",
+        "erase": "Erases drawn currents and calm water under the eraser."
+      },
+      "River": "Selected river"
     },
     "Terrains": {
       "stone": "Flagstones",

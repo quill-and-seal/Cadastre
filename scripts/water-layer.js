@@ -13,7 +13,7 @@
  */
 import { MODULE_ID, log } from "./constants.js";
 import {
-  buildField, fieldPixels, coastPixels, normalizeWater, surfaceUniforms, bedUniforms, bedLayout, quadTriangles, waterVisible,
+  buildField, fieldPixels, coastPixels, waterPixels, normalizeWater, surfaceUniforms, bedUniforms, bedLayout, quadTriangles, waterVisible,
   WaterSim, WATER_LEVELS, SURFACE_VERT, SURFACE_FRAG, BED_FRAG, FLOAT_VERT, FLOAT_FRAG, QUAD_CORNERS, INSTANCE_FLOATS
 } from "./water.js";
 
@@ -52,6 +52,7 @@ function teardown() {
   state.texture?.destroy(true);
   state.bed?.destroy(true);
   state.coastTex?.destroy(true);
+  state.waterTex?.destroy(true);
   state = null;
 }
 
@@ -102,6 +103,10 @@ function refresh() {
     const coastTex = PIXI.Texture.fromBuffer(coastPixels(field), field.W, field.H, {
       alphaMode: PIXI.ALPHA_MODES?.NPM ?? 0, scaleMode: PIXI.SCALE_MODES?.LINEAR ?? 1, mipmap: PIXI.MIPMAP_MODES?.OFF ?? 0
     });
+    // Outil Eau : profondeur retouchée et types d'eau.
+    const waterTex = PIXI.Texture.fromBuffer(waterPixels(field), field.W, field.H, {
+      alphaMode: PIXI.ALPHA_MODES?.NPM ?? 0, scaleMode: PIXI.SCALE_MODES?.LINEAR ?? 1, mipmap: PIXI.MIPMAP_MODES?.OFF ?? 0
+    });
     const quads = new PIXI.Geometry().addAttribute("aVertexPosition", quadTriangles(field), 2);
 
     // Fond de l'eau, une fois pour toutes, à la finesse de l'image de la scène.
@@ -118,7 +123,7 @@ function refresh() {
       bake.destroy();
     }
 
-    const uniforms = { ...surfaceUniforms(field, settings, layout.rect), uField: texture, uBed: bed, uCoast: coastTex, uTime: 0 };
+    const uniforms = { ...surfaceUniforms(field, settings, layout.rect), uField: texture, uBed: bed, uCoast: coastTex, uWater: waterTex, uTime: 0 };
     const surface = new PIXI.Mesh(quads, PIXI.Shader.from(SURFACE_VERT, SURFACE_FRAG, uniforms), undefined, PIXI.DRAW_MODES.TRIANGLES);
     root.addChild(surface);
 
@@ -184,7 +189,7 @@ function refresh() {
     };
     tick();
     canvas.app.ticker.add(tick);
-    state = { root, tick, texture, bed, coastTex };
+    state = { root, tick, texture, bed, coastTex, waterTex };
   } catch (error) {
     log("Eau non animée", error);
     teardown();

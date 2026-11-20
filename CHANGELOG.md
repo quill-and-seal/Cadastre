@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.15
+
+- **Outil Eau** (touche W) : toute l'eau se place avec un seul outil, en trois modes.
+  - **Étendue** : pinceau, remplissage d'une zone close, forme (rectangle, ellipse, plume), tracé de rivière à main levée et gomme. Un lac, une mer et les rivières qui s'y jettent forment une seule eau. La gomme ne touche qu'à l'eau : elle efface l'eau peinte et coupe les rivières.
+  - **Profondeur et type** : un pinceau creuse ou remonte le fond (Alt : l'inverse), ou rend la profondeur automatique ; une carte de couleurs montre la profondeur pendant qu'on peint. Le type d'eau se peint par zones (claire, profonde, boueuse, et la nouvelle eau tropicale) et les zones se fondent à leur limite ; ailleurs, l'eau garde le type par défaut de la carte. Peu profond : eau plus claire, courant plus vif, et les vagues montent plus loin sur une plage.
+  - **Courants** : on trace des flèches dans le sens du courant, n'importe où sur l'eau ; il se répartit entre les traits et s'éteint contre les berges. Un pinceau d'eau calme coupe le courant sur une zone. Un clic sur une rivière règle son courant (sens, vitesse, largeur). Les flèches ne s'affichent qu'avec l'outil.
+- L'outil Chemin et les palettes de sol ne proposent plus l'eau : tout passe par l'outil Eau. Les cartes existantes n'ont rien à changer (eau peinte, rivières et type d'eau sont repris tels quels).
+
 ## 0.1.14
 
 - **Herbe : rendu** (réglage du module, propre à chaque joueur) : « Optimisé » (par défaut) ou « Comme en 0.1.8 », l'herbe d'avant les optimisations, gardée telle quelle (brins en rectangles, vent calculé pour chaque brin, tous les brins dessinés même de loin). Plus lourd. Le choix vaut pour la scène, pour l'éditeur (à rouvrir) et pour l'image exportée.

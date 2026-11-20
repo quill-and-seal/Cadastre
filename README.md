@@ -51,7 +51,15 @@ Sols disponibles : dalles, plancher, pavés, terre, herbe, eau. L'herbe est une 
 
 ## Eau vivante
 
-L'eau est dessinée par la carte graphique : fond de sable et de galets vu à travers l'eau, reflets de lumière qui ondulent sur le fond et suivent le courant, éclats de soleil sur les rides, liseré d'écume contre la berge. Une rivière tracée avec l'outil **Chemin** et le sol **eau** a un courant, rapide au milieu, presque nul contre les berges, déporté vers la rive extérieure dans les virages ; sur le chemin sélectionné (ou avant de tracer), tu peux l'inverser, régler sa vitesse ou le couper pour une eau calme. L'eau peinte au pinceau (étangs, lacs) reste calme.
+L'eau est dessinée par la carte graphique : fond de sable et de galets vu à travers l'eau, reflets de lumière qui ondulent sur le fond et suivent le courant, éclats de soleil sur les rides, liseré d'écume contre la berge.
+
+### L'outil Eau (touche W)
+
+Toute l'eau se place avec l'outil **Eau**, en trois modes :
+
+- **Étendue** : où il y a de l'eau. Pinceau, remplissage d'une zone close, forme (rectangle, ellipse, plume), rivière tracée à main levée, gomme. Lacs, mer et rivières forment une seule eau ; la gomme n'efface que l'eau et coupe les rivières.
+- **Profondeur et type** : un pinceau creuse ou remonte le fond (Alt : l'inverse) ou rend la profondeur automatique (le fond descend en s'éloignant du bord) ; une carte de couleurs la montre pendant qu'on peint. Le type d'eau (claire, profonde, boueuse, tropicale) se peint par zones qui se fondent à leur limite ; ailleurs, c'est le type par défaut du panneau **Carte**. Peu profond : eau plus claire, courant plus vif, vagues qui montent plus loin sur une plage.
+- **Courants** : glisse dans le sens du courant pour tracer une flèche, n'importe où ; le courant se répartit entre les traits et s'éteint contre les berges. Un pinceau d'eau calme le coupe sur une zone. Une rivière a d'office un courant le long de son tracé, rapide au milieu, presque nul contre les berges, déporté vers la rive extérieure dans les virages : un clic dessus permet de l'inverser, de régler sa vitesse ou de le couper.
 
 Tout objet posé dans une rivière (rocher de ta bibliothèque, tonneau, caisse…) fait obstacle : l'eau s'écrase devant, ralentit, passe de chaque côté, tourbillonne derrière, puis reste hachée sur une bonne distance, avec deux rides en V qui s'ouvrent vers l'aval. De l'écume et quelques feuilles flottent sur le courant ; l'écume se rassemble là où l'eau bouillonne.
 

@@ -24,6 +24,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - 0.1.12 : plages plus naturelles (écume, eau peu profonde, bords).
 - 0.1.13 : correctif, animations de l'eau et de l'herbe dans les scènes sous Foundry v13 et v14.
 - 0.1.14 : réglage « Herbe : rendu » pour retrouver l'herbe d'avant les optimisations.
+- 0.1.15 : outil Eau (étendue, profondeur et type par zones, courants tracés et eau calme).
 
 ## 0.2 — Palisade, Vellum, étages, zones retouchables
 

@@ -43,7 +43,8 @@
       "prop": "Objet (7)",
       "eraser": "Gomme (8)",
       "path": "Chemin (9)",
-      "trees": "Arbres (0)"
+      "trees": "Arbres (0)",
+      "water": "Eau (W)"
     },
     "Hints": {
       "select": "Clic : sélectionner, glisser : déplacer. Mur sélectionné : glisse nœuds et poignées (Alt : poignées indépendantes), double-clic sur un nœud : coin ↔ courbe, double-clic sur le mur : nouveau nœud. Suppr : effacer, Ctrl+D : dupliquer. Objet sélectionné : coins pour l'échelle, rond pour tourner (par 15°, Alt : libre).",
@@ -55,8 +56,9 @@
       "eraser": "Glisse pour effacer.",
       "pan": "Clic droit, molette enfoncée ou Espace + clic : déplacer la vue. Molette : zoom. Échap : annuler le tracé.",
       "fill": "Clic dans une pièce : pose le sol jusqu'aux murs (portes fermées comprises). Dehors, remplit tout ce qui n'est pas enclos.",
-      "path": "Route, quai, rivière : trace la courbe à la plume (clic : coin, clic-glisser : courbe, Entrée : finir) ou à main levée. Largeur, sol et bordure dans le panneau. Avec la sélection, glisse ses points pour le redessiner.",
-      "trees": "Clic : un arbre. Glisser : sème des arbres dans la zone du pinceau, espacés selon la densité. Chaque arbre est unique ; la sélection permet ensuite de le déplacer, le tourner, le redimensionner."
+      "path": "Route, quai : trace la courbe à la plume (clic : coin, clic-glisser : courbe, Entrée : finir) ou à main levée. Largeur, sol et bordure dans le panneau. Avec la sélection, glisse ses points pour le redessiner. Les rivières se tracent avec l'outil Eau.",
+      "trees": "Clic : un arbre. Glisser : sème des arbres dans la zone du pinceau, espacés selon la densité. Chaque arbre est unique ; la sélection permet ensuite de le déplacer, le tourner, le redimensionner.",
+      "water": "Étendue : peins, remplis, dessine ou trace une rivière (Alt : efface). Profondeur et type : pinceau qui creuse ou remonte le fond (Alt : l'inverse), ou peint un type d'eau. Courants : glisse pour tracer un courant dans son sens, clic sur une rivière pour régler le sien."
     },
     "Panel": {
       "Terrain": "Sol",
@@ -151,11 +153,12 @@
       "WindAngle": "Angle des brins",
       "WindJitter": "Désordre de la grille",
       "Water": "Eau",
-      "WaterTexture": "Texture de l'eau",
+      "WaterTexture": "Type d'eau par défaut",
       "WaterTextures": {
         "clear": "Claire : fond de galets visible",
         "deep": "Profonde",
-        "muddy": "Boueuse"
+        "muddy": "Boueuse",
+        "tropical": "Tropicale (turquoise)"
       },
       "WaterGlow": "Reflets de lumière",
       "WaterStrokes": "Traits du courant",
@@ -165,7 +168,53 @@
       "WaterEddies": "Tourbillons derrière les rochers",
       "WaterWaves": "Force des vagues (plages et falaises)",
       "WaterPeriod": "Secondes entre deux vagues",
-      "WaterSpray": "Hauteur des gerbes"
+      "WaterSpray": "Hauteur des gerbes",
+      "WaterModes": {
+        "extent": "Étendue",
+        "depth": "Profondeur et type",
+        "currents": "Courants"
+      },
+      "WaterExtents": {
+        "brush": "Pinceau",
+        "fill": "Remplir",
+        "shape": "Forme",
+        "river": "Rivière",
+        "erase": "Gomme"
+      },
+      "WaterExtentNotes": {
+        "brush": "Peins l'eau à main levée. Alt : efface l'eau.",
+        "fill": "Clic : remplit d'eau la zone close (murs compris).",
+        "shape": "Dessine un bassin : rectangle, ellipse ou plume.",
+        "river": "Trace une rivière à main levée ; elle reçoit un courant dans le sens du tracé, à régler dans Courants.",
+        "erase": "Efface l'eau peinte et coupe les rivières sous la gomme ; le reste de la carte ne bouge pas."
+      },
+      "RiverWidth": "Largeur de la rivière",
+      "DepthModes": {
+        "deeper": "Creuser",
+        "shallower": "Remonter",
+        "reset": "Automatique",
+        "type": "Type d'eau"
+      },
+      "DepthStrength": "Force",
+      "DepthNotes": {
+        "deeper": "Le fond descend sous le pinceau (Alt : remonte). La couleur montre la profondeur : clair, peu profond ; foncé, profond.",
+        "shallower": "Le fond remonte sous le pinceau (Alt : descend). Peu profond : eau claire, courant plus vif, les vagues montent plus loin sur une plage.",
+        "reset": "Rend la profondeur automatique : le fond descend en s'éloignant du bord.",
+        "type": "Peins un type d'eau ; « Par défaut » (ou Alt) rend le type de la carte, réglé dans le panneau Carte. Les types se fondent à leur limite."
+      },
+      "WaterType": "Type d'eau",
+      "WaterTypeDefault": "Par défaut",
+      "CurrentModes": {
+        "draw": "Tracer",
+        "calm": "Eau calme",
+        "erase": "Gomme"
+      },
+      "CurrentNotes": {
+        "draw": "Glisse dans le sens du courant ; il se répartit entre les traits et s'éteint contre les berges. Clic sur une rivière : son courant.",
+        "calm": "Peins une zone sans courant (Alt : l'efface).",
+        "erase": "Efface les courants tracés et l'eau calme sous la gomme."
+      },
+      "River": "Rivière choisie"
     },
     "Terrains": {
       "stone": "Dalles",
