@@ -21,6 +21,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - 0.1.9 : herbe optimisée (même rendu), calcul en arrière-plan dans l'éditeur, compteur de performances.
 - 0.1.10 : eau optimisée (même rendu), calcul en arrière-plan dans l'éditeur.
 - 0.1.11 : plages et falaises (sols sable et roche), vagues, gerbes et ressac.
+- 0.1.12 : plages plus naturelles (écume, eau peu profonde, bords).
 
 ## 0.2 — Palisade, Vellum, étages, zones retouchables
 

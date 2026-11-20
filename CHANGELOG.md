@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.12
+
+- **Plages, eau plus naturelle** :
+  - L'écume n'est plus alignée en rangées perpendiculaires au rivage, et ses bulles sont plus fines.
+  - Plus de bande d'eau terne au bord : l'eau peu profonde laisse voir le sable mouillé, de la même teinte de part et d'autre du rivage, et les reflets reviennent dès qu'elle s'approfondit un peu.
+  - L'effet de la côte s'éteint en douceur dans l'eau, sans bord net.
+  - Au bout d'une plage, là où l'herbe reprend, l'eau ne déborde plus sur l'herbe.
+  - Plus de trait sombre le long du rivage d'une plage ou d'une falaise.
+
 ## 0.1.11
 
 - **Plages et falaises** : deux nouveaux sols, **sable** et **roche**. Là où l'eau les borde, la côte s'anime d'elle-même, sans rien tracer de plus :

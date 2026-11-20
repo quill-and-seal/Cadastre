@@ -850,7 +850,8 @@ void main() {
   vec2 sea = -cn;
   float cwk = min(1.0, cw);
 
-  if (cd > 0.0) {
+  // Côté terre (l'eau dessinée s'arrête au rivage ; un demi-échantillon près du bord, on garde l'eau).
+  if (cd > 0.0 && a < 0.5) {
     // Sur la terre : sable ou roche mouillés, paroi de la falaise, pellicule d'eau qui monte.
     vec4 o = vec4(0.0);
     float reachMax = mix((12.0 + uWaves * 0.9 * 70.0) * (0.95 + 0.05 * sin(sA / 53.0 + 0.7)), 9.0, k);
@@ -882,13 +883,14 @@ void main() {
       // Pellicule d'eau sur le sable, presque transparente ; liseré d'écume qui vient avec la vague.
       // Même teinte que l'eau juste avant le rivage (sable vu à travers une eau très mince) :
       // pas de couture au bord, et elle s'efface vers le front de la vague.
-      float wa = smoothstep(0.0, 6.0, hpx) * 0.85;
+      // Le sable mouillé dessous a déjà la teinte du sable vu sous l'eau : la pellicule
+      // n'ajoute qu'un léger voile d'eau.
+      float wa = smoothstep(0.0, 6.0, hpx) * 0.1;
       float lipK = smoothstep(0.0, 0.06, cc) * (1.0 - smoothstep(0.3, 0.6, cc));
       float lip = smoothstep(7.0, 0.0, hpx) * (0.35 + 0.4 * noise(vec2(sA / 4.0, t * 2.0))) * lipK;
       float band = k * smoothstep(5.0, 0.0, hpx) * (0.25 + 0.75 * hit);
       float fw = max(lip * (1.0 - k), band) * (0.4 + 0.6 * uWaves);
-      vec3 sandUnder = mix(vec3(0.68, 0.58, 0.42), vec3(0.62, 0.55, 0.41), noise(px / 5.0)) * mix(vec3(0.85, 0.95, 0.92), vec3(1.0), 0.3);
-      vec3 film = mix(mix(sandUnder, shallow, 0.08), vec3(0.88, 0.93, 0.92), fw / max(0.001, max(wa, fw)));
+      vec3 film = mix(shallow, vec3(0.88, 0.93, 0.92), fw / max(0.001, max(wa, fw)));
       float fa = max(wa, fw * 0.9);
       o = o * (1.0 - fa) + vec4(film * fa, fa);
     }
@@ -904,7 +906,7 @@ void main() {
   float hd = hpx * mix(1.0, 2.5, k);
   float swell = cwk > 0.0 ? cos(((t - dot(vPos, uWaveDir) / ${WAVE_SPEED.toFixed(1)}) / uPeriod - cAlong(sA)) * 6.2832) * 0.6 * uWaves * smoothstep(0.0, 60.0, hd) : 0.0;
   float disp = cwk * (epx * exp(-max(hpx, 0.0) / 70.0) + swell * 6.0);
-  float refl = mix(1.0, smoothstep(30.0, 170.0, hd), cwk);
+  float refl = mix(1.0, smoothstep(8.0, 70.0, hd), cwk);
   vec2 pq = px - cn * disp;
   // Vu de loin, les détails plus fins que les pixels scintilleraient : ils s'effacent en fondu.
   float fine = smoothstep(8.0, 16.0, uPPC), tiny = smoothstep(25.0, 50.0, uPPC);
@@ -919,13 +921,13 @@ void main() {
   // Fond précalculé, vu à travers l'eau qui ondule ; sable fin au bord d'une plage.
   vec2 bp = px + vec2(rip) * 3.0 * depth * refl;
   vec4 bedT = texture2D(uBed, (bp / ${PX.toFixed(1)} - uBedRect.xy) / uBedRect.zw);
-  vec3 bed = mix(bedT.rgb, mix(vec3(0.68, 0.58, 0.42), vec3(0.62, 0.55, 0.41), noise(bp / 5.0)), sandW * exp(dpx / 60.0));
+  vec3 bed = mix(bedT.rgb, mix(vec3(0.66, 0.57, 0.42), vec3(0.60, 0.52, 0.39), noise(bp / 5.0)), sandW * exp(dpx / 45.0));
   float absorb, causticK;
   if (uMode == 0) { absorb = 0.04 + 0.62 * depth; causticK = 0.7; }
   else if (uMode == 1) { absorb = 0.55 + 0.45 * depth; causticK = 0.25; }
   else { absorb = 0.6 + 0.35 * depth; causticK = 0.12; }
   // Au bord d'une plage, l'eau n'est qu'une mince pellicule : presque transparente.
-  absorb *= mix(1.0, smoothstep(0.0, 25.0, hd), cwk);
+  absorb *= mix(1.0, smoothstep(0.0, 60.0, hd), cwk);
   vec3 water = mix(shallow, deep, smoothstep(0.0, 1.0, depth));
   vec3 col = mix(bed * mix(vec3(0.85, 0.95, 0.92), vec3(1.0), 0.3), water, absorb);
   col += vec3(0.85, 1.0, 0.92) * cs * causticK * (1.0 - absorb * 0.7) * uGlow * 1.4 * refl;

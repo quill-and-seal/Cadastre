@@ -107,6 +107,13 @@ const segDist = (s, x, y) => {
   return Math.hypot(x - s[0] - dx * h, y - s[1] - dy * h);
 };
 
+/** De combien un point dépasse le bout d'un segment, le long du segment (0 s'il est en face). */
+const segBeyond = (s, x, y) => {
+  const dx = s[2] - s[0], dy = s[3] - s[1], L = Math.hypot(dx, dy) || 1e-9;
+  const u = ((x - s[0]) * dx + (y - s[1]) * dy) / L;
+  return Math.max(0, -u, u - L);
+};
+
 /**
  * Données de côte sur la grille du champ de l'eau, près des rivages de sable et de roche :
  *   d    : distance signée au rivage (cases ; > 0 sur la terre)
@@ -140,15 +147,20 @@ export function buildCoast(field, coast, shore, inWater) {
         for (const k of near) dc = Math.min(dc, segDist(segs[k], x, y));
         if (dc > COAST_REACH) continue;
         // Sable et roche voisins se fondent l'un dans l'autre.
-        let ws = 0, wr = 0;
+        let ws = 0, wr = 0, beyond = Infinity;
         for (const k of near) {
-          const w = Math.max(0, 1 - (segDist(segs[k], x, y) - dc) / 0.3);
+          const sd = segDist(segs[k], x, y);
+          const w = Math.max(0, 1 - (sd - dc) / 0.3);
           if (segs[k][4] === COAST_KINDS.rock) wr += w; else ws += w;
+          if (sd <= dc + 0.05) beyond = Math.min(beyond, segBeyond(segs[k], x, y));
         }
         let da = Infinity;
         for (const k of sb.get(key) ?? []) da = Math.min(da, segDist(shore[k], x, y));
         // Une autre berge (herbe, pavés…) plus proche : pas de vagues ici.
-        const weight = Math.max(0, Math.min(1, 1 - (dc - da) / 0.35));
+        // … et l'effet s'éteint en douceur avant la limite de portée (pas de bord net dans l'eau).
+        let weight = Math.max(0, Math.min(1, 1 - (dc - da) / 0.35)) * smooth(COAST_REACH, COAST_REACH - 0.8, dc);
+        // Sur la terre, au-delà du bout d'une plage (là où l'herbe reprend), rien.
+        if (!inWater[o]) weight *= smooth(0.3, 0, beyond);
         const sum = ws + wr || 1;
         d[o] = inWater[o] ? -dc : dc;
         sand[o] = weight * ws / sum;
@@ -293,7 +305,9 @@ export class CoastSim {
     const { e, c } = this._edge(x, y, t);
     if (c > 0.22) { B[o + 3] = -1; return; }
     const d = e - (this.rand() ** 2 * 25 + 1) / PX;
-    B[o] = x + nx * d; B[o + 1] = y + ny * d;
+    // Un peu de côté aussi : pas de rangées de bulles alignées sur les points du rivage.
+    const side = (this.rand() - 0.5) * SAMPLE_STEP * 1.6;
+    B[o] = x + nx * d - ny * side; B[o + 1] = y + ny * d + nx * side;
     B[o + 2] = 0; B[o + 3] = 1.5 + this.rand() * 2.5; B[o + 4] = this.rand(); B[o + 5] = 0;
   }
 
@@ -345,7 +359,7 @@ export class CoastSim {
       const fade = Math.min(1, age / 0.6, (life - age) / 1.0);
       const al = fade * (1 - age / life) ** 0.6 * (0.3 + 0.7 * k) * (0.5 + 0.5 * ((rnd * 7) % 1));
       if (al < 0.08) continue;
-      const size = (0.6 + ((rnd * 13) % 1) * 1.4 + k * 0.7) / PX;
+      const size = (0.4 + ((rnd * 13) % 1) * 0.9 + k * 0.4) / PX;
       put(x, y, size, 0, 0.2 + Math.min(3, Math.floor(al * 4)) * 0.22, 1, 0, 0);
     }
 

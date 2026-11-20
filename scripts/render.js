@@ -193,7 +193,7 @@ export function renderWater(map, prefix = "cad") {
   const coast = ringsPath([...(map.terrains?.sand ?? []), ...(map.terrains?.rock ?? [])]);
   const mask = coast ? ` mask="url(#${id("coast")})"` : "";
   return `<defs>`
-      + (coast ? `<mask id="${id("coast")}" maskUnits="userSpaceOnUse" ${region(map)}><rect ${region(map)} fill="#fff"/><path d="${coast}" fill="#000"/></mask>` : "")
+      + (coast ? `<mask id="${id("coast")}" maskUnits="userSpaceOnUse" ${region(map)}><rect ${region(map)} fill="#fff"/><path d="${coast}" fill="#000" stroke="#000" stroke-width="0.5"/></mask>` : "")
       + `<clipPath id="${id("clip")}"><path d="${d}"/></clipPath>`
       + `<filter id="${id("soft")}" ${r}><feGaussianBlur stdDeviation="0.3"/></filter>`
       + `<filter id="${id("rimblur")}" ${r}><feGaussianBlur stdDeviation="0.05"/></filter>`
