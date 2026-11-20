@@ -73,6 +73,19 @@ export function biomeArea(map) {
 }
 
 /**
+ * Retire les plantes semées par un biome (ou au pinceau Biome) qui se retrouvent là où rien ne
+ * pousse : eau, pièce, chemin, sol nu peints après coup. Les plantes posées à la main restent.
+ * @returns {number}  plantes retirées
+ */
+export function pruneBiome(map) {
+  if (!map.props.some((p) => p.b)) return 0;
+  const area = biomeArea(map);
+  const n = map.props.length;
+  map.props = map.props.filter((p) => !p.b || poly.pointInRings(area, p.x, p.y));
+  return n - map.props.length;
+}
+
+/**
  * Toute la carte devient le biome : son sol en fond (sous les sols peints), sa végétation semée
  * partout où elle peut pousser. Les plantes d'un biome précédent sont retirées d'abord ; celles
  * posées à la main restent. Biome null : retire le biome et ses plantes.

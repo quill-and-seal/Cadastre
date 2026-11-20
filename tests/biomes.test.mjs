@@ -47,3 +47,16 @@ test("une carte avec seulement un biome n'est pas vide ; le pinceau peint une zo
   assert.equal(m2.props.filter((q) => q.b).length, 0);
   assert.ok(biomeArea(m2).length);
 });
+
+test("eau peinte après le biome : la végétation semée dessous disparaît, pas celle posée à la main", async () => {
+  const { pruneBiome } = await import("../scripts/biomes.js");
+  const map = createMap({ width: 20, height: 14 });
+  applyBiome(map, "broadleaf", mulberry32(3));
+  const hand = addProp(map, "tree-oak", 5, 5);
+  const inside = (p) => p.x > 4 && p.x < 10 && p.y > 4 && p.y < 10;
+  assert.ok(map.props.some((p) => p.b && inside(p)));
+  paintArea(map, rectRings(4, 4, 10, 10), "water");
+  assert.ok(pruneBiome(map) > 0);
+  assert.ok(!map.props.some((p) => p.b && inside(p)));
+  assert.ok(map.props.some((p) => p.id === hand.id));
+});

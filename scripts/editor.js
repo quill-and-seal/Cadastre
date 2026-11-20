@@ -5,7 +5,7 @@
 import { TERRAINS, PROPS, mulberry32 } from "./catalog.js";
 import { TREES, TREE_PREFIX, TREE_BY_TYPE, pickTreeKind, treeRadius } from "./trees.js";
 import { treeSprites } from "./tree-sprites.js";
-import { BIOMES, sowBiome, applyBiome } from "./biomes.js";
+import { BIOMES, sowBiome, applyBiome, pruneBiome } from "./biomes.js";
 import { onGroundTile } from "./ground-tiles.js";
 import * as M from "./model.js";
 import * as P from "./poly.js";
@@ -101,6 +101,8 @@ export class MapEditor {
   constructor(root, map, { t = (k) => k, onSave = null, onExport = null, onDirty = null, library = [], onOpenLibrary = null, resolve = defaultResolve } = {}) {
     this.root = root;
     this.map = M.normalizeMap(map);
+    // Cartes faites avant que l'eau ou les chemins ne retirent la végétation semée dessous.
+    pruneBiome(this.map);
     this.t = t;
     this.onSave = onSave;
     this.onExport = onExport;
@@ -885,6 +887,8 @@ export class MapEditor {
       this._renderOverlay();
       return;
     }
+    // Eau, rivière, pièce, chemin, mur ou sol nu posé sur une végétation semée : elle disparaît dessous.
+    if (pruneBiome(this.map) > 0) full = true;
     this.undoStack.push(before);
     if (this.undoStack.length > HISTORY_LIMIT) this.undoStack.shift();
     this.redoStack = [];

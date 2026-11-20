@@ -4,7 +4,7 @@
  * tous les niveaux de détail. Vellum ne charge ensuite que les tuiles visibles, au niveau du zoom.
  *
  *   tuiles/<clé>.vellum.webp   aperçu, en fond de scène (aussi fin que le fond habituel)
- *   tuiles/<clé>.dzi           description de la découpe
+ *   tuiles/<clé>.xml           description de la découpe (format Deep Zoom)
  *   tuiles/<clé>_files/N/i_j.webp
  *
  * Les noms sont fixes pour une carte : un réexport remplace ses tuiles au lieu de les empiler
@@ -126,7 +126,8 @@ export async function exportPyramid({ map, ppc, preview, previewScale, render, k
   <Size Width="${width}" Height="${height}"/>
 </Image>
 `;
-  await upload(dir, new File([dzi], `${key}.dzi`, { type: "application/xml" }));
+  // .xml et non .dzi : Foundry refuse d'envoyer les .dzi (Vellum 0.4.5 lit les deux).
+  await upload(dir, new File([dzi], `${key}.xml`, { type: "application/xml" }));
   return `${previewPath}?v=${Date.now()}`;
 }
 

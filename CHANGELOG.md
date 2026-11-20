@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.25
+
+- **Export en tuiles impossible** (« File … has a disallowed extension ".dzi" ») : Foundry refuse d'envoyer les fichiers `.dzi`. La description de la découpe est maintenant envoyée en `.xml` ; il faut **Vellum 0.4.5**, qui sait la lire.
+- **Végétation sous l'eau** : la végétation semée par un biome (ou au pinceau Biome) disparaît quand on peint de l'eau, une rivière, une pièce, un chemin, un mur ou un sol nu par-dessus après coup. Les plantes posées à la main restent. Les cartes existantes sont corrigées à leur ouverture dans l'éditeur.
+
 ## 0.1.24
 
 - **Fond net de près, avec Vellum** : le fond exporté est en plus découpé en tuiles fines (200, 300 ou 400 pixels par case, 300 par défaut ; réglage *Finesse du fond exporté*), au format des cartes géantes de Vellum. Vellum ne charge que les tuiles visibles, au niveau du zoom : le sol (feuilles mortes, aiguilles), les cailloux, les chemins restent nets de près, au lieu d'un agrandissement flou de l'image à 100 px/case.

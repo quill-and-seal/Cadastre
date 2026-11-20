@@ -172,6 +172,7 @@ Avec [Vellum](https://github.com/quill-and-seal/Vellum) actif, le fond est en pl
 - Les tuiles sont rangées dans `worlds/<ton monde>/cadastre/tuiles/` ; un réexport remplace celles de la carte.
 - Compte ≈ 50 ko par case à 300 px/case pour une forêt (≈ 100 Mo pour 50 × 40 cases), et un export plus long (une à deux minutes pour une grande carte).
 - Sans Vellum, ou avec la finesse « Normal », le fond habituel est exporté, sans tuiles.
+- Il faut **Vellum 0.4.5** ou plus récent.
 - Clic droit sur une scène → **Précharger chez les joueurs** (Vellum 0.4.4) : fond, premières tuiles et images des arbres partent chez les joueurs sans que la scène s'affiche.
 
 ## API
