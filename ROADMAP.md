@@ -33,6 +33,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - 0.1.21 : forêts beaucoup plus rapides (variantes du sous-bois, dessins partagés, plus de workers, moins de morceaux).
 - 0.1.22 : plus de gel au zoom (affinage des arbres plafonné et progressif), arbres lissés au dézoom (mipmaps).
 - 0.1.23 : calques ignorés par Vellum (plus de gel d'une minute au zoom).
+- 0.1.24 : fond net de près, découpé en tuiles fines pour Vellum ; arbres préchargés avec la scène.
 
 ## Biomes (V1 : 20 biomes, un par issue)
 

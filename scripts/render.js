@@ -74,7 +74,7 @@ const region = (map) => `x="-2" y="-2" width="${map.width + 4}" height="${map.he
  * <defs> : motifs de sol et filtres.
  * @param {(src:string)=>string} [resolve]  URL d'une image d'asset
  */
-export function renderDefs(map, prefix = "cad", resolve = defaultResolve) {
+export function renderDefs(map, prefix = "cad", resolve = defaultResolve, groundPpc = undefined) {
   const r = `filterUnits="userSpaceOnUse" ${region(map)}`;
   let out = "<defs>";
   for (const { key, def: t } of terrainList(map)) {
@@ -82,9 +82,9 @@ export function renderDefs(map, prefix = "cad", resolve = defaultResolve) {
     out += isAssetKey(key)
       ? `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${t.w}" height="${t.h}">`
         + `<image href="${attr(resolve(t.src))}" width="${t.w}" height="${t.h}" preserveAspectRatio="none"/></pattern>`
-      : t.ground && groundTile(t.ground)
+      : t.ground && groundTile(t.ground, groundPpc)
         ? `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${t.w}" height="${t.h}">`
-          + `<image href="${groundTile(t.ground)}" width="${t.w}" height="${t.h}" preserveAspectRatio="none"/></pattern>`
+          + `<image href="${groundTile(t.ground, groundPpc)}" width="${t.w}" height="${t.h}" preserveAspectRatio="none"/></pattern>`
         : `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${t.w}" height="${t.h}">`
           + `<rect width="${t.w}" height="${t.h}" fill="${t.base}"/>${t.pattern}</pattern>`;
     // Seconde couche d'un sol (les brins de l'herbe), avec son propre motif, posée sur la première.
@@ -362,11 +362,11 @@ export function renderGrid(map, opacity = 0.12) {
 }
 
 /** Contenu complet (sans la balise <svg>). */
-export function renderContent(map, { mode = "export", grid = false, prefix = "cad", resolve = defaultResolve, part = "all", treeArt = null } = {}) {
+export function renderContent(map, { mode = "export", grid = false, prefix = "cad", resolve = defaultResolve, part = "all", treeArt = null, groundPpc } = {}) {
   // « ground » : fond, sols et eau ; « top » : chemins, objets et murs. L'eau animée et l'herbe
   // se glissent entre les deux.
   const ground = part !== "top", top = part !== "ground";
-  return renderDefs(map, prefix, resolve)
+  return renderDefs(map, prefix, resolve, groundPpc)
     + (ground ? `<rect x="0" y="0" width="${map.width}" height="${map.height}" fill="${map.background}"/>`
       + renderTerrains(map, prefix)
       + renderWater(map, prefix) : "")
@@ -381,9 +381,11 @@ export function renderContent(map, { mode = "export", grid = false, prefix = "ca
  * @param {{scale?:number, grid?:boolean, mode?:"editor"|"export", resolve?:(src:string)=>string}} [options]
  *   scale = pixels par case ; resolve = URL de chaque image d'asset (à l'export : images intégrées)
  */
-export function renderSVG(map, { scale = map.gridSize, grid = false, mode = "export", resolve = defaultResolve, part = "all", treeArt = null } = {}) {
-  const w = Math.round(map.width * scale), h = Math.round(map.height * scale);
-  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${w}" height="${h}" viewBox="0 0 ${map.width} ${map.height}" shape-rendering="geometricPrecision">`
-    + renderContent(map, { mode, grid, resolve, part, treeArt })
+export function renderSVG(map, { scale = map.gridSize, grid = false, mode = "export", resolve = defaultResolve, part = "all", treeArt = null, groundPpc, view = null } = {}) {
+  // view : portion de la carte (en cases) à rendre seule, pour un fond découpé en tuiles.
+  const [vx, vy, vw, vh] = view ?? [0, 0, map.width, map.height];
+  const w = Math.round(vw * scale), h = Math.round(vh * scale);
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${w}" height="${h}" viewBox="${vx} ${vy} ${vw} ${vh}" shape-rendering="geometricPrecision">`
+    + renderContent(map, { mode, grid, resolve, part, treeArt, groundPpc })
     + "</svg>";
 }

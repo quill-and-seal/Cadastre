@@ -136,7 +136,8 @@ export class GrassRenderer {
  * @param {object} wind   réglages normalisés
  * @param {number} scale  pixels par case de l'image
  */
-export function paintStillGrass(ctx, field, wind, scale, { tile = 2048 } = {}) {
+export function paintStillGrass(ctx, field, wind, scale, { tile = 2048, ox = 0, oy = 0 } = {}) {
+  // ox, oy : position (pixels de l'image entière) du coin de ce canvas, pour un fond découpé.
   if (!field?.count) return;
   const glCanvas = document.createElement("canvas");
   const r = new GrassRenderer(glCanvas, { preserve: true });
@@ -146,7 +147,7 @@ export function paintStillGrass(ctx, field, wind, scale, { tile = 2048 } = {}) {
     for (let y = 0; y < H; y += tile) {
       for (let x = 0; x < W; x += tile) {
         const w = Math.min(tile, W - x), h = Math.min(tile, H - y);
-        r.render({ width: w, height: h, scale, tx: -x, ty: -y, time: 0 });
+        r.render({ width: w, height: h, scale, tx: -(x + ox), ty: -(y + oy), time: 0 });
         ctx.drawImage(glCanvas, 0, 0, w, h, x, y, w, h);
       }
     }

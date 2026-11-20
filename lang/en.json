@@ -275,7 +275,8 @@
       "Empty": "The map is empty: nothing to export.",
       "Reduced": "Very large map: the image is reduced to {size} px per side, Foundry stretches it to the scene size.",
       "Missing": "Images not found, left blank on the scene: {list}",
-      "Trees": "Cadastre: drawing trees ({done} / {total})…"
+      "Trees": "Cadastre: drawing trees ({done} / {total})…",
+      "Tiles": "Cadastre: cutting the background into fine tiles ({done} / {total})…"
     },
     "Close": {
       "Title": "Unsaved changes",
@@ -349,6 +350,14 @@
       "GrassRenders": {
         "optimized": "Optimized",
         "legacy": "As in 0.1.8"
+      },
+      "BackgroundPpc": "Exported background detail",
+      "BackgroundPpcHint": "With Vellum active, the background is cut into fine tiles that Vellum loads on demand when zooming: ground, stones and paths stay sharp up close. Finer = longer export and more disk space (a 50 × 40 forest: ≈ 100 MB at 300 px per square). Without Vellum, the usual background is exported.",
+      "BackgroundPpcs": {
+        "100": "Normal (single image, no tiles)",
+        "200": "Fine (200 px per square)",
+        "300": "Very fine (300 px per square, recommended)",
+        "400": "Maximum (400 px per square)"
       }
     }
   }

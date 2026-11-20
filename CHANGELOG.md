@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.24
+
+- **Fond net de près, avec Vellum** : le fond exporté est en plus découpé en tuiles fines (200, 300 ou 400 pixels par case, 300 par défaut ; réglage *Finesse du fond exporté*), au format des cartes géantes de Vellum. Vellum ne charge que les tuiles visibles, au niveau du zoom : le sol (feuilles mortes, aiguilles), les cailloux, les chemins restent nets de près, au lieu d'un agrandissement flou de l'image à 100 px/case.
+  - Les sols peints sont redessinés aussi fins que les tuiles ; l'herbe, l'eau et les ombres des arbres suivent.
+  - Changement de scène pas plus long : seul l'aperçu (aussi fin que le fond habituel) est chargé à l'ouverture ; les tuiles arrivent en zoomant.
+  - Tuiles dans `worlds/<monde>/cadastre/tuiles/`, remplacées à chaque réexport de la carte. ≈ 50 ko par case de forêt à 300 px/case.
+  - Sans Vellum, ou en finesse « Normal », le fond habituel est exporté.
+- Les images des arbres sont préchargées avec la scène par **Précharger chez les joueurs** (Vellum 0.4.4).
+
 ## 0.1.23
 
 - **Plus de gel d'une minute au zoom avec Vellum** : Vellum prenait chacun des milliers de morceaux d'arbres de la scène pour une image à agrandir, et les retraitait un par un à chaque zoom. Les calques de Cadastre (arbres, herbe, eau) sont maintenant marqués pour que Vellum les laisse de côté : Cadastre gère déjà lui-même leur netteté. Fonctionne avec toutes les versions de Vellum ; Vellum 0.4.3 reconnaît en plus officiellement ce marquage.

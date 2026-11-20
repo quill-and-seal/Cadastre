@@ -7,8 +7,8 @@
 import { log } from "./constants.js";
 import { GROUND_PPC } from "./ground.js";
 
-const tiles = new Map();      // kind → data URI
-const pending = new Map();    // kind → Promise
+const tiles = new Map();      // « kind@ppc » → data URI
+const pending = new Map();    // « kind@ppc » → Promise
 const listeners = new Set();
 let worker = null, seq = 0;
 const jobs = new Map();
@@ -20,14 +20,14 @@ const toDataURI = (blob) => new Promise((resolve, reject) => {
   reader.readAsDataURL(blob);
 });
 
-async function paintHere(kind) {
+async function paintHere(kind, ppc = GROUND_PPC) {
   const { paintGround } = await import("./ground.js");
-  const canvas = paintGround(kind, GROUND_PPC, 1);
+  const canvas = paintGround(kind, ppc, 1);
   if (canvas.convertToBlob) return canvas.convertToBlob({ type: "image/webp", quality: 0.9 });
   return new Promise((resolve) => canvas.toBlob(resolve, "image/webp", 0.9));
 }
 
-function paint(kind) {
+function paint(kind, ppc) {
   if (typeof OffscreenCanvas !== "undefined" && typeof Worker !== "undefined") {
     try {
       if (!worker) {
@@ -40,41 +40,46 @@ function paint(kind) {
         worker.onerror = (error) => {
           log("Sols peints en arrière-plan impossibles", error);
           worker = null;
-          for (const job of jobs.values()) paintHere(job.kind).then(job.resolve, job.reject);
+          for (const job of jobs.values()) paintHere(job.kind, job.ppc).then(job.resolve, job.reject);
           jobs.clear();
         };
       }
       return new Promise((resolve, reject) => {
         const id = ++seq;
-        jobs.set(id, { kind, resolve, reject });
-        worker.postMessage({ id, kind, ppc: GROUND_PPC, seed: 1 });
+        jobs.set(id, { kind, ppc, resolve, reject });
+        worker.postMessage({ id, kind, ppc, seed: 1 });
       });
     } catch (error) {
       worker = null;
     }
   }
-  return paintHere(kind);
+  return paintHere(kind, ppc);
 }
 
-/** Tuile prête (data URI), ou null — et son calcul est alors lancé. */
-export function groundTile(kind) {
-  if (tiles.has(kind)) return tiles.get(kind);
+/**
+ * Tuile prête (data URI), ou null — et son calcul est alors lancé.
+ * @param {number} [ppc]  finesse (pixels par case) : plus fine pour un fond découpé en tuiles
+ */
+export function groundTile(kind, ppc = GROUND_PPC) {
+  const key = `${kind}@${ppc}`;
+  if (tiles.has(key)) return tiles.get(key);
   if (typeof document === "undefined" && typeof OffscreenCanvas === "undefined") return null;
-  loadGroundTile(kind);
+  loadGroundTile(kind, ppc);
   return null;
 }
 
 /** @returns {Promise<string|null>} */
-export function loadGroundTile(kind) {
-  if (tiles.has(kind)) return Promise.resolve(tiles.get(kind));
-  let p = pending.get(kind);
+export function loadGroundTile(kind, ppc = GROUND_PPC) {
+  const key = `${kind}@${ppc}`;
+  if (tiles.has(key)) return Promise.resolve(tiles.get(key));
+  let p = pending.get(key);
   if (!p) {
-    p = paint(kind).then(toDataURI).then((uri) => {
-      tiles.set(kind, uri);
+    p = paint(kind, ppc).then(toDataURI).then((uri) => {
+      tiles.set(key, uri);
       for (const fn of listeners) { try { fn(kind); } catch (error) { log(error); } }
       return uri;
-    }).catch((error) => { log("Sol peint non calculé", kind, error); pending.delete(kind); return null; });
-    pending.set(kind, p);
+    }).catch((error) => { log("Sol peint non calculé", kind, error); pending.delete(key); return null; });
+    pending.set(key, p);
   }
   return p;
 }

@@ -165,6 +165,15 @@ Une carte déjà exportée propose de **mettre à jour** sa scène : le fond et 
 
 Au-delà de 8192 px de côté, l'image est réduite et Foundry l'étire à la taille de la scène : les murs, eux, restent exacts.
 
+### Fond net de près (avec Vellum)
+
+Avec [Vellum](https://github.com/quill-and-seal/Vellum) actif, le fond est en plus découpé en **tuiles fines** (réglage *Finesse du fond exporté* : 200, 300 ou 400 pixels par case, 300 par défaut). Vellum ne charge que les tuiles visibles, au niveau du zoom : le sol, les feuilles mortes, les aiguilles, les cailloux et les chemins restent nets de près. Le changement de scène n'est pas plus long : seul l'aperçu (aussi fin que le fond habituel) est chargé à l'ouverture.
+
+- Les tuiles sont rangées dans `worlds/<ton monde>/cadastre/tuiles/` ; un réexport remplace celles de la carte.
+- Compte ≈ 50 ko par case à 300 px/case pour une forêt (≈ 100 Mo pour 50 × 40 cases), et un export plus long (une à deux minutes pour une grande carte).
+- Sans Vellum, ou avec la finesse « Normal », le fond habituel est exporté, sans tuiles.
+- Clic droit sur une scène → **Précharger chez les joueurs** (Vellum 0.4.4) : fond, premières tuiles et images des arbres partent chez les joueurs sans que la scène s'affiche.
+
 ## API
 
 ```js

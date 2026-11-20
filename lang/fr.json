@@ -275,7 +275,8 @@
       "Empty": "La carte est vide : rien à exporter.",
       "Reduced": "Carte très grande : l'image est réduite à {size} px de côté, Foundry l'étire à la taille de la scène.",
       "Missing": "Images introuvables, laissées vides sur la scène : {list}",
-      "Trees": "Cadastre : dessin des arbres ({done} / {total})…"
+      "Trees": "Cadastre : dessin des arbres ({done} / {total})…",
+      "Tiles": "Cadastre : découpage du fond en tuiles fines ({done} / {total})…"
     },
     "Close": {
       "Title": "Modifications non enregistrées",
@@ -349,6 +350,14 @@
       "GrassRenders": {
         "optimized": "Optimisé",
         "legacy": "Comme en 0.1.8"
+      },
+      "BackgroundPpc": "Finesse du fond exporté",
+      "BackgroundPpcHint": "Avec Vellum actif, le fond est découpé en tuiles fines que Vellum charge à la demande en zoomant : le sol, les cailloux et les chemins restent nets de près. Plus fin = export plus long et plus de place sur le disque (une forêt de 50 × 40 cases : ≈ 100 Mo à 300 px/case). Sans Vellum, le fond habituel est exporté.",
+      "BackgroundPpcs": {
+        "100": "Normal (une seule image, sans tuiles)",
+        "200": "Fin (200 px par case)",
+        "300": "Très fin (300 px par case, recommandé)",
+        "400": "Maximal (400 px par case)"
       }
     }
   }

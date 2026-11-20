@@ -24,12 +24,13 @@ import { registerWind } from "./wind-layer.js";
 import { registerTrees } from "./tree-layer.js";
 import { isMapEntry } from "./storage.js";
 import { exportMap } from "./export.js";
+import { registerBackground } from "./pyramid-export.js";
 import { renderSVG } from "./render.js";
 import * as model from "./model.js";
 
 Hooks.once("init", () => {
   // Chaque partie s'enregistre à part : si l'une échoue, les autres (eau, vent) restent actives.
-  for (const [name, register] of [["bibliothèque", registerLibrarySettings], ["eau", registerWater], ["vent", registerWind], ["arbres", registerTrees]]) {
+  for (const [name, register] of [["bibliothèque", registerLibrarySettings], ["eau", registerWater], ["vent", registerWind], ["arbres", registerTrees], ["fond", registerBackground]]) {
     try {
       register();
     } catch (error) {

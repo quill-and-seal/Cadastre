@@ -317,6 +317,10 @@ let state = null;
 
 export function registerTrees() {
   Hooks.on("canvasReady", () => refresh());
+  // « Précharger chez les joueurs » de Vellum : les images des arbres partent avec la scène.
+  Hooks.on("vellumPreload", (scene, add) => {
+    for (const p of scene.getFlag(MODULE_ID, "trees")?.pages ?? []) add(p.color);
+  });
   Hooks.on("canvasTearDown", () => teardown());
   Hooks.on("updateScene", (scene, changes) => {
     if (scene.id === canvas.scene?.id && foundry.utils.hasProperty(changes, `flags.${MODULE_ID}`)) refresh();

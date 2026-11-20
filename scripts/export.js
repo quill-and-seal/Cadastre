@@ -20,6 +20,8 @@ import { packTrees, TREE_PAGE, treePpc } from "./tree-pack.js";
 import { makeCanvas } from "./tree-paint.js";
 import { TERRAINS, BIOME_SOILS } from "./catalog.js";
 import { loadGroundTile } from "./ground-tiles.js";
+import { GROUND_PPC } from "./ground.js";
+import { exportPyramid, vellumActive } from "./pyramid-export.js";
 
 const FilePickerCls = () => foundry.applications?.apps?.FilePicker?.implementation ?? globalThis.FilePicker;
 const SceneCls = () => CONFIG.Scene.documentClass;
@@ -44,6 +46,15 @@ async function svgImage(svg) {
  * @param {string|(string|((ctx:CanvasRenderingContext2D)=>void))[]} layers
  */
 export async function rasterize(layers) {
+  const canvas = await rasterizeCanvas(layers);
+  const toBlob = (type, quality) => new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+  const webp = await toBlob("image/webp", 0.92);
+  if (webp?.type === "image/webp") return { blob: webp, ext: "webp" };
+  return { blob: await toBlob("image/png"), ext: "png" };
+}
+
+/** Comme rasterize, mais renvoie le canvas (fond découpé en tuiles). */
+export async function rasterizeCanvas(layers) {
   if (!Array.isArray(layers)) layers = [layers];
   let ctx = null;
   for (const layer of layers) {
@@ -64,11 +75,7 @@ export async function rasterize(layers) {
       }
     }
   }
-  const canvas = ctx.canvas;
-  const toBlob = (type, quality) => new Promise((resolve) => canvas.toBlob(resolve, type, quality));
-  const webp = await toBlob("image/webp", 0.92);
-  if (webp?.type === "image/webp") return { blob: webp, ext: "webp" };
-  return { blob: await toBlob("image/png"), ext: "png" };
+  return ctx.canvas;
 }
 
 /** Lit une image et la renvoie en data URI. */
@@ -201,20 +208,61 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
   const waterField = water ? buildField(water) : null;
   // Sols peints (litière, aiguilles) : leur tuile doit être prête avant le rendu.
   const biomeSoil = map.biome && BIOME_SOILS[map.biome.id];
-  await Promise.all(TERRAINS.filter((t) => t.ground && (map.terrains[t.id]?.length || t.id === biomeSoil)).map((t) => loadGroundTile(t.ground)));
+  const grounds = TERRAINS.filter((t) => t.ground && (map.terrains[t.id]?.length || t.id === biomeSoil)).map((t) => t.ground);
+  await Promise.all(grounds.map((g) => loadGroundTile(g)));
   // Arbres générés : animés dans la scène, hors de l'image de fond ; leur ombre y reste.
   const trees = await exportTrees(map, scale);
-  // Sol, puis eau et herbe figées, puis chemins, objets et murs par-dessus.
-  const { blob, ext } = await rasterize([
-    renderSVG(map, { scale, resolve, part: "ground" }),
-    (ctx) => { if (waterField) paintStillWater(ctx, waterField, normalizeWater(water.water), scale); },
-    (ctx) => (legacy ? paintStillGrassLegacy : paintStillGrass)(ctx, field, grassWind, scale),
-    renderSVG(map, { scale, resolve, part: "top", treeArt: () => "" }),
-    (ctx) => {
-      for (const s of trees.shadows) ctx.drawImage(s.img, s.x * scale - s.half, s.y * scale - s.half);
+  // Sol, puis eau et herbe figées, puis chemins, objets et murs par-dessus. « view » : portion de
+  // la carte (en cases) pour le fond découpé en tuiles, rendue à « s » pixels par case.
+  const layersAt = (s, view = null, groundPpc = undefined) => {
+    const ox = view ? view[0] * s : 0, oy = view ? view[1] * s : 0;
+    const f = s / scale;
+    return [
+      renderSVG(map, { scale: s, resolve, part: "ground", view, groundPpc }),
+      (ctx) => { if (waterField) paintStillWater(ctx, waterField, normalizeWater(water.water), s, { ox, oy }); },
+      (ctx) => (legacy ? paintStillGrassLegacy : paintStillGrass)(ctx, field, grassWind, s, { ox, oy }),
+      renderSVG(map, { scale: s, resolve, part: "top", treeArt: () => "", view, groundPpc }),
+      (ctx) => {
+        const W = ctx.canvas.width, H = ctx.canvas.height;
+        for (const sh of trees.shadows) {
+          const w = sh.img.width * f, h = sh.img.height * f, x = sh.x * s - sh.half * f - ox, y = sh.y * s - sh.half * f - oy;
+          if (x + w < 0 || y + h < 0 || x > W || y > H) continue;
+          ctx.drawImage(sh.img, x, y, w, h);
+        }
+      }
+    ];
+  };
+  const preview = await rasterizeCanvas(layersAt(scale));
+
+  // Fond fin découpé en tuiles (Vellum) : seulement s'il apporte plus que le fond habituel.
+  let fine = 100;
+  try { fine = Number(game.settings.get(MODULE_ID, "backgroundPpc")) || 100; } catch { /* réglage absent */ }
+  let src;
+  if (vellumActive() && fine > scale * 1.2) {
+    const key = `${slug(map.name)}-${sourceId ?? scene?.id ?? foundry.utils.randomID()}`;
+    const label = (done, total) => game.i18n.format("CADASTRE.Export.Tiles", { done, total });
+    const note = ui.notifications?.info?.(label(0, "…"), { progress: true });
+    try {
+      src = await exportPyramid({
+        map, ppc: fine, preview, previewScale: scale, key,
+        render: async (s, view) => {
+          // Motif des sols peints aussi fin que la bande rendue.
+          const groundPpc = s <= GROUND_PPC ? undefined : Math.min(512, Math.ceil(s / GROUND_PPC) * GROUND_PPC);
+          if (groundPpc) await Promise.all(grounds.map((g) => loadGroundTile(g, groundPpc)));
+          return rasterizeCanvas(layersAt(s, view, groundPpc));
+        },
+        onProgress: (done, total) => note?.update?.({ pct: done / total, message: label(done, total) })
+      });
+    } finally {
+      note?.remove?.();
     }
-  ]);
-  const src = await uploadImage(blob, ext, map.name);
+  } else {
+    const webp = await new Promise((resolve) => preview.toBlob(resolve, "image/webp", 0.92));
+    const { blob, ext } = webp?.type === "image/webp" ? { blob: webp, ext: "webp" }
+      : { blob: await new Promise((resolve) => preview.toBlob(resolve, "image/png")), ext: "png" };
+    src = await uploadImage(blob, ext, map.name);
+  }
+  preview.width = preview.height = 0;
   const treeFlag = trees.items.length ? await uploadTrees(map, trees) : null;
 
   const sceneData = {
