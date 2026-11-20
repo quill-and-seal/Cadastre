@@ -120,7 +120,7 @@ Le réglage **Herbe : rendu** permet de revenir à l'herbe d'avant les optimisat
 
 Chêne, bouleau, sapin et buisson sont générés comme de vrais arbres vus de dessus : un squelette en 3D (tronc, charpentières, branches, rameaux), puis des feuilles à leur taille et en quantité réelles, chacune accrochée à un rameau. La graine de l'arbre (tirée au hasard quand on le pose) donne sa forme : deux arbres ne se ressemblent jamais. Le palmier garde un dessin simple.
 
-Dans l'éditeur, chaque arbre est calculé en arrière-plan ; sa silhouette s'affiche le temps du calcul. À l'export, les arbres sont envoyés avec la scène et seule leur ombre reste dans l'image de fond.
+Dans l'éditeur, chaque arbre est calculé en arrière-plan ; sa silhouette s'affiche le temps du calcul. À l'export, les arbres sont envoyés avec la scène et seule leur ombre reste dans l'image de fond. Dans la scène, ils restent nets à tous les zooms : au-delà de la finesse envoyée avec la scène, les arbres à l'écran sont redessinés plus fins, à la volée, depuis leur graine.
 
 Dans la scène, ils bougent avec **le même vent que l'herbe** (direction, force, vagues et rafales réglées dans **Vent dans l'herbe**), à la même horloge : une rafale qui couche l'herbe passe dans l'arbre au même moment. La couronne se couche un peu sous le vent et balance, les feuilles frémissent, le sapin plie d'un bloc. Avec le niveau **Aucun**, les arbres restent immobiles.
 

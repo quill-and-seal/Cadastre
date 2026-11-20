@@ -25,7 +25,7 @@ export const treePpc = (gridSize) => Math.min(320, Math.round(gridSize * 2.5));
  * @param {{shadowPpc?:number, onProgress?:(done:number)=>void}} [opts]  shadowPpc : pixels par case
  *   de l'image de fond, où les ombres seront peintes
  * @returns {Promise<{items:object[], pages:{color, data, used:number}[], shadows:object[]}>}
- *   items : { x, y (cases), page, u, v, size, half (pixels de la page de couleur), ppc }
+ *   items : { x, y (cases), page, u, v, size, half (pixels de la page de couleur), ppc, kind, seed, radius, rot }
  */
 export async function packTrees(map, ppc, { shadowPpc = map.gridSize, onProgress = null } = {}) {
   const props = map.props.filter((p) => TREE_BY_TYPE.get(p.type)?.proc);
@@ -50,7 +50,8 @@ export async function packTrees(map, ppc, { shadowPpc = map.gridSize, onProgress
       page.color.getContext("2d").drawImage(r.color, x, y);
       page.data.getContext("2d").drawImage(r.data, x * D, y * D, size * D, size * D);
       page.used = Math.max(page.used, y + size + gap);
-      out.items.push({ x: p.x, y: p.y, page: out.pages.indexOf(page), u: x, v: y, size, half: r.half, ppc: tp });
+      // kind, seed, radius, rot : de quoi le redessiner plus fin quand on zoome (tree-layer.js).
+      out.items.push({ x: p.x, y: p.y, page: out.pages.indexOf(page), u: x, v: y, size, half: r.half, ppc: tp, kind: def.proc, seed: p.s ?? 0, radius, rot: p.a });
       x += size + gap; rowH = Math.max(rowH, size + gap);
       // L'ombre est gardée à la résolution de l'image de fond, où elle sera peinte.
       const f = shadowPpc / tp;

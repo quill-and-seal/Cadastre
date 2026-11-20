@@ -285,7 +285,7 @@ export function leafShape(l, kind, N = 36) {
  * @param {number} radius  rayon de la couronne, en cases
  * @param {{detail?:number, rotation?:number}} [opts]  rotation en degrés
  */
-export function buildTree(kind, seed, radius, { detail = 1, rotation = 0 } = {}) {
+export function buildTree(kind, seed, radius, { detail = 1, rotation = 0, cull = true } = {}) {
   const sp = SPECIES[kind] ?? SPECIES.oak;
   const rand = mulberry32(seed >>> 0);
   const tree = fit(sp.form === "conifer" ? growConifer(rand, sp) : growBroadleaf(rand, sp), radius);
@@ -299,5 +299,40 @@ export function buildTree(kind, seed, radius, { detail = 1, rotation = 0 } = {})
     for (const t of tree.tips) { rot(t.p); rot(t.base); rot(t.dir); }
     for (const l of leaves) { rot(l.p); l.ang += r; }
   }
-  return { kind, sp, seed, tree, leaves };
+  const all = leaves.length;
+  return { kind, sp, seed, tree, leaves: cull ? cullHidden(leaves) : leaves, all };
+}
+
+/**
+ * Feuilles invisibles retirées. Vu de dessus, une feuille recouverte par au moins `layers`
+ * épaisseurs de feuilles plus hautes ne se voit pas — même quand le vent fait bouger celles
+ * du dessus, d'où la marge d'une épaisseur. On ne compte comme couvert que le cœur des
+ * feuilles (le long de la nervure), et une feuille n'est retirée que si toute sa surface l'est :
+ * dans le doute, elle reste.
+ */
+export function cullHidden(leaves, layers = 2) {
+  if (!leaves.length) return leaves;
+  const L = leaves.reduce((a, l) => a + l.L, 0) / leaves.length;
+  const cell = L * 0.3;
+  const cover = new Map();
+  const key = (x, y) => Math.floor(x / cell) * 73856093 ^ Math.floor(y / cell) * 19349663;
+  const order = leaves.map((l, i) => i).sort((a, b) => leaves[b].p[2] - leaves[a].p[2]);
+  const keep = new Uint8Array(leaves.length);
+  for (const i of order) {
+    const l = leaves[i], ca = Math.cos(l.ang), sa = Math.sin(l.ang);
+    const W = l.needle ? 0.25 : l.W * (l.f ?? 1);
+    const at = (u, v) => [l.p[0] + ((u + 0.14) * ca - v * sa) * l.L, l.p[1] + ((u + 0.14) * sa + v * ca) * l.L];
+    // Surface de la feuille : quelques points jusqu'au bord.
+    let hidden = true;
+    for (const [u, v] of [[0, 0], [0.3, -W], [0.3, W], [0.55, -W], [0.55, W], [0.5, 0], [1, 0], [0.8, -W * 0.6], [0.8, W * 0.6]]) {
+      const [x, y] = at(u, v);
+      if ((cover.get(key(x, y)) ?? 0) < layers) { hidden = false; break; }
+    }
+    if (hidden) continue;
+    keep[i] = 1;
+    // Ce qu'elle couvre à coup sûr : son cœur, le long de la nervure.
+    const core = l.needle ? [[0.3, 0], [0.6, 0]] : [[0.25, 0], [0.45, 0], [0.65, 0], [0.4, -W * 0.5], [0.4, W * 0.5], [0.55, -W * 0.45], [0.55, W * 0.45]];
+    for (const [u, v] of core) { const k = key(...at(u, v)); cover.set(k, (cover.get(k) ?? 0) + 1); }
+  }
+  return leaves.filter((l, i) => keep[i]);
 }

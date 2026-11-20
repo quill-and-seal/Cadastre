@@ -8,6 +8,7 @@
 import { MODULE_ID, log } from "./constants.js";
 import { normalizeWind, WIND_LEVELS } from "./wind.js";
 import { gustAt, windClock } from "./grass.js";
+import { treeSprites } from "./tree-sprites.js";
 
 /** Au-dessus de l'herbe (même rang, ordre 1), sous les tuiles et les jetons. */
 const SORT_LAYER = 100;
@@ -62,44 +63,139 @@ void main() {
 /** Force du vent locale (0..1 de l'herbe) → poussée sur l'arbre. */
 export const treeGust = (g) => 0.3 + 1.2 * g;
 
+/** Pose une image d'arbre sur son maillage : texture (page ou image seule), cadre, finesse. */
+function setSprite(tr, { color, data, pw, ph, u, v, half, ppc }, sceneSize) {
+  const size = half * 2, u0 = u / pw, v0 = v / ph, u1 = (u + size) / pw, v1 = (v + size) / ph;
+  tr.mesh.geometry.getBuffer("aVertexPosition").update(new Float32Array([-half, -half, half, -half, half, half, -half, half]));
+  tr.mesh.geometry.getBuffer("aTextureCoord").update(new Float32Array([u0, v0, u1, v0, u1, v1, u0, v1]));
+  const U = tr.uniforms;
+  Object.assign(U, { uColor: color, uData: data, uHalf: half, uAmp: ppc * 0.22, uFlut: Math.max(0.6, ppc * 0.006) });
+  U.uRect.set([u0 + 0.5 / pw, v0 + 0.5 / ph, u1 - 0.5 / pw, v1 - 0.5 / ph]);
+  U.uTexel.set([1 / pw, 1 / ph]);
+  tr.mesh.scale.set(sceneSize / ppc);
+  tr.ppc = ppc;
+}
+
 /**
  * Un maillage par arbre, posé sur la scène (pixels de scène), lisant sa page d'images.
- * @returns {{mesh, uniforms, x:number, y:number, r:number}[]}
+ * @returns {object[]}  { mesh, uniforms, x, y, r (cases), ppc, base (image d'origine), item }
  */
 export function treeMeshes(root, items, pages, { size, ox, oy, ppc, dir, strength }) {
   const program = PIXI.Program.from(VERT, TREE_FRAG);
   return items.map((t) => {
     const page = pages[t.page];
     if (!page) return null;
-    // Chaque arbre a sa finesse (pixels par case) ; v1 : celle de toute la scène.
-    const tp = t.ppc ?? ppc, pw = page.w, ph = page.h, h = t.half;
-    const u0 = t.u / pw, v0 = t.v / ph, u1 = (t.u + t.size) / pw, v1 = (t.v + t.size) / ph;
     const geometry = new PIXI.Geometry()
-      .addAttribute("aVertexPosition", [-h, -h, h, -h, h, h, -h, h], 2)
-      .addAttribute("aTextureCoord", [u0, v0, u1, v0, u1, v1, u0, v1], 2)
+      .addAttribute("aVertexPosition", new Float32Array(8), 2)
+      .addAttribute("aTextureCoord", new Float32Array(8), 2)
       .addIndex([0, 1, 2, 0, 2, 3]);
     const uniforms = {
-      uColor: page.color, uData: page.data,
-      uRect: new Float32Array([u0 + 0.5 / pw, v0 + 0.5 / ph, u1 - 0.5 / pw, v1 - 0.5 / ph]),
-      uTexel: new Float32Array([1 / pw, 1 / ph]),
+      uColor: page.color, uData: page.data, uRect: new Float32Array(4), uTexel: new Float32Array(2),
       uDir: new Float32Array(dir), uGust: new Float32Array([0.75, 0.75, 0.75]),
-      uT: 0, uStr: strength, uAmp: tp * 0.22, uFlut: Math.max(0.6, tp * 0.006), uHalf: h, uAlpha: 1
+      uT: 0, uStr: strength, uAmp: 0, uFlut: 0, uHalf: 1, uAlpha: 1
     };
     const mesh = new PIXI.Mesh(geometry, new PIXI.Shader(program, uniforms));
     mesh.position.set(ox + t.x * size, oy + t.y * size);
-    mesh.scale.set(size / tp);
     root.addChild(mesh);
-    // Rayon en cases, pour lire le vent de part et d'autre de la couronne.
-    return { mesh, uniforms, x: t.x, y: t.y, r: h / tp };
+    // Chaque arbre a sa finesse (pixels par case) ; v1 : celle de toute la scène.
+    const base = { color: page.color, data: page.data, pw: page.w, ph: page.h, u: t.u, v: t.v, half: t.half, ppc: t.ppc ?? ppc };
+    const tr = { mesh, uniforms, x: t.x, y: t.y, r: t.half / base.ppc, base, item: t };
+    setSprite(tr, base, size);
+    return tr;
   }).filter(Boolean);
 }
 
+/* -------------------------------------------- */
+/*  Netteté au zoom                             */
+/* -------------------------------------------- */
+
+/** Finesses possibles en zoomant (pixels par case), et nombre d'arbres gardés aussi fins. */
+const SHARP_LEVELS = [400, 560];
+const SHARP_KEEP = 16;
+const MAX_SPRITE = 4096;
+
+/**
+ * Comme Vellum pour les images vectorielles : quand on zoome plus loin que la finesse des images
+ * envoyées avec la scène, les arbres à l'écran sont redessinés plus fins (en arrière-plan, depuis
+ * leur graine), puis remplacés au vol ; en dézoomant, ils reprennent leur image d'origine.
+ */
+export class TreeSharpener {
+  constructor(trees, sceneSize) {
+    this.trees = trees.filter((t) => t.item.kind);
+    this.size = sceneSize;
+    this.lastPpc = 0;
+    this.stableSince = 0;
+    this.sharp = new Set();
+    this.dead = false;
+  }
+
+  /** viewPpc : pixels d'écran par case. */
+  update(viewPpc, now) {
+    if (Math.abs(viewPpc - this.lastPpc) > 1) { this.lastPpc = viewPpc; this.stableSince = now; return; }
+    if (now - this.stableSince < 350) return;
+    for (const tr of this.trees) {
+      const want = this._level(tr, viewPpc);
+      if (want <= tr.base.ppc) { if (tr.ppc !== tr.base.ppc && !tr.pending) this._restore(tr); continue; }
+      if (!tr.mesh.visible || want === tr.ppc || want === tr.pending) continue;
+      // Place pour un arbre de plus : on rend son image d'origine à un arbre hors de l'écran.
+      if (this.sharp.size >= SHARP_KEEP && !this.sharp.has(tr)) {
+        const old = [...this.sharp].find((x) => !x.mesh.visible);
+        if (!old) continue;
+        this._restore(old);
+      }
+      this._request(tr, want);
+    }
+  }
+
+  _level(tr, viewPpc) {
+    if (viewPpc <= tr.base.ppc * 1.15) return tr.base.ppc;
+    const cap = Math.floor((MAX_SPRITE - 8) / (2 * (tr.item.radius + 0.5)));
+    const lvl = SHARP_LEVELS.find((l) => l >= viewPpc) ?? SHARP_LEVELS.at(-1);
+    return Math.max(tr.base.ppc, Math.min(lvl, cap));
+  }
+
+  async _request(tr, ppc) {
+    tr.pending = ppc;
+    try {
+      const it = tr.item;
+      const r = await treeSprites.get({ kind: it.kind, seed: it.seed, radius: it.radius, rotation: it.rot, ppc, detail: 1 });
+      if (this.dead || tr.pending !== ppc) { for (const b of [r.color, r.data, r.shadow]) b?.close?.(); return; }
+      r.shadow?.close?.();
+      const color = PIXI.Texture.from(r.color), data = PIXI.Texture.from(r.data);
+      this._drop(tr);
+      tr.sharpTex = [color, data];
+      setSprite(tr, { color, data, pw: r.half * 2, ph: r.half * 2, u: 0, v: 0, half: r.half, ppc }, this.size);
+      this.sharp.delete(tr); this.sharp.add(tr);
+    } catch (error) {
+      log("Arbre non affiné", error);
+    } finally {
+      if (tr.pending === ppc) tr.pending = 0;
+    }
+  }
+
+  _drop(tr) {
+    for (const t of tr.sharpTex ?? []) t.destroy(true);
+    tr.sharpTex = null;
+  }
+
+  _restore(tr) {
+    this._drop(tr);
+    this.sharp.delete(tr);
+    setSprite(tr, tr.base, this.size);
+  }
+
+  destroy() {
+    this.dead = true;
+    for (const tr of this.trees) this._drop(tr);
+  }
+}
+
 /** Une image : le vent lu de part et d'autre de chaque arbre visible (view : rectangle en cases). */
-export function stepTrees(trees, t, wind, dir, [x0, y0, x1, y1]) {
+export function stepTrees(trees, t, wind, dir, [x0, y0, x1, y1], animated = true) {
   for (const tr of trees) {
     const vis = tr.x + tr.r >= x0 && tr.x - tr.r <= x1 && tr.y + tr.r >= y0 && tr.y - tr.r <= y1;
     tr.mesh.visible = vis;
-    if (!vis) continue;
+    if (!vis || !animated) continue;
     const k = tr.r * 0.8, g = tr.uniforms.uGust;
     g[0] = treeGust(gustAt(tr.x - dir[0] * k, tr.y - dir[1] * k, t, wind));
     g[1] = treeGust(gustAt(tr.x, tr.y, t, wind));
@@ -125,6 +221,7 @@ function teardown() {
   if (!state) return;
   state.dead = true;
   if (state.tick) canvas.app?.ticker?.remove(state.tick);
+  state.sharpener?.destroy();
   if (state.root && !state.root.destroyed) state.root.destroy({ children: true });
   state = null;
 }
@@ -158,14 +255,15 @@ async function refresh() {
 
     const trees = treeMeshes(root, data.items, pages, { size, ox, oy, ppc, dir, strength: animated ? wind.strength : 0 });
 
-    if (!animated) return;
+    const sharpener = me.sharpener = new TreeSharpener(trees, size);
     me.tick = () => {
       const t = windClock();
       const r = canvas.app.renderer, inv = canvas.stage.worldTransform.clone().invert();
       const p0 = inv.apply(new PIXI.Point(0, 0)), p1 = inv.apply(new PIXI.Point(r.screen.width, r.screen.height));
       const x0 = (Math.min(p0.x, p1.x) - ox) / size, y0 = (Math.min(p0.y, p1.y) - oy) / size;
       const x1 = (Math.max(p0.x, p1.x) - ox) / size, y1 = (Math.max(p0.y, p1.y) - oy) / size;
-      stepTrees(trees, t, wind, dir, [x0, y0, x1, y1]);
+      stepTrees(trees, t, wind, dir, [x0, y0, x1, y1], animated);
+      sharpener.update(size * Math.abs(canvas.stage.scale.x) * (r.resolution ?? 1), performance.now());
     };
     me.tick();
     canvas.app.ticker.add(me.tick);

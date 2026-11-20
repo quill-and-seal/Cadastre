@@ -92,3 +92,13 @@ test("rendu : un arbre généré peut être remplacé par son image, laissé de 
   assert.match(renderProps(map, "cad", undefined, { treeArt: () => null }), /opacity="0.55"/);
   assert.ok(Math.abs(treeRadius(TREE_BY_TYPE.get("tree-oak"), 1) - 1.84) < 1e-9);
 });
+
+test("arbre généré : les feuilles cachées sous deux épaisseurs d'autres sont retirées, pas les autres", () => {
+  const full = buildTree("oak", 4, 1.8, { cull: false }), cut = buildTree("oak", 4, 1.8);
+  assert.equal(cut.all, full.leaves.length);
+  assert.ok(cut.leaves.length < full.leaves.length * 0.8, `${cut.leaves.length} / ${full.leaves.length}`);
+  // Les feuilles du dessus de la couronne restent toutes.
+  const zTop = Math.max(...full.leaves.map((l) => l.p[2]));
+  const top = (b) => b.leaves.filter((l) => l.p[2] > zTop - 0.05).length;
+  assert.equal(top(cut), top(full));
+});

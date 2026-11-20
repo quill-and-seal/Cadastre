@@ -2,7 +2,10 @@
 
 ## 0.1.18
 
-- **Arbres nets dans la scène** : ils étaient dessinés à la résolution de l'image de fond (100 px par case) et devenaient flous dès qu'on zoomait. Ils sont maintenant dessinés à 2,5 fois cette finesse (250 px par case pour une grille de 100 px), et restent nets jusqu'à un zoom de 2,5. La carte du vent, qui est lisse, est gardée à demi-résolution pour ne pas alourdir la scène. Les scènes exportées en 0.1.17 sont à réexporter.
+- **Arbres nets dans la scène** : ils étaient dessinés à la résolution de l'image de fond (100 px par case) et devenaient flous dès qu'on zoomait. Ils sont maintenant envoyés avec 2,5 fois cette finesse (250 px par case pour une grille de 100 px). La carte du vent, qui est lisse, est gardée à demi-résolution pour ne pas alourdir la scène.
+- **Nets à tous les zooms, comme avec Vellum** : quand on zoome plus loin, les arbres à l'écran sont redessinés plus fins en arrière-plan (jusqu'à 560 px par case), à partir de leur graine, puis remplacés au vol ; l'arbre est le même, feuille pour feuille. En dézoomant, ils reprennent leur image d'origine. Seize arbres au plus sont gardés affinés à la fois.
+- **Moitié moins de feuilles, même image** : les feuilles recouvertes par au moins deux épaisseurs d'autres feuilles (invisibles de dessus, même quand le vent bouge celles du dessus) ne sont plus dessinées. Chêne −46 %, bouleau −58 %, buisson −42 % ; moins de 0,2 % des pixels changent, à peine. Arbres calculés plus vite dans l'éditeur et à l'export.
+- Les scènes exportées en 0.1.17 sont à réexporter.
 
 ## 0.1.17
 
