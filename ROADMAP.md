@@ -27,6 +27,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - 0.1.15 : outil Eau (étendue, profondeur et type par zones, courants tracés et eau calme), jonctions des cours d'eau.
 - 0.1.16 : le courant contourne les îles et glisse le long des berges.
 - 0.1.17 : arbres générés branche par branche et feuille par feuille, animés par le même vent que l'herbe.
+- 0.1.18 : arbres nets quand on zoome dans la scène.
 
 ## 0.2 — Palisade, Vellum, étages, zones retouchables
 

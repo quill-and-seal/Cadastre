@@ -71,7 +71,8 @@ export function treeMeshes(root, items, pages, { size, ox, oy, ppc, dir, strengt
   return items.map((t) => {
     const page = pages[t.page];
     if (!page) return null;
-    const pw = page.w, ph = page.h, h = t.half;
+    // Chaque arbre a sa finesse (pixels par case) ; v1 : celle de toute la scène.
+    const tp = t.ppc ?? ppc, pw = page.w, ph = page.h, h = t.half;
     const u0 = t.u / pw, v0 = t.v / ph, u1 = (t.u + t.size) / pw, v1 = (t.v + t.size) / ph;
     const geometry = new PIXI.Geometry()
       .addAttribute("aVertexPosition", [-h, -h, h, -h, h, h, -h, h], 2)
@@ -82,14 +83,14 @@ export function treeMeshes(root, items, pages, { size, ox, oy, ppc, dir, strengt
       uRect: new Float32Array([u0 + 0.5 / pw, v0 + 0.5 / ph, u1 - 0.5 / pw, v1 - 0.5 / ph]),
       uTexel: new Float32Array([1 / pw, 1 / ph]),
       uDir: new Float32Array(dir), uGust: new Float32Array([0.75, 0.75, 0.75]),
-      uT: 0, uStr: strength, uAmp: ppc * 0.22, uFlut: Math.max(0.6, ppc * 0.006), uHalf: h, uAlpha: 1
+      uT: 0, uStr: strength, uAmp: tp * 0.22, uFlut: Math.max(0.6, tp * 0.006), uHalf: h, uAlpha: 1
     };
     const mesh = new PIXI.Mesh(geometry, new PIXI.Shader(program, uniforms));
     mesh.position.set(ox + t.x * size, oy + t.y * size);
-    mesh.scale.set(size / ppc);
+    mesh.scale.set(size / tp);
     root.addChild(mesh);
     // Rayon en cases, pour lire le vent de part et d'autre de la couronne.
-    return { mesh, uniforms, x: t.x, y: t.y, r: h / ppc };
+    return { mesh, uniforms, x: t.x, y: t.y, r: h / tp };
   }).filter(Boolean);
 }
 

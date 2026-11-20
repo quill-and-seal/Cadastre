@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.18
+
+- **Arbres nets dans la scène** : ils étaient dessinés à la résolution de l'image de fond (100 px par case) et devenaient flous dès qu'on zoomait. Ils sont maintenant dessinés à 2,5 fois cette finesse (250 px par case pour une grille de 100 px), et restent nets jusqu'à un zoom de 2,5. La carte du vent, qui est lisse, est gardée à demi-résolution pour ne pas alourdir la scène. Les scènes exportées en 0.1.17 sont à réexporter.
+
 ## 0.1.17
 
 - **Arbres générés** : chêne, bouleau, sapin et buisson sont maintenant calculés branche par branche et feuille par feuille, comme de vrais arbres vus de dessus.
