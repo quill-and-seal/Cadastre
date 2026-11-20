@@ -12,10 +12,11 @@
  */
 import { MODULE_ID, log } from "./constants.js";
 import { startLegacyGrass, stopLegacyGrass } from "./wind-layer-legacy.js";
+import { refreshTrees } from "./tree-layer.js";
 import { normalizeWind, WIND_LEVELS } from "./wind.js";
 import {
   bladeField, lod, windUniforms, packPushers, PushTrail, grassVert, GRASS_FRAG, BLADE_CORNERS, BLADE_BYTES,
-  drawCount, pushersFor, gustGrid, gustRect, GUST_MAX
+  drawCount, pushersFor, gustGrid, gustRect, GUST_MAX, windClock
 } from "./grass.js";
 
 /** Rang de dessin dans le groupe principal : au-dessus du fond de scène, sous les tuiles et les jetons. */
@@ -39,7 +40,7 @@ export function registerWind() {
       3: "CADASTRE.Settings.WindLevels.3"
     },
     default: WIND_LEVELS.FULL,
-    onChange: () => refresh()
+    onChange: () => { refresh(); refreshTrees(); }
   });
   game.settings.register(MODULE_ID, "grassRender", {
     name: "CADASTRE.Settings.GrassRender",
@@ -181,7 +182,7 @@ function refresh() {
     const tick = () => {
       const t0 = performance.now();
       const dt = Math.min(0.1, (canvas.app.ticker.deltaMS ?? 16) / 1000);
-      time += dt;
+      time = windClock();
       const view = viewRect(size, ox, oy);
       const pushers = trail.update(movers(), dt);
       const visible = meshes.filter((m) => {

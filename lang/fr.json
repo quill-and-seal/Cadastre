@@ -123,9 +123,10 @@
       "TreeKind": "Essence",
       "TreeKinds": {
         "mix": "Mélange",
-        "oak": "Feuillu",
+        "oak": "Chêne",
+        "birch": "Bouleau",
         "palm": "Palmier",
-        "pine": "Conifère",
+        "pine": "Sapin",
         "bush": "Buisson"
       },
       "TreeRadius": "Zone semée (rayon)",
@@ -253,7 +254,8 @@
       "Failed": "Export impossible : {error}",
       "Empty": "La carte est vide : rien à exporter.",
       "Reduced": "Carte très grande : l'image est réduite à {size} px de côté, Foundry l'étire à la taille de la scène.",
-      "Missing": "Images introuvables, laissées vides sur la scène : {list}"
+      "Missing": "Images introuvables, laissées vides sur la scène : {list}",
+      "Trees": "Cadastre : dessin des arbres ({done} / {total})…"
     },
     "Close": {
       "Title": "Modifications non enregistrées",

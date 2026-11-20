@@ -3,7 +3,8 @@
  * La fenêtre Foundry (app.js) l'héberge ; le banc d'essai (tools/editor-lab.html) aussi.
  */
 import { TERRAINS, PROPS, mulberry32 } from "./catalog.js";
-import { TREES, TREE_PREFIX, TREE_BY_TYPE, pickTreeKind } from "./trees.js";
+import { TREES, TREE_PREFIX, TREE_BY_TYPE, pickTreeKind, treeRadius } from "./trees.js";
+import { treeSprites } from "./tree-sprites.js";
 import * as M from "./model.js";
 import * as P from "./poly.js";
 import { flattenNodes, rectNodes, ellipseNodes, smoothNodes, rdp, cleanNode, polylineLength } from "./curves.js";
@@ -46,7 +47,7 @@ const WATER_FIELDS = [
 ];
 import { renderDefs, renderTerrains, renderProps, renderWalls, renderGrid, polylinePath, terrainFill, terrainPatternId, propArt, defaultResolve } from "./render.js";
 import { isAssetKey, assetIdOf, assetKey, embedAsset, refreshMapAssets, filterAssets, normalizeLibrary, pruneAssets } from "./library.js";
-import { HISTORY_LIMIT, MIN_CELLS, MAX_CELLS, MIN_GRID_SIZE, MAX_GRID_SIZE } from "./constants.js";
+import { HISTORY_LIMIT, MIN_CELLS, MAX_CELLS, MIN_GRID_SIZE, MAX_GRID_SIZE, log } from "./constants.js";
 
 /** Outils, dans l'ordre de la barre ; `key` : raccourci (les anciens gardent le leur). */
 export const TOOLS = [
@@ -72,6 +73,8 @@ const isCurve = (sel) => sel?.type === "wall" || sel?.type === "path";
 const ERASE_MODES = ["all", "floor", "walls", "props"];
 const MIN_SCALE = 4, MAX_SCALE = 260;
 const SNAP_STEP = 0.5;
+/** Aperçu des arbres générés : pixels par case, et part des feuilles dessinées (plus grandes). */
+const TREE_PREVIEW_PPC = 48, TREE_PREVIEW_DETAIL = 0.35;
 const HIT_PX = 8;
 const SVG_NS = "http://www.w3.org/2000/svg";
 /** Nombre maximal d'assets de bibliothèque affichés dans une palette (la recherche affine). */
@@ -295,7 +298,41 @@ export class MapEditor {
     this._updateTopbar();
   }
 
+  /* -------------------------------------------- */
+  /*  Arbres générés                              */
+  /* -------------------------------------------- */
+
+  _renderProps() {
+    this.el.props.innerHTML = renderProps(this.map, this.prefix, this.resolve, { treeArt: (p, def) => this._treeArt(p, def) });
+  }
+
+  /**
+   * Aperçu d'un arbre généré : son image s'il est déjà dessiné ; sinon son dessin simple, et le
+   * calcul est lancé en arrière-plan (les objets sont redessinés quand il arrive).
+   */
+  _treeArt(p, def) {
+    const ppc = TREE_PREVIEW_PPC;
+    const req = { kind: def.proc, seed: p.s ?? 0, radius: treeRadius(def, p.k), rotation: p.a, ppc, detail: TREE_PREVIEW_DETAIL, preview: true };
+    const key = JSON.stringify(req);
+    this._treeImgs ??= new Map();
+    const img = this._treeImgs.get(key);
+    if (img) return img.svg;
+    if (img === undefined) {
+      this._treeImgs.set(key, null);
+      treeSprites.get(req).then((r) => {
+        if (this._destroyed) return;
+        r.url ??= URL.createObjectURL(r.blob);
+        const f = (n) => Math.round(n / ppc * 1000) / 1000;
+        this._treeImgs.set(key, { svg: `<image href="${r.url}" x="${f(-r.half)}" y="${f(-r.half)}" width="${f(r.shadowW)}" height="${f(r.shadowH)}"/>` });
+        if (!this._treeRedraw) this._treeRedraw = requestAnimationFrame(() => { this._treeRedraw = 0; if (!this._destroyed) this._renderProps(); });
+      }).catch((error) => { log("Arbre non dessiné", error); });
+    }
+    return null;
+  }
+
   destroy() {
+    this._destroyed = true;
+    if (this._treeRedraw) cancelAnimationFrame(this._treeRedraw);
     this.windPreview?.destroy();
     this.waterPreview?.destroy();
     for (const [target, type, fn, opts] of this._listeners) target.removeEventListener(type, fn, opts);
@@ -340,7 +377,7 @@ export class MapEditor {
     if (!this.animateWater) this.el.svg.pauseAnimations?.();
     this.windPreview?.invalidate();
     this.waterPreview?.invalidate();
-    this.el.props.innerHTML = renderProps(map, prefix, this.resolve);
+    this._renderProps();
     this.el.walls.innerHTML = renderWalls(map, "editor", prefix);
     this.el.grid.style.display = this.showGrid ? "" : "none";
     this._renderOverlay();

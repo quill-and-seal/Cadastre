@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.17
+
+- **Arbres générés** : chêne, bouleau, sapin et buisson sont maintenant calculés branche par branche et feuille par feuille, comme de vrais arbres vus de dessus.
+  - Squelette en 3D : tronc et contreforts, charpentières tout autour, branches qui serpentent, s'affinent et se partagent l'épaisseur à chaque fourche, branches latérales le long des autres ; sapin en étages, avec rameaux sur trois niveaux.
+  - Feuilles à leur taille réelle (chêne 11 cm, bouleau 6 cm, aiguille de pin 8 cm) et en quantité réelle (des dizaines de milliers par arbre), chacune accrochée à un rameau ; feuille de chêne lobée, de bouleau dentée, aiguilles en touffes.
+  - Écorce selon l'essence (crevasses du chêne, bouleau blanc marqué de noir, plaques du pin), lumière en haut à gauche, ombre portée au sol.
+  - Nouvelle essence : **bouleau**. Le palmier garde son ancien dessin. Les arbres déjà posés sur les cartes prennent le nouveau rendu.
+- **Les arbres bougent avec le vent**, dans la scène : la couronne se couche un peu sous le vent et balance, chaque grosse branche à son rythme, les feuilles frémissent, et le sapin plie d'un bloc. C'est **le même vent que l'herbe**, à la même horloge : une rafale qui couche l'herbe passe dans l'arbre au même moment. Avec l'effet du vent coupé, les arbres restent visibles, immobiles.
+- Dans l'éditeur, chaque arbre est calculé en arrière-plan ; sa silhouette s'affiche le temps du calcul.
+- À l'export, les arbres ne sont plus dans l'image de fond (seule leur ombre y reste) : ils sont envoyés avec la scène en pages d'images, que les joueurs n'ont pas à recalculer. L'export affiche sa progression. Une scène exportée avant la 0.1.17 garde ses anciens arbres tant qu'elle n'est pas réexportée.
+
 ## 0.1.16
 
 - **Îles** : le courant contourne enfin les îles (trous dans l'eau). Il s'écrase devant en blanchissant, se partage de chaque côté, file plus vite le long des flancs et reste plus lent à l'abri, derrière. Plus généralement, l'eau ne traverse plus une berge : contre une rive en travers du courant, elle glisse le long du bord.

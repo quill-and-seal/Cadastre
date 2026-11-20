@@ -26,6 +26,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - 0.1.14 : réglage « Herbe : rendu » pour retrouver l'herbe d'avant les optimisations.
 - 0.1.15 : outil Eau (étendue, profondeur et type par zones, courants tracés et eau calme), jonctions des cours d'eau.
 - 0.1.16 : le courant contourne les îles et glisse le long des berges.
+- 0.1.17 : arbres générés branche par branche et feuille par feuille, animés par le même vent que l'herbe.
 
 ## 0.2 — Palisade, Vellum, étages, zones retouchables
 
@@ -37,7 +38,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - Calques : masquer, verrouiller, réordonner.
 - Sélection de plusieurs objets au rectangle, déplacés et tournés ensemble.
 - Dénivelés à l'intérieur des terres ; écume et rapides sur les rivières.
-- Nouveaux arbres assortis à l'herbe et à l'eau.
+- Arbres : saisons (printemps, automne, hiver nu), d'autres essences ; aperçu du vent dans les arbres dans l'éditeur.
 - Eau : remous lus dans une table, simulation des particules sur la carte graphique.
 
 ## 0.3 — Générateur de donjons et grottes

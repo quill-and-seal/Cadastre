@@ -33,6 +33,13 @@ export const BLADE_BYTES = 8;
 export const GUST_RES = 4;
 export const GUST_MAX = 256;
 
+/**
+ * Horloge du vent, commune à l'herbe et aux arbres : une rafale qui couche l'herbe passe dans
+ * les arbres au même moment. En secondes, ramenée dans une plage où les cartes graphiques
+ * gardent assez de précision.
+ */
+export const windClock = () => (performance.now() / 1000) % 3600;
+
 export const WAVES = ["swell", "gusts", "mix"];
 
 /** Contour d'un brin : un triangle (x : 0 pied → 1 pointe, y : côté -1 / 1). */

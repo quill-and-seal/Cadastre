@@ -43,3 +43,52 @@ test("le mélange tire surtout des feuillus", () => {
   assert.ok(count.oak > count.palm && count.oak > count.pine);
   assert.equal(pickTreeKind("palm", rand), "palm");
 });
+
+/* -------------------------------------------- */
+/*  Arbres générés                              */
+/* -------------------------------------------- */
+import { buildTree, SPECIES } from "../scripts/tree-gen.js";
+import { treeRadius } from "../scripts/trees.js";
+import { renderProps } from "../scripts/render.js";
+
+test("arbre généré : même graine, même arbre ; la couronne a le rayon demandé", () => {
+  for (const kind of Object.keys(SPECIES)) {
+    const a = buildTree(kind, 5, 1.5, { detail: 0.3 }), b = buildTree(kind, 5, 1.5, { detail: 0.3 });
+    assert.equal(a.leaves.length, b.leaves.length, kind);
+    assert.deepEqual(a.leaves[10].p, b.leaves[10].p, kind);
+    assert.ok(a.leaves.length > 500, `${kind} : ${a.leaves.length} feuilles`);
+    let m = 0;
+    for (const g of a.tree.segs) if (!g.twig) m = Math.max(m, Math.hypot(g.b[0], g.b[1]));
+    assert.ok(m <= 1.5 + 1e-6 && m > 1.2, `${kind} : rayon ${m}`);
+    for (const g of a.tree.segs) assert.ok([g.a, g.b, [g.w, g.w2]].flat().every(Number.isFinite), kind);
+  }
+});
+
+test("arbre généré : la rotation tourne l'arbre sans le changer", () => {
+  const a = buildTree("oak", 9, 2, { detail: 0.3 }), b = buildTree("oak", 9, 2, { detail: 0.3, rotation: 90 });
+  const [x, y] = a.leaves[50].p, [bx, by] = b.leaves[50].p;
+  assert.ok(Math.abs(bx + y) < 1e-9 && Math.abs(by - x) < 1e-9);
+});
+
+test("arbre généré : chaque feuille tient à un rameau (aucune en l'air)", () => {
+  const { tree, leaves } = buildTree("birch", 3, 1.5, { detail: 0.3 });
+  const twigs = tree.segs.filter((g) => g.twig);
+  const near = (p) => twigs.some((g) => {
+    const dx = g.b[0] - g.a[0], dy = g.b[1] - g.a[1], dz = g.b[2] - g.a[2], L2 = dx * dx + dy * dy + dz * dz;
+    const t = Math.max(0, Math.min(1, ((p[0] - g.a[0]) * dx + (p[1] - g.a[1]) * dy + (p[2] - g.a[2]) * dz) / L2));
+    return Math.hypot(g.a[0] + dx * t - p[0], g.a[1] + dy * t - p[1], g.a[2] + dz * t - p[2]) < 0.01;
+  });
+  for (let i = 0; i < leaves.length; i += 97) assert.ok(near(leaves[i].p), `feuille ${i}`);
+});
+
+test("rendu : un arbre généré peut être remplacé par son image, laissé de côté, ou dessiné simplement", () => {
+  const map = createMap({ width: 10, height: 10 });
+  addProp(map, "tree-oak", 5, 5, 0, 1, 42);
+  addProp(map, "tree-palm", 2, 2, 0, 1, 7);
+  assert.match(renderProps(map, "cad", undefined, { treeArt: () => "<image/>" }), /<image\/>/);
+  const skipped = renderProps(map, "cad", undefined, { treeArt: () => "" });
+  assert.doesNotMatch(skipped, /data-prop="[^"]*" transform="translate\(5 5\)/);
+  assert.match(skipped, /translate\(2 2\)/, "le palmier reste dessiné");
+  assert.match(renderProps(map, "cad", undefined, { treeArt: () => null }), /opacity="0.55"/);
+  assert.ok(Math.abs(treeRadius(TREE_BY_TYPE.get("tree-oak"), 1) - 1.84) < 1e-9);
+});

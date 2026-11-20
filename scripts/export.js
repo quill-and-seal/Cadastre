@@ -15,6 +15,9 @@ import { waterFlag, buildField, normalizeWater } from "./water.js";
 import { paintStillWater } from "./water-gl.js";
 import { buildWallData, textureScale } from "./walls.js";
 import { isEmpty } from "./model.js";
+import { TREE_BY_TYPE } from "./trees.js";
+import { packTrees, TREE_PAGE } from "./tree-pack.js";
+import { makeCanvas } from "./tree-paint.js";
 
 const FilePickerCls = () => foundry.applications?.apps?.FilePicker?.implementation ?? globalThis.FilePicker;
 const SceneCls = () => CONFIG.Scene.documentClass;
@@ -103,7 +106,7 @@ const slug = (s) => (s || "carte").normalize("NFD").replace(/[̀-ͯ]/g, "")
   .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "carte";
 
 /** Envoie l'image dans worlds/<monde>/cadastre/ ; un nom horodaté évite que le navigateur garde l'ancienne en cache. */
-async function uploadImage(blob, ext, name) {
+async function uploadImage(blob, ext, name, suffix = "") {
   const FP = FilePickerCls();
   const dir = `worlds/${game.world.id}/${MODULE_ID}`;
   try {
@@ -111,7 +114,7 @@ async function uploadImage(blob, ext, name) {
   } catch {
     // Le dossier existe déjà.
   }
-  const file = new File([blob], `${slug(name)}-${Date.now()}.${ext}`, { type: blob.type });
+  const file = new File([blob], `${slug(name)}${suffix}-${Date.now()}.${ext}`, { type: blob.type });
   const res = await FP.upload("data", dir, file, {}, { notify: false });
   if (res === false || res?.status === "error") throw new Error(res?.message ?? "upload");
   return res?.path ?? `${dir}/${file.name}`;
@@ -141,6 +144,37 @@ async function refreshThumbnail(scene) {
   }
 }
 
+const canvasBlob = async (canvas, type, quality) => (canvas.convertToBlob
+  ? canvas.convertToBlob({ type, quality })
+  : new Promise((resolve) => canvas.toBlob(resolve, type, quality)));
+
+/** Arbres générés, avec la progression affichée. */
+async function exportTrees(map, ppc) {
+  const total = map.props.filter((p) => TREE_BY_TYPE.get(p.type)?.proc).length;
+  if (!total) return packTrees(map, ppc);
+  const label = (done) => game.i18n.format("CADASTRE.Export.Trees", { done, total });
+  const note = ui.notifications?.info?.(label(0), { progress: true });
+  try {
+    return await packTrees(map, ppc, (done) => note?.update?.({ pct: done / total, message: label(done) }));
+  } finally {
+    note?.remove?.();
+  }
+}
+
+/** Envoie les pages d'arbres ; renvoie le drapeau de scène du calque des arbres. */
+async function uploadTrees(map, trees, ppc) {
+  const pages = [];
+  for (const [i, p] of trees.pages.entries()) {
+    // Seule la partie remplie de la page est gardée.
+    const h = Math.max(1, p.used);
+    const crop = (src) => { const c = makeCanvas(TREE_PAGE, h); c.getContext("2d").drawImage(src, 0, 0); return c; };
+    const color = await uploadImage(await canvasBlob(crop(p.color), "image/webp", 0.92), "webp", map.name, `-arbres${i}`);
+    const data = await uploadImage(await canvasBlob(crop(p.data), "image/png"), "png", map.name, `-vent${i}`);
+    pages.push({ color, data, w: TREE_PAGE, h });
+  }
+  return { v: 1, ppc, wind: normalizeWind(map.wind), pages, items: trees.items };
+}
+
 /**
  * @param {object} map
  * @param {{scene?:Scene|null, sourceId?:string}} [options]  scene : scène à mettre à jour, sinon une nouvelle est créée
@@ -158,14 +192,20 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
   // L'eau, figée, aussi : la même que celle que le calque anime.
   const water = waterFlag(map);
   const waterField = water ? buildField(water) : null;
+  // Arbres générés : animés dans la scène, hors de l'image de fond ; leur ombre y reste.
+  const trees = await exportTrees(map, scale);
   // Sol, puis eau et herbe figées, puis chemins, objets et murs par-dessus.
   const { blob, ext } = await rasterize([
     renderSVG(map, { scale, resolve, part: "ground" }),
     (ctx) => { if (waterField) paintStillWater(ctx, waterField, normalizeWater(water.water), scale); },
     (ctx) => (legacy ? paintStillGrassLegacy : paintStillGrass)(ctx, field, grassWind, scale),
-    renderSVG(map, { scale, resolve, part: "top" })
+    renderSVG(map, { scale, resolve, part: "top", treeArt: () => "" }),
+    (ctx) => {
+      for (const s of trees.shadows) ctx.drawImage(s.img, s.x * scale - s.half, s.y * scale - s.half, s.w, s.h);
+    }
   ]);
   const src = await uploadImage(blob, ext, map.name);
+  const treeFlag = trees.items.length ? await uploadTrees(map, trees, scale) : null;
 
   const sceneData = {
     width: sceneWidth,
@@ -202,6 +242,9 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
   const wind = windFlag(map);
   if (wind) await scene.setFlag(MODULE_ID, "wind", wind);
   else if (scene.getFlag(MODULE_ID, "wind")) await scene.unsetFlag(MODULE_ID, "wind");
+  // Arbres générés : animés par le calque du module (tree-layer.js).
+  if (treeFlag) await scene.setFlag(MODULE_ID, "trees", treeFlag);
+  else if (scene.getFlag(MODULE_ID, "trees")) await scene.unsetFlag(MODULE_ID, "trees");
   await refreshThumbnail(scene);
   return { scene, created, reduced, missing };
 }

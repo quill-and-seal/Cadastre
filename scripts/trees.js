@@ -148,18 +148,27 @@ function pine(seed, size) {
   return out;
 }
 
+/**
+ * proc : essence générée (tree-gen.js) — l'arbre est calculé branche par branche et feuille par
+ * feuille, puis animé par le vent dans la scène. `make` reste son dessin simple : icône de la
+ * palette et silhouette affichée le temps du calcul.
+ */
 export const TREES = [
-  { id: "oak", w: 3, h: 3, tree: true, make: (seed) => lobedCanopy(seed, 3, { lobes: [8, 11], palette: { dark: "#2c6339", mid: "#3c7d46", light: "#5f9f58" } }) },
-  { id: "palm", w: 3.4, h: 3.4, tree: true, make: (seed) => palm(seed, 3.4) },
-  { id: "pine", w: 2.6, h: 2.6, tree: true, make: (seed) => pine(seed, 2.6) },
-  { id: "bush", w: 1.4, h: 1.4, tree: true, make: (seed) => lobedCanopy(seed, 1.4, { lobes: [6, 8], palette: { dark: "#2f6e35", mid: "#418a43", light: "#69ad5c" }, flowers: 0.35 }) }
+  { id: "oak", w: 4, h: 4, tree: true, proc: "oak", make: (seed) => lobedCanopy(seed, 4, { lobes: [8, 11], palette: { dark: "#2c6339", mid: "#3c7d46", light: "#5f9f58" } }) },
+  { id: "birch", w: 3, h: 3, tree: true, proc: "birch", make: (seed) => lobedCanopy(seed, 3, { lobes: [7, 10], palette: { dark: "#3b7a3a", mid: "#55984a", light: "#8cc26a" } }) },
+  { id: "pine", w: 3, h: 3, tree: true, proc: "pine", make: (seed) => pine(seed, 3) },
+  { id: "bush", w: 1.4, h: 1.4, tree: true, proc: "bush", make: (seed) => lobedCanopy(seed, 1.4, { lobes: [6, 8], palette: { dark: "#2f6e35", mid: "#418a43", light: "#69ad5c" }, flowers: 0.35 }) },
+  { id: "palm", w: 3.4, h: 3.4, tree: true, make: (seed) => palm(seed, 3.4) }
 ];
 
 export const TREE_PREFIX = "tree-";
 export const TREE_BY_TYPE = new Map(TREES.map((t) => [`${TREE_PREFIX}${t.id}`, t]));
 
 /** Mélange par défaut du pinceau à arbres : surtout des feuillus et des buissons. */
-export const TREE_MIX = [["oak", 0.45], ["bush", 0.25], ["palm", 0.15], ["pine", 0.15]];
+export const TREE_MIX = [["oak", 0.35], ["birch", 0.2], ["bush", 0.2], ["pine", 0.15], ["palm", 0.1]];
+
+/** Rayon de la couronne d'un arbre posé (cases), pour son essence et son échelle. */
+export const treeRadius = (def, k = 1) => (def.w * k) / 2 * 0.92;
 
 export function pickTreeKind(kind, rand) {
   if (kind !== "mix") return kind;

@@ -252,8 +252,13 @@ export function propArt(def, resolve = defaultResolve, seed = 0) {
     : def.svg;
 }
 
-/** Objets posés, avec une ombre portée. */
-export function renderProps(map, prefix = "cad", resolve = defaultResolve) {
+/**
+ * Objets posés, avec une ombre portée.
+ * treeArt(prop, def) : dessin d'un arbre généré, autour du pied de son tronc (déjà tourné et à
+ * sa taille) ; "" : arbre laissé de côté (à l'export, il est animé dans la scène) ; null : son
+ * dessin simple, le temps qu'il soit calculé.
+ */
+export function renderProps(map, prefix = "cad", resolve = defaultResolve, { treeArt = null } = {}) {
   // Les arbres portent leur propre ombre : ils restent hors du filtre (coûteux) des autres objets.
   // L'ordre de pose est conservé : chaque suite d'objets ou d'arbres forme son propre groupe.
   let out = "", run = "", runIsTree = null;
@@ -266,6 +271,13 @@ export function renderProps(map, prefix = "cad", resolve = defaultResolve) {
     if (!def) continue;
     const isTree = !!def.tree;
     if (isTree !== runIsTree) { flush(); runIsTree = isTree; }
+    if (def.proc && treeArt) {
+      const art = treeArt(p, def);
+      if (art === "") continue;
+      if (art) { run += `<g data-prop="${p.id}" transform="translate(${p.x} ${p.y})">${art}</g>`; continue; }
+      run += `<g data-prop="${p.id}" opacity="0.55" transform="translate(${p.x} ${p.y}) rotate(${p.a}) scale(${p.k}) translate(${-def.w / 2} ${-def.h / 2})">${propArt(def, resolve, p.s)}</g>`;
+      continue;
+    }
     run += `<g data-prop="${p.id}" transform="translate(${p.x} ${p.y}) rotate(${p.a}) scale(${p.k}) translate(${-def.w / 2} ${-def.h / 2})">${propArt(def, resolve, p.s)}</g>`;
   }
   flush();
@@ -340,7 +352,7 @@ export function renderGrid(map, opacity = 0.12) {
 }
 
 /** Contenu complet (sans la balise <svg>). */
-export function renderContent(map, { mode = "export", grid = false, prefix = "cad", resolve = defaultResolve, part = "all" } = {}) {
+export function renderContent(map, { mode = "export", grid = false, prefix = "cad", resolve = defaultResolve, part = "all", treeArt = null } = {}) {
   // « ground » : fond, sols et eau ; « top » : chemins, objets et murs. L'eau animée et l'herbe
   // se glissent entre les deux.
   const ground = part !== "top", top = part !== "ground";
@@ -349,7 +361,7 @@ export function renderContent(map, { mode = "export", grid = false, prefix = "ca
       + renderTerrains(map, prefix)
       + renderWater(map, prefix) : "")
     + (top ? renderPaths(map, prefix)
-      + renderProps(map, prefix, resolve)
+      + renderProps(map, prefix, resolve, { treeArt })
       + renderWalls(map, mode, prefix)
       + (grid ? renderGrid(map) : "") : "");
 }
@@ -359,9 +371,9 @@ export function renderContent(map, { mode = "export", grid = false, prefix = "ca
  * @param {{scale?:number, grid?:boolean, mode?:"editor"|"export", resolve?:(src:string)=>string}} [options]
  *   scale = pixels par case ; resolve = URL de chaque image d'asset (à l'export : images intégrées)
  */
-export function renderSVG(map, { scale = map.gridSize, grid = false, mode = "export", resolve = defaultResolve, part = "all" } = {}) {
+export function renderSVG(map, { scale = map.gridSize, grid = false, mode = "export", resolve = defaultResolve, part = "all", treeArt = null } = {}) {
   const w = Math.round(map.width * scale), h = Math.round(map.height * scale);
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${w}" height="${h}" viewBox="0 0 ${map.width} ${map.height}" shape-rendering="geometricPrecision">`
-    + renderContent(map, { mode, grid, resolve, part })
+    + renderContent(map, { mode, grid, resolve, part, treeArt })
     + "</svg>";
 }

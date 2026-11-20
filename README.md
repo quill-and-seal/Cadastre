@@ -40,7 +40,7 @@ La façon la plus rapide de bâtir : pose l'emprise du bâtiment avec des **form
 | Mur | 5 | **Plume** : clic pour un coin, clic-glisser pour une courbe, **Entrée** ou double-clic pour finir, clic sur le premier point pour fermer. **Main levée** : le tracé est lissé en courbe retouchable. |
 | Porte | 6 | Clic sur un mur, droit ou courbe : porte, ou porte secrète, de la largeur choisie. Avec la sélection, une porte glisse le long de son mur. |
 | Objet | 7 | Tonneau, caisse, coffre, table, chaise, lit, pilier, escalier. Angle et échelle libres : **R** et **Maj+R** tournent de 15°. |
-| Arbres | 0 | Arbres dessinés à la volée : feuillu, palmier, conifère, buisson, ou un mélange. Clic : un arbre ; glisser : sème des arbres dans la zone du pinceau, espacés selon la densité. Chaque arbre est unique (graine) et devient un objet : sélection, déplacement, rotation, taille. |
+| Arbres | 0 | Arbres générés branche par branche et feuille par feuille : chêne, bouleau, sapin, buisson, palmier, ou un mélange. Clic : un arbre ; glisser : sème des arbres dans la zone du pinceau, espacés selon la densité. Chaque arbre est unique (graine) et devient un objet : sélection, déplacement, rotation, taille. Dans la scène, ils bougent avec le vent de l'herbe. |
 | Gomme | 8 | Efface en glissant : tout, ou seulement les sols, les murs ou les objets. Un mur gommé est coupé proprement. |
 
 Navigation : clic droit, molette enfoncée ou **Espace** + clic pour déplacer la vue, molette pour zoomer. **Échap** annule le tracé en cours. **Ctrl+Z** / **Ctrl+Maj+Z** pour annuler et rétablir, **Ctrl+S** pour enregistrer.
@@ -115,6 +115,14 @@ Dans Foundry, chaque joueur choisit son niveau dans les réglages du module (**V
 Vus de loin, les brins sont moins nombreux et plus larges, avec un fondu quand on zoome : la prairie garde le même aspect sans ralentir la scène. Le réglage **Compteur de performances (herbe et eau)** affiche en bas à gauche ce qui est dessiné et le temps de calcul par image. Les brins ne poussent que sur le sol **herbe**, jamais sur l'eau, les chemins, les pièces ni sous ce qui est posé (arbres, objets, tentes de ta bibliothèque). Une scène prend son vent à l'export ; une scène exportée avant la 0.1.7 doit être réexportée pour avoir la nouvelle herbe.
 
 Le réglage **Herbe : rendu** permet de revenir à l'herbe d'avant les optimisations (**Comme en 0.1.8** : brins en rectangles, vent calculé pour chaque brin, tous les brins dessinés même de loin). Plus lourd ; il vaut aussi pour l'éditeur (à rouvrir) et l'image exportée.
+
+## Arbres
+
+Chêne, bouleau, sapin et buisson sont générés comme de vrais arbres vus de dessus : un squelette en 3D (tronc, charpentières, branches, rameaux), puis des feuilles à leur taille et en quantité réelles, chacune accrochée à un rameau. La graine de l'arbre (tirée au hasard quand on le pose) donne sa forme : deux arbres ne se ressemblent jamais. Le palmier garde un dessin simple.
+
+Dans l'éditeur, chaque arbre est calculé en arrière-plan ; sa silhouette s'affiche le temps du calcul. À l'export, les arbres sont envoyés avec la scène et seule leur ombre reste dans l'image de fond.
+
+Dans la scène, ils bougent avec **le même vent que l'herbe** (direction, force, vagues et rafales réglées dans **Vent dans l'herbe**), à la même horloge : une rafale qui couche l'herbe passe dans l'arbre au même moment. La couronne se couche un peu sous le vent et balance, les feuilles frémissent, le sapin plie d'un bloc. Avec le niveau **Aucun**, les arbres restent immobiles.
 
 ## Bibliothèque d'assets
 

@@ -123,9 +123,10 @@
       "TreeKind": "Kind",
       "TreeKinds": {
         "mix": "Mix",
-        "oak": "Broadleaf",
+        "oak": "Oak",
+        "birch": "Birch",
         "palm": "Palm",
-        "pine": "Conifer",
+        "pine": "Fir",
         "bush": "Bush"
       },
       "TreeRadius": "Scatter area (radius)",
@@ -253,7 +254,8 @@
       "Failed": "Export failed: {error}",
       "Empty": "The map is empty: nothing to export.",
       "Reduced": "Very large map: the image is reduced to {size} px per side, Foundry stretches it to the scene size.",
-      "Missing": "Images not found, left blank on the scene: {list}"
+      "Missing": "Images not found, left blank on the scene: {list}",
+      "Trees": "Cadastre: drawing trees ({done} / {total})…"
     },
     "Close": {
       "Title": "Unsaved changes",
