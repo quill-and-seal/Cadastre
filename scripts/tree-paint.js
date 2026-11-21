@@ -20,8 +20,13 @@ export const SUN_HEIGHTS = { high: 1, mid: 1.8, low: 2.8 };
  * intensité est appliquée à l'affichage (réglage « Intensité des ombres »). Aperçu de l'éditeur :
  * intensité par défaut.
  */
-const SHADOW_BODY = 0.7, SHADOW_FOOT = 0.5;
-export const SHADOW_DEFAULT = 0.6;
+const SHADOW_BODY = 0.85, SHADOW_FOOT = 0.45;
+export const SHADOW_DEFAULT = 0.8;
+/**
+ * Teinte des ombres : un bleu-vert très sombre plutôt que du noir. Sous un ciel bleu, une ombre
+ * sur l'herbe au soleil est froide : elle se lit comme une ombre, pas comme un sol plus foncé.
+ */
+const SHADOW_COLOR = "rgb(8,22,38)";
 /** Marge autour de la couronne, en cases : les feuilles qui dépassent et le balancement au vent. */
 export const SPRITE_MARGIN = 0.45;
 
@@ -30,7 +35,7 @@ const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
 const rgb = (c, a = 1) => `rgba(${c.map((v) => Math.round(Math.max(0, Math.min(255, v)))).join(",")},${a})`;
 
 /** Flou du bord de l'ombre (pixels) : plus l'ombre tombe loin, plus son bord est doux. */
-const shadowBlur = (ppc, sun) => Math.max(1, ppc * 0.03 * Math.sqrt(sun));
+const shadowBlur = (ppc, sun) => Math.max(0.8, ppc * 0.018 * Math.sqrt(sun));
 
 export function makeCanvas(w, h) {
   if (typeof OffscreenCanvas !== "undefined") return new OffscreenCanvas(w, h);
@@ -98,6 +103,9 @@ export function paintTree(built, ppc, { wind = true, sun = 1 } = {}) {
     const g0 = sc.createRadialGradient(cx, cy, 0, cx, cy, tree.R * S * 0.6);
     g0.addColorStop(0, `rgba(0,0,0,${SHADOW_FOOT})`); g0.addColorStop(1, "rgba(0,0,0,0)");
     sc.fillStyle = g0; sc.beginPath(); sc.arc(cx, cy, tree.R * S * 0.6, 0, Math.PI * 2); sc.fill();
+    sc.globalCompositeOperation = "source-in";
+    sc.fillStyle = SHADOW_COLOR; sc.fillRect(0, 0, L.shadow.w, L.shadow.h);
+    sc.globalCompositeOperation = "source-over";
   }
 
   /* Bois et feuilles, triés par hauteur. */

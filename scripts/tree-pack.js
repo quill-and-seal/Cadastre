@@ -10,7 +10,7 @@ import { treeSprites } from "./tree-sprites.js";
 import { makeCanvas, SUN_HEIGHTS } from "./tree-paint.js";
 
 /** Finesse des ombres au plus (pixels par case) : leur bord est flou, inutile d'en garder plus. */
-export const SHADOW_PPC = 80;
+export const SHADOW_PPC = 96;
 
 /** Allongement des ombres selon le réglage « Hauteur du soleil ». */
 export function sunFactor() {
@@ -78,8 +78,8 @@ export async function packTrees(map, ppc, { sun = 1, onProgress = null } = {}) {
   for (const radius of uniq.values()) area += (2 * (radius + 0.5)) ** 2 * 1.5;
   ppc = Math.max(48, Math.min(ppc, Math.floor(Math.sqrt((TREE_BUDGET * TREE_PAGE * TREE_PAGE) / Math.max(1e-6, area)))));
   out.ppc = ppc;
-  // Ombres : environ deux fois moins fines que les arbres (leur bord est flou).
-  const sppc = out.shadowPpc = Math.max(24, Math.min(SHADOW_PPC, Math.round(ppc * 0.5)));
+  // Ombres : un peu moins fines que les arbres (leur bord est flou).
+  const sppc = out.shadowPpc = Math.max(24, Math.min(SHADOW_PPC, Math.round(ppc * 0.7)));
   // Plantes identiques (mêmes essence, graine, taille et orientation : les variantes du
   // sous-bois) : dessinées une seule fois, et leurs morceaux partagés dans les pages.
   const groups = new Map();

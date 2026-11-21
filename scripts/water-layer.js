@@ -48,7 +48,11 @@ export function registerWater() {
   });
 }
 
+let note = null;
+
 function teardown() {
+  note?.remove();
+  note = null;
   state?.stats?.remove();
   if (!state) return;
   canvas.app?.ticker?.remove(state.tick);
@@ -75,9 +79,15 @@ function viewRect(size, ox, oy) {
 
 function refresh() {
   teardown();
+  const start = performance.now();
   const flag = canvas.scene?.getFlag(MODULE_ID, "water");
   const level = Number(game.settings.get(MODULE_ID, "waterLevel"));
-  if (!flag?.rings?.length || !level) return;
+  if (!flag?.rings?.length) return;
+  if (!level) {
+    note = diagLine("Eau");
+    if (note) note.textContent = "Eau : animation coupée (réglage), seule l'eau de l'image de fond reste";
+    return;
+  }
   try {
     const d = canvas.dimensions;
     const size = d.size, ox = d.sceneX ?? d.sceneRect?.x ?? 0, oy = d.sceneY ?? d.sceneRect?.y ?? 0;
@@ -191,7 +201,7 @@ function refresh() {
     tick();
     canvas.app.ticker.add(tick);
     state = { root, tick, texture, bed, coastTex, waterTex, stats };
-    diagLoaded("eau");
+    diagLoaded("eau", start);
   } catch (error) {
     log("Eau non animée", error);
     teardown();

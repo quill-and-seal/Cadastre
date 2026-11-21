@@ -78,7 +78,7 @@ function setPieces(tr, pieces, ppc, sceneSize) {
  * Un conteneur par arbre, posé sur la scène (pixels de scène), avec ses morceaux.
  * @returns {object[]}  { box, x, y, r (cases), item, parts, ppc }
  */
-export function treeSprites2(root, items, pages, { size, ox, oy, ppc, shadowRoot = null, shadowPages = [], sppc = 0 }) {
+export function treeSprites2(root, items, pages, { size, ox, oy, ppc, shadowPages = [], sppc = 0 }) {
   const region = (q, list = pages) => {
     const page = list[q.page];
     if (!page) return null;
@@ -94,14 +94,14 @@ export function treeSprites2(root, items, pages, { size, ox, oy, ppc, shadowRoot
     // Scènes exportées avant les morceaux (0.1.17 à 0.1.20) : l'arbre d'une seule image, immobile.
     const pieces = t.pieces ?? [{ id: 0, page: t.page, u: t.u, v: t.v, w: t.size, h: t.size, ox: -t.half, oy: -t.half, ax: 0, ay: 0, lx: 0, ly: 0 }];
     setPieces(tr, pieces.map((q) => ({ ...q, tex: region(q) })).filter((q) => q.tex), tp, size);
-    // Ombre : immobile, posée sous l'arbre (pied du tronc en cx, cy de son image).
-    const tex = shadowRoot && t.s && sppc ? region({ page: t.s[0], u: t.s[1], v: t.s[2], w: t.s[3], h: t.s[4] }, shadowPages) : null;
+    // Ombre : immobile, à sa place sous l'arbre (pied du tronc en cx, cy de son image). Elle n'est
+    // pas affichée elle-même : ShadowTiles la peint une fois dans les dalles d'ombres.
+    const tex = t.s && sppc ? region({ page: t.s[0], u: t.s[1], v: t.s[2], w: t.s[3], h: t.s[4] }, shadowPages) : null;
     if (tex) {
       const [, , , w, h, cx, cy] = t.s;
       const sh = tr.shadow = new PIXI.Sprite(tex);
       sh.position.set(ox + (t.x - cx / sppc) * size, oy + (t.y - cy / sppc) * size);
       sh.scale.set(size / sppc);
-      shadowRoot.addChild(sh);
       tr.sb = [t.x - cx / sppc, t.y - cy / sppc, t.x + (w - cx) / sppc, t.y + (h - cy) / sppc];
     }
     return tr;
@@ -118,7 +118,6 @@ export function stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated = 
     const sr = -tr.box.rotation, dx = dir[0] * Math.cos(sr) - dir[1] * Math.sin(sr), dy = dir[0] * Math.sin(sr) + dir[1] * Math.cos(sr);
     const vis = tr.x + tr.r >= x0 && tr.x - tr.r <= x1 && tr.y + tr.r >= y0 && tr.y - tr.r <= y1;
     tr.box.visible = vis;
-    if (tr.shadow) tr.shadow.visible = tr.sb[2] >= x0 && tr.sb[0] <= x1 && tr.sb[3] >= y0 && tr.sb[1] <= y1;
     if (!vis || !animated || tr.item.rigid || tr.parts.length < 2) continue;
     // Trop petit à l'écran pour qu'un balancement se voie : on ne calcule rien.
     if (tr.r * viewPpc < 18) continue;
@@ -321,41 +320,31 @@ export class TreeSharpener {
  * ne se voit plus et des milliers de morceaux d'arbres coûtent pour rien. Les arbres sont alors
  * dessinés une fois, par zones de BAKE_CHUNK cases, dans quelques images fixes (BAKE_PPC pixels par
  * case) affichées à leur place. En rezoomant (au-delà de BAKE_ABOVE), les vrais arbres reviennent.
- * Les zones sont préparées petit à petit (quelques millisecondes par image), puis gardées. Les
- * ombres de la zone sont regroupées de même, moins fines (leur bord est flou), dans le calque des ombres.
+ * Les zones sont préparées petit à petit (quelques millisecondes par image), puis gardées.
  */
 const BAKE_PPC = 32;
-const BAKE_SHADOW_PPC = 20;
 const BAKE_BELOW = 26;
 const BAKE_ABOVE = 34;
 const BAKE_CHUNK = 8;
 const BAKE_MS = 4;
 
 export class TreeBaker {
-  constructor(root, trees, { size, ox, oy, renderer, shadowRoot = null }) {
+  constructor(root, trees, { size, ox, oy, renderer }) {
     this.trees = trees;
     this.size = size; this.ox = ox; this.oy = oy;
     this.renderer = renderer;
     this.layer = new PIXI.Container();
     this.layer.eventMode = "none";
     root.addChild(this.layer);
-    this.shadowLayer = null;
-    if (shadowRoot) {
-      this.shadowLayer = new PIXI.Container();
-      this.shadowLayer.eventMode = "none";
-      shadowRoot.addChild(this.shadowLayer);
-    }
     this.active = false;
     // Zones : arbres rattachés à la zone de leur centre ; l'image déborde du plus grand d'entre eux.
-    // sb : rectangle (cases) couvert par les ombres de la zone.
     const chunks = new Map();
     for (const tr of trees) {
       const cx = Math.floor(tr.x / BAKE_CHUNK), cy = Math.floor(tr.y / BAKE_CHUNK), id = `${cx},${cy}`;
       let c = chunks.get(id);
-      if (!c) chunks.set(id, c = { cx, cy, trees: [], margin: 0, sprite: null, rt: null, sb: null, shadow: null, srt: null });
+      if (!c) chunks.set(id, c = { cx, cy, trees: [], margin: 0, sprite: null, rt: null });
       c.trees.push(tr);
       c.margin = Math.max(c.margin, tr.r + 0.1);
-      if (tr.sb) c.sb = c.sb ? [Math.min(c.sb[0], tr.sb[0]), Math.min(c.sb[1], tr.sb[1]), Math.max(c.sb[2], tr.sb[2]), Math.max(c.sb[3], tr.sb[3])] : [...tr.sb];
     }
     this.chunks = [...chunks.values()];
     this.bytes = 0;
@@ -372,15 +361,13 @@ export class TreeBaker {
     for (const c of this.chunks) {
       const m = c.margin;
       const seen = (c.cx + 1) * BAKE_CHUNK + m >= x0 && c.cx * BAKE_CHUNK - m <= x1 && (c.cy + 1) * BAKE_CHUNK + m >= y0 && c.cy * BAKE_CHUNK - m <= y1;
-      const sb = c.sb, shadowSeen = !!sb && sb[2] >= x0 && sb[0] <= x1 && sb[3] >= y0 && sb[1] <= y1;
-      if (!c.sprite && (seen || shadowSeen) && performance.now() - t0 < BAKE_MS) this._bake(c);
+      if (!c.sprite && seen && performance.now() - t0 < BAKE_MS) this._bake(c);
       if (c.sprite) {
         c.sprite.visible = seen;
-        if (c.shadow) c.shadow.visible = shadowSeen;
-        for (const tr of c.trees) { tr.box.visible = false; if (tr.shadow) tr.shadow.visible = false; }
+        for (const tr of c.trees) tr.box.visible = false;
       } else {
         // Pas encore préparée : ses vrais arbres restent, immobiles.
-        for (const tr of c.trees) { tr.box.visible = seen; if (tr.shadow) tr.shadow.visible = shadowSeen; }
+        for (const tr of c.trees) tr.box.visible = seen;
       }
     }
     return true;
@@ -388,53 +375,132 @@ export class TreeBaker {
 
   _leave() {
     this.active = false;
-    for (const c of this.chunks) {
-      if (c.sprite) c.sprite.visible = false;
-      if (c.shadow) c.shadow.visible = false;
-    }
+    for (const c of this.chunks) if (c.sprite) c.sprite.visible = false;
   }
 
-  /** Dessine des objets de la scène dans une image fixe ; rect : [x, y, largeur, hauteur] en cases. */
-  _draw(objects, [wx, wy, ww, wh], ppc, layer) {
-    const { size, ox, oy } = this;
-    const pw = Math.max(1, Math.ceil(ww * ppc)), ph = Math.max(1, Math.ceil(wh * ppc));
-    // Avec réductions (mipmaps) : vue de très loin, la forêt reste lisse au lieu de scintiller.
-    const rt = PIXI.RenderTexture.create({ width: pw, height: ph, scaleMode: PIXI.SCALE_MODES?.LINEAR ?? 1, mipmap: PIXI.MIPMAP_MODES?.ON ?? 1 });
-    const k = ppc / size;
-    const transform = new PIXI.Matrix(k, 0, 0, k, -(ox + wx * size) * k, -(oy + wy * size) * k);
-    let first = true;
-    for (const o of objects) {
-      const was = o.visible;
-      o.visible = true;
-      this.renderer.render(o, { renderTexture: rt, transform, clear: first });
-      o.visible = was;
-      first = false;
-    }
-    const sprite = new PIXI.Sprite(rt);
-    sprite.position.set(ox + wx * size, oy + wy * size);
-    sprite.scale.set(1 / k);
-    layer.addChild(sprite);
-    this.bytes += pw * ph * 4 * 4 / 3;
-    return { rt, sprite };
+  _draw(objects, rect, ppc, layer) {
+    const r = drawFixed(this.renderer, objects, rect, ppc, this);
+    layer.addChild(r.sprite);
+    this.bytes += r.bytes;
+    return r;
   }
 
   _bake(c) {
     const m = c.margin, span = BAKE_CHUNK + 2 * m;
     // Petites plantes d'abord, comme dans le calque.
     ({ rt: c.rt, sprite: c.sprite } = this._draw(c.trees.map((tr) => tr.box), [c.cx * BAKE_CHUNK - m, c.cy * BAKE_CHUNK - m, span, span], BAKE_PPC, this.layer));
-    const shadows = c.trees.map((tr) => tr.shadow).filter(Boolean);
-    if (shadows.length && this.shadowLayer) {
-      const sb = c.sb;
-      ({ rt: c.srt, sprite: c.shadow } = this._draw(shadows, [sb[0], sb[1], sb[2] - sb[0], sb[3] - sb[1]], BAKE_SHADOW_PPC, this.shadowLayer));
-    }
     diagMemory("forêts regroupées", this.bytes);
   }
 
   get count() { return this.chunks.filter((c) => c.sprite?.visible).length; }
 
   destroy() {
-    for (const c of this.chunks) { c.rt?.destroy(true); c.srt?.destroy(true); }
+    for (const c of this.chunks) c.rt?.destroy(true);
     diagMemory("forêts regroupées", 0);
+  }
+}
+
+/**
+ * Dessine des objets de la scène dans une image fixe (avec réductions : vue de loin, elle reste
+ * lisse au lieu de scintiller). rect : [x, y, largeur, hauteur] en cases ; ppc : pixels par case.
+ * @returns {{rt, sprite, bytes:number}}  sprite : l'image, posée à sa place sur la scène
+ */
+function drawFixed(renderer, objects, [wx, wy, ww, wh], ppc, { size, ox, oy }) {
+  const pw = Math.max(1, Math.ceil(ww * ppc)), ph = Math.max(1, Math.ceil(wh * ppc));
+  // Avec réductions (mipmaps) : vue de très loin, la forêt reste lisse au lieu de scintiller.
+  const rt = PIXI.RenderTexture.create({ width: pw, height: ph, scaleMode: PIXI.SCALE_MODES?.LINEAR ?? 1, mipmap: PIXI.MIPMAP_MODES?.ON ?? 1 });
+  const k = ppc / size;
+  const transform = new PIXI.Matrix(k, 0, 0, k, -(ox + wx * size) * k, -(oy + wy * size) * k);
+  let first = true;
+  for (const o of objects) {
+    const was = o.visible;
+    o.visible = true;
+    renderer.render(o, { renderTexture: rt, transform, clear: first });
+    o.visible = was;
+    first = false;
+  }
+  const sprite = new PIXI.Sprite(rt);
+  sprite.position.set(ox + wx * size, oy + wy * size);
+  sprite.scale.set(1 / k);
+  return { rt, sprite, bytes: pw * ph * 4 * 4 / 3 };
+}
+
+/**
+ * Ombres des arbres : elles ne bougent pas. Elles sont peintes une fois dans des dalles fixes de
+ * SHADOW_TILE cases, côte à côte sans se chevaucher, posées dans le calque des arbres avant eux
+ * (donc sur l'herbe). Les dalles à l'écran d'abord, les autres quelques millisecondes par image ;
+ * une fois toutes peintes, les images d'ombres de chaque arbre sont rendues à la carte graphique.
+ * L'intensité réglée est l'opacité du calque : rien à repeindre quand elle change.
+ */
+const SHADOW_TILE = 8;
+/** Finesse des dalles au plus (pixels par case), et leur total de pixels au plus. */
+const SHADOW_TILE_PPC = 96;
+const SHADOW_TILE_BUDGET = 16e6;
+
+export class ShadowTiles {
+  constructor(root, trees, { size, ox, oy, renderer, level, pages = [] }) {
+    this.size = size; this.ox = ox; this.oy = oy;
+    this.renderer = renderer;
+    this.pages = pages;
+    this.layer = new PIXI.Container();
+    this.layer.eventMode = "none";
+    this.layer.alpha = level;
+    root.addChildAt(this.layer, 0);
+    const tiles = new Map();
+    for (const tr of trees) {
+      if (!tr.shadow) continue;
+      const [a, b, c, d] = tr.sb;
+      for (let ty = Math.floor(b / SHADOW_TILE); ty <= Math.floor(d / SHADOW_TILE); ty++) {
+        for (let tx = Math.floor(a / SHADOW_TILE); tx <= Math.floor(c / SHADOW_TILE); tx++) {
+          const id = `${tx},${ty}`;
+          let t = tiles.get(id);
+          if (!t) tiles.set(id, t = { tx, ty, shadows: [], rt: null, sprite: null });
+          t.shadows.push(tr.shadow);
+        }
+      }
+    }
+    this.tiles = [...tiles.values()];
+    this.todo = this.tiles.length;
+    const area = this.tiles.length * SHADOW_TILE * SHADOW_TILE;
+    this.ppc = Math.max(24, Math.min(SHADOW_TILE_PPC, Math.floor(Math.sqrt(SHADOW_TILE_BUDGET / Math.max(1, area)))));
+    this.bytes = 0;
+    this.trees = trees;
+  }
+
+  set level(v) { this.layer.alpha = v; }
+
+  /** Peint les dalles à l'écran, puis les autres petit à petit. */
+  update(view) {
+    if (!this.todo || !this.renderer) return;
+    const [x0, y0, x1, y1] = view;
+    const t0 = performance.now();
+    for (const t of this.tiles) {
+      if (t.sprite) continue;
+      const seen = (t.tx + 1) * SHADOW_TILE >= x0 && t.tx * SHADOW_TILE <= x1 && (t.ty + 1) * SHADOW_TILE >= y0 && t.ty * SHADOW_TILE <= y1;
+      if (!seen && performance.now() - t0 > BAKE_MS) continue;
+      const r = drawFixed(this.renderer, t.shadows, [t.tx * SHADOW_TILE, t.ty * SHADOW_TILE, SHADOW_TILE, SHADOW_TILE], this.ppc, this);
+      this.layer.addChild(r.sprite);
+      t.rt = r.rt; t.sprite = r.sprite; t.shadows = null;
+      this.bytes += r.bytes;
+      this.todo--;
+    }
+    if (!this.todo) this._release();
+    diagMemory("ombres", this.bytes + this._pageBytes());
+  }
+
+  _pageBytes() { return this.pages.reduce((n, p) => n + textureBytes(p.color?.baseTexture), 0); }
+
+  /** Toutes les dalles sont peintes : les images d'ombres des arbres ne servent plus. */
+  _release() {
+    for (const tr of this.trees) { tr.shadow?.destroy(); tr.shadow = null; }
+    for (const p of this.pages) p.color?.destroy?.(true);
+    this.pages = [];
+  }
+
+  destroy() {
+    for (const t of this.tiles) t.rt?.destroy(true);
+    this._release();
+    diagMemory("ombres", 0);
   }
 }
 
@@ -452,7 +518,7 @@ let state = null;
 
 /** Intensité des ombres réglée (0..1). */
 function shadowLevel() {
-  try { return Number(game.settings.get(MODULE_ID, "treeShadow")) || SHADOW_LEVELS[1]; } catch { return SHADOW_LEVELS[1]; }
+  try { return Number(game.settings.get(MODULE_ID, "treeShadow")) || SHADOW_LEVELS[2]; } catch { return SHADOW_LEVELS[2]; }
 }
 
 export function registerTrees() {
@@ -463,9 +529,9 @@ export function registerTrees() {
     config: true,
     type: Number,
     choices: Object.fromEntries(SHADOW_LEVELS.map((n, i) => [n, `CADASTRE.Settings.TreeShadows.${i}`])),
-    default: SHADOW_LEVELS[1],
+    default: SHADOW_LEVELS[2],
     // Appliquée à l'affichage : rien à réexporter.
-    onChange: () => { if (state?.shadowFilter) state.shadowFilter.alpha = shadowLevel(); else if (state?.shadowRoot) state.shadowRoot.alpha = shadowLevel(); }
+    onChange: () => { if (state?.shadows) state.shadows.level = shadowLevel(); }
   });
   game.settings.register(MODULE_ID, "sunHeight", {
     name: "CADASTRE.Settings.SunHeight",
@@ -497,11 +563,11 @@ function teardown() {
   if (state.tick) canvas.app?.ticker?.remove(state.tick);
   state.sharpener?.destroy();
   state.baker?.destroy();
+  state.shadows?.destroy();
   state.stats?.remove();
   diagMemory("arbres", 0);
   diagMemory("arbres affinés", 0);
   if (state.root && !state.root.destroyed) state.root.destroy({ children: true });
-  if (state.shadowRoot && !state.shadowRoot.destroyed) state.shadowRoot.destroy({ children: true });
   state = null;
 }
 
@@ -512,6 +578,7 @@ async function refresh() {
   const data = canvas.scene?.getFlag(MODULE_ID, "trees");
   if (!data?.items?.length || !data.pages?.length) return;
   const me = state = { dead: false };
+  const start = performance.now();
   try {
     const load = (list) => Promise.all((list ?? []).map(async (p) => ({ ...p, color: await loadTex(p.color) })));
     const [pages, shadowPages] = await Promise.all([load(data.pages), load(data.shadows?.pages).catch((error) => { log("Ombres des arbres non chargées", error); return []; })]);
@@ -537,31 +604,18 @@ async function refresh() {
     parent.addChild(root);
     me.root = root;
 
-    // Ombres (scènes exportées depuis la 0.1.27 ; avant, elles sont dans l'image de fond) : premier
-    // enfant du calque des arbres, donc dessinées juste avant eux et forcément par-dessus l'herbe,
-    // sans dépendre du tri de Foundry. Aplaties puis rendues transparentes d'un bloc, pour que deux
-    // ombres qui se croisent ne s'additionnent pas.
-    let shadowRoot = null;
-    if (shadowPages.length) {
-      shadowRoot = me.shadowRoot = new PIXI.Container();
-      shadowRoot.eventMode = "none";
-      shadowRoot.vellumIgnore = true;
-      shadowRoot._vellumPatch = true;
-      const Alpha = PIXI.AlphaFilter ?? PIXI.filters?.AlphaFilter;
-      if (Alpha) {
-        me.shadowFilter = new Alpha(shadowLevel());
-        shadowRoot.filters = [me.shadowFilter];
-      } else shadowRoot.alpha = shadowLevel();
-      root.addChildAt(shadowRoot, 0);
-    }
     parent.sortDirty = true;
 
-    const trees = treeSprites2(root, expandItems(data), pages, { size, ox, oy, ppc, shadowRoot, shadowPages, sppc: data.shadows?.ppc ?? 0 });
+    const trees = treeSprites2(root, expandItems(data), pages, { size, ox, oy, ppc, shadowPages, sppc: data.shadows?.ppc ?? 0 });
+    // Ombres (scènes exportées depuis la 0.1.27 ; avant, elles sont dans l'image de fond).
+    const shadows = me.shadows = shadowPages.length
+      ? new ShadowTiles(root, trees, { size, ox, oy, renderer: canvas.app.renderer, level: shadowLevel(), pages: shadowPages })
+      : null;
     const sharpener = me.sharpener = new TreeSharpener(trees, size, pages);
     sharpener.renderer = canvas.app.renderer;
-    const baker = me.baker = new TreeBaker(root, trees, { size, ox, oy, renderer: canvas.app.renderer, shadowRoot });
+    const baker = me.baker = new TreeBaker(root, trees, { size, ox, oy, renderer: canvas.app.renderer });
     const stats = me.stats = diagLine("Arbres");
-    const pageBytes = [...pages, ...shadowPages].reduce((n, p) => n + textureBytes(p.color?.baseTexture), 0);
+    const pageBytes = pages.reduce((n, p) => n + textureBytes(p.color?.baseTexture), 0);
     diagMemory("arbres", pageBytes);
     let frames = 0, cpuMs = 0, lastStats = performance.now();
     let last = windClock();
@@ -575,6 +629,7 @@ async function refresh() {
       const x1 = (Math.max(p0.x, p1.x) - ox) / size, y1 = (Math.max(p0.y, p1.y) - oy) / size;
       const viewPpc = size * Math.abs(canvas.stage.scale.x);
       // Dézoomé : forêts regroupées en quelques images fixes, rien à animer.
+      shadows?.update([x0, y0, x1, y1]);
       if (!baker.update(viewPpc * (r.resolution ?? 1), [x0, y0, x1, y1])) stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated, viewPpc);
       sharpener.update(viewPpc * (r.resolution ?? 1), performance.now(), [x0, y0, x1, y1]);
       if (stats) {
@@ -594,7 +649,7 @@ async function refresh() {
       }
     };
     me.tick();
-    diagLoaded("arbres");
+    diagLoaded("arbres", start);
     canvas.app.ticker.add(me.tick);
   } catch (error) {
     log("Arbres non affichés", error);

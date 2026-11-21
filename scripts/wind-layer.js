@@ -76,8 +76,17 @@ export function registerWind() {
 /** Herbe « comme en 0.1.8 » choisie dans les réglages du module ? */
 export const legacyGrass = () => { try { return game.settings.get(MODULE_ID, "grassRender") === "legacy"; } catch { return false; } };
 
+/** Ligne du mode diagnostic qui dit pourquoi l'herbe n'est pas animée. */
+let note = null;
+function why(text) {
+  note = diagLine("Herbe");
+  if (note) note.textContent = `Herbe : ${text}`;
+}
+
 function teardown() {
   stopLegacyGrass();
+  note?.remove();
+  note = null;
   state?.stats?.remove();
   if (!state) return;
   canvas.app?.ticker?.remove(state.tick);
@@ -100,15 +109,18 @@ function viewRect(size, ox, oy) {
 
 function refresh() {
   teardown();
+  const start = performance.now();
   // Herbe « comme en 0.1.8 » : l'ancien calque, tel quel.
   if (legacyGrass()) return startLegacyGrass();
   const data = canvas.scene?.getFlag(MODULE_ID, "wind");
   const level = Number(game.settings.get(MODULE_ID, "windLevel"));
   // Les scènes exportées avant la 0.1.7 ont l'ancienne herbe dans leur fond : on n'y ajoute rien.
-  if (!data?.zone?.length || !level || (data.v ?? 1) < 2) return;
+  if (!data?.zone?.length) return;
+  if (!level) return why("coupée (réglage « Vent dans l'herbe »), seule l'herbe de l'image de fond reste");
+  if ((data.v ?? 1) < 2) return why("scène exportée avant la 0.1.7, à réexporter");
   const wind = normalizeWind(data.wind);
   // Sans vent ni jetons, l'herbe ne bouge pas : l'image de fond suffit.
-  if (!wind.strength && level < WIND_LEVELS.FULL) return;
+  if (!wind.strength && level < WIND_LEVELS.FULL) return why("immobile (carte sans vent), seule l'herbe de l'image de fond reste");
   try {
     const d = canvas.dimensions;
     const size = d.size, ox = d.sceneX ?? d.sceneRect?.x ?? 0, oy = d.sceneY ?? d.sceneRect?.y ?? 0;
@@ -222,7 +234,7 @@ function refresh() {
     tick();
     canvas.app.ticker.add(tick);
     state = { root, tick, gustTexture, stats };
-    diagLoaded("herbe");
+    diagLoaded("herbe", start);
   } catch (error) {
     log("Vent non affiché", error);
     teardown();

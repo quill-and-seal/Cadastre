@@ -37,9 +37,13 @@ export function diagMemory(name, bytes) {
   else memory.delete(name);
 }
 
-/** Étape du chargement de la scène (« arbres », « herbe »…), comptée depuis son début. */
-export function diagLoaded(step) {
-  if (sceneStart) loads.set(step, performance.now() - sceneStart);
+/**
+ * Durée de chargement d'un calque (« arbres », « herbe »…), comptée depuis le début de son propre
+ * chargement (since : performance.now() à ce moment) ; sans since, depuis le début de la scène.
+ * Un calque rechargé en cours de partie (réglage changé) n'est donc pas compté depuis l'ouverture.
+ */
+export function diagLoaded(step, since = sceneStart) {
+  if (since) loads.set(step, performance.now() - since);
 }
 
 /** Octets d'une texture dans la carte graphique (avec ses réductions s'il y en a). */

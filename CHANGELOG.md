@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.29
+
+- **Ombres plus sombres et plus nettes** : bord plus net, plus foncées, et teintées d'un bleu-vert très sombre au lieu du noir. Une ombre sur l'herbe au soleil est froide : elle se lit comme une ombre, plus comme un sol foncé. L'intensité par défaut passe à « Normale » (0,8). Demande un réexport de la carte.
+- **Ombres vues de loin** : elles sont peintes une fois dans des dalles fixes, sans se chevaucher, avec des réductions lissées. Elles gardent leur force au dézoom, ne coûtent plus rien à chaque image (plus de filtre de transparence) et les images d'ombres de chaque arbre sont rendues à la carte graphique une fois les dalles peintes.
+- **Mode diagnostic** :
+  - le temps de chargement d'un calque est compté depuis le début de son propre chargement (avant, un calque rechargé en cours de partie, par exemple en activant le mode diagnostic, était compté depuis l'ouverture de la scène : « arbres 26 s ») ;
+  - quand l'herbe ou l'eau ne sont pas animées, le panneau dit pourquoi (carte sans vent, réglage coupé, scène à réexporter) au lieu de ne rien afficher.
+
 ## 0.1.28
 
 - **Ombres des arbres sous les brins d'herbe** : dans Foundry, le calque des ombres pouvait passer sous l'herbe animée ; les brins restaient alors clairs dans l'ombre. Les ombres sont maintenant dessinées avec les arbres, juste avant eux : elles assombrissent toujours l'herbe. Pas besoin de réexporter une scène exportée en 0.1.27.

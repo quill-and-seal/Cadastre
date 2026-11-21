@@ -360,12 +360,12 @@
         "400": "Maximal (400 px par case)"
       },
       "TreeShadow": "Intensité des ombres des arbres",
-      "TreeShadowHint": "Force des ombres portées par les arbres sur l'herbe et le sol. Appliquée tout de suite, sans réexport (scènes exportées depuis la 0.1.27).",
+      "TreeShadowHint": "Force des ombres portées par les arbres sur l'herbe et le sol (ombres d'un bleu-vert très sombre). Appliquée tout de suite, sans réexport (scènes exportées depuis la 0.1.27 ; les ombres plus nettes et plus froides de la 0.1.29 demandent un réexport).",
       "TreeShadows": {
-        "0": "Légère (comme avant)",
-        "1": "Normale",
-        "2": "Marquée",
-        "3": "Très marquée"
+        "0": "Très légère (comme avant la 0.1.27)",
+        "1": "Légère",
+        "2": "Normale",
+        "3": "Marquée"
       },
       "SunHeight": "Hauteur du soleil",
       "SunHeightHint": "Plus le soleil est bas, plus les ombres des arbres s'allongent et sortent de sous les couronnes. Prise en compte au prochain export de la carte.",
