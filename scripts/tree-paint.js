@@ -11,14 +11,26 @@ import { leafShape, norm } from "./tree-gen.js";
 
 const INK = "#13221a", INK_A = "rgba(19,34,26,0.7)";
 const LIGHT = norm([-0.55, -0.7, 0.9]);
-/** Décalage de l'ombre par case de hauteur (lumière en haut à gauche). */
+/** Décalage de l'ombre par case de hauteur, soleil haut (lumière en haut à gauche). */
 export const SHADOW_SHIFT = [0.147, 0.193];
+/** Hauteurs du soleil : allongement des ombres (réglage « Hauteur du soleil »). */
+export const SUN_HEIGHTS = { high: 1, mid: 1.8, low: 2.8 };
+/**
+ * Les ombres sont dessinées à pleine force (silhouette, et plus sombre au pied du tronc) ; leur
+ * intensité est appliquée à l'affichage (réglage « Intensité des ombres »). Aperçu de l'éditeur :
+ * intensité par défaut.
+ */
+const SHADOW_BODY = 0.7, SHADOW_FOOT = 0.5;
+export const SHADOW_DEFAULT = 0.6;
 /** Marge autour de la couronne, en cases : les feuilles qui dépassent et le balancement au vent. */
 export const SPRITE_MARGIN = 0.45;
 
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
 const rgb = (c, a = 1) => `rgba(${c.map((v) => Math.round(Math.max(0, Math.min(255, v)))).join(",")},${a})`;
+
+/** Flou du bord de l'ombre (pixels) : plus l'ombre tombe loin, plus son bord est doux. */
+const shadowBlur = (ppc, sun) => Math.max(1, ppc * 0.03 * Math.sqrt(sun));
 
 export function makeCanvas(w, h) {
   if (typeof OffscreenCanvas !== "undefined") return new OffscreenCanvas(w, h);
@@ -28,11 +40,11 @@ export function makeCanvas(w, h) {
 }
 
 /** Taille des images d'un arbre, en pixels, et position du pied du tronc dans chacune. */
-export function spriteLayout(built, ppc) {
+export function spriteLayout(built, ppc, sun = 1) {
   const { tree } = built;
   const half = Math.ceil((tree.R + SPRITE_MARGIN) * ppc);
-  const sx = Math.ceil(tree.zmax * SHADOW_SHIFT[0] * ppc), sy = Math.ceil(tree.zmax * SHADOW_SHIFT[1] * ppc);
-  const blur = Math.ceil(Math.max(1, ppc * 0.03) * 2);
+  const sx = Math.ceil(tree.zmax * SHADOW_SHIFT[0] * sun * ppc), sy = Math.ceil(tree.zmax * SHADOW_SHIFT[1] * sun * ppc);
+  const blur = Math.ceil(shadowBlur(ppc, sun) * 2);
   return {
     size: half * 2, half,
     shadow: { w: half * 2 + sx + blur, h: half * 2 + sy + blur, cx: half, cy: half }
@@ -49,9 +61,9 @@ export function spriteLayout(built, ppc) {
  *   pied du tronc en (half, half).
  * @returns {{color?, pieces?, shadow, half:number, shadowW:number, shadowH:number}}
  */
-export function paintTree(built, ppc, { wind = true } = {}) {
+export function paintTree(built, ppc, { wind = true, sun = 1 } = {}) {
   const { tree, leaves, sp, seed } = built;
-  const L = spriteLayout(built, ppc);
+  const L = spriteLayout(built, ppc, sun);
   const S = ppc, cx = L.half, cy = L.half;
   let OX = 0, OY = 0;
   const color = wind ? null : makeCanvas(L.size, L.size);
@@ -70,7 +82,8 @@ export function paintTree(built, ppc, { wind = true } = {}) {
   {
     const raw = makeCanvas(L.shadow.w, L.shadow.h), s = raw.getContext("2d");
     s.fillStyle = s.strokeStyle = "#000"; s.lineCap = "round";
-    const P = (p) => [cx + (p[0] + p[2] * SHADOW_SHIFT[0]) * S, cy + (p[1] + p[2] * SHADOW_SHIFT[1]) * S];
+    const kx = SHADOW_SHIFT[0] * sun, ky = SHADOW_SHIFT[1] * sun;
+    const P = (p) => [cx + (p[0] + p[2] * kx) * S, cy + (p[1] + p[2] * ky) * S];
     for (const g of tree.segs) {
       const a = P(g.a), b = P(g.b);
       s.lineWidth = Math.max(1, trunkW * (g.w + g.w2) / 2);
@@ -81,9 +94,9 @@ export function paintTree(built, ppc, { wind = true } = {}) {
       s.beginPath(); s.ellipse(c[0] + Math.cos(l.ang) * r, c[1] + Math.sin(l.ang) * r, r * 1.05, Math.max(0.5, r * (l.needle ? 0.9 : l.W * 2 * l.f)), l.ang, 0, Math.PI * 2); s.fill();
     }
     const sc = shadow.getContext("2d");
-    sc.save(); sc.globalAlpha = 0.34; sc.filter = `blur(${Math.max(1, S * 0.03)}px)`; sc.drawImage(raw, 0, 0); sc.restore();
+    sc.save(); sc.globalAlpha = SHADOW_BODY; sc.filter = `blur(${shadowBlur(S, sun)}px)`; sc.drawImage(raw, 0, 0); sc.restore();
     const g0 = sc.createRadialGradient(cx, cy, 0, cx, cy, tree.R * S * 0.6);
-    g0.addColorStop(0, "rgba(0,0,0,0.35)"); g0.addColorStop(1, "rgba(0,0,0,0)");
+    g0.addColorStop(0, `rgba(0,0,0,${SHADOW_FOOT})`); g0.addColorStop(1, "rgba(0,0,0,0)");
     sc.fillStyle = g0; sc.beginPath(); sc.arc(cx, cy, tree.R * S * 0.6, 0, Math.PI * 2); sc.fill();
   }
 
@@ -311,7 +324,9 @@ function paintStumpTop(ctx, x, y, r, sp, seed) {
 /** Aperçu de l'éditeur : ombre puis arbre, dans une seule image. */
 export function previewImage(sprite) {
   const c = makeCanvas(sprite.shadowW, sprite.shadowH), x = c.getContext("2d");
+  x.globalAlpha = SHADOW_DEFAULT;
   x.drawImage(sprite.shadow, 0, 0);
+  x.globalAlpha = 1;
   x.drawImage(sprite.color, 0, 0);
   return c;
 }

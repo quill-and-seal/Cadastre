@@ -61,8 +61,8 @@ class SpritePool {
 
   async _here(job) {
     try {
-      const { kind, seed, radius, rotation, ppc, detail, preview } = job.req;
-      const sprite = paintTree(buildTree(kind, seed, radius, { detail, rotation }), ppc, { wind: !preview });
+      const { kind, seed, radius, rotation, ppc, detail, preview, sun } = job.req;
+      const sprite = paintTree(buildTree(kind, seed, radius, { detail, rotation }), ppc, { wind: !preview, sun });
       if (preview) {
         const img = previewImage(sprite);
         const blob = img.convertToBlob ? await img.convertToBlob({ type: "image/webp", quality: 0.9 })
@@ -90,11 +90,11 @@ class SpritePool {
 
   /**
    * Images d'un arbre.
-   * @param {{kind:string, seed:number, radius:number, rotation?:number, ppc:number, detail?:number, preview?:boolean}} req
+   * @param {{kind:string, seed:number, radius:number, rotation?:number, ppc:number, detail?:number, preview?:boolean, sun?:number}} req  sun : allongement des ombres
    * @returns {Promise<object>}  preview : { blob, half, shadowW, shadowH } ; sinon { pieces, shadow, half, shadowW, shadowH, conifer, rigid }
    */
   get(req) {
-    const r = { kind: req.kind, seed: req.seed >>> 0, radius: r2(req.radius), rotation: Math.round(req.rotation ?? 0), ppc: Math.round(req.ppc), detail: req.detail ?? 1, preview: !!req.preview };
+    const r = { kind: req.kind, seed: req.seed >>> 0, radius: r2(req.radius), rotation: Math.round(req.rotation ?? 0), ppc: Math.round(req.ppc), detail: req.detail ?? 1, preview: !!req.preview, sun: r2(req.sun ?? 1) };
     const key = JSON.stringify(r);
     let p = this.cache.get(key);
     if (!p) {

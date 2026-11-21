@@ -5,6 +5,7 @@
 import { TERRAINS, PROPS, mulberry32 } from "./catalog.js";
 import { TREES, TREE_PREFIX, TREE_BY_TYPE, pickTreeKind, treeRadius } from "./trees.js";
 import { treeSprites } from "./tree-sprites.js";
+import { sunFactor } from "./tree-pack.js";
 import { BIOMES, sowBiome, applyBiome, pruneBiome } from "./biomes.js";
 import { onGroundTile } from "./ground-tiles.js";
 import * as M from "./model.js";
@@ -322,7 +323,7 @@ export class MapEditor {
    */
   _treeArt(p, def) {
     const ppc = TREE_PREVIEW_PPC;
-    const req = { kind: def.proc, seed: p.s ?? 0, radius: treeRadius(def, p.k), rotation: def.spin ? 0 : p.a, ppc, detail: TREE_PREVIEW_DETAIL, preview: true };
+    const req = { kind: def.proc, seed: p.s ?? 0, radius: treeRadius(def, p.k), rotation: def.spin ? 0 : p.a, ppc, detail: TREE_PREVIEW_DETAIL, preview: true, sun: sunFactor() };
     const key = JSON.stringify(req);
     this._treeImgs ??= new Map();
     const img = this._treeImgs.get(key);

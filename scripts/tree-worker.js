@@ -7,9 +7,9 @@ import { buildTree } from "./tree-gen.js";
 import { paintTree, previewImage } from "./tree-paint.js";
 
 self.onmessage = async (event) => {
-  const { id, kind, seed, radius, rotation, ppc, detail, preview } = event.data;
+  const { id, kind, seed, radius, rotation, ppc, detail, preview, sun } = event.data;
   try {
-    const sprite = paintTree(buildTree(kind, seed, radius, { detail, rotation }), ppc, { wind: !preview });
+    const sprite = paintTree(buildTree(kind, seed, radius, { detail, rotation }), ppc, { wind: !preview, sun });
     if (preview) {
       const blob = await previewImage(sprite).convertToBlob({ type: "image/webp", quality: 0.9 });
       self.postMessage({ id, half: sprite.half, shadowW: sprite.shadowW, shadowH: sprite.shadowH, blob });

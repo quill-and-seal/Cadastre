@@ -358,6 +358,21 @@
         "200": "Fine (200 px per square)",
         "300": "Very fine (300 px per square, recommended)",
         "400": "Maximum (400 px per square)"
+      },
+      "TreeShadow": "Tree shadow intensity",
+      "TreeShadowHint": "Strength of the shadows trees cast on grass and ground. Applied immediately, no re-export needed (scenes exported with 0.1.27 or later).",
+      "TreeShadows": {
+        "0": "Light (as before)",
+        "1": "Normal",
+        "2": "Strong",
+        "3": "Very strong"
+      },
+      "SunHeight": "Sun height",
+      "SunHeightHint": "The lower the sun, the longer tree shadows get, reaching out from under the canopies. Applied on the next map export.",
+      "SunHeights": {
+        "high": "High (noon, short shadows)",
+        "mid": "Medium",
+        "low": "Low (morning or evening, long shadows)"
       }
     }
   }

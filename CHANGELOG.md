@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.27
+
+- **Ombres des arbres bien visibles** : elles ne sont plus peintes dans l'image de fond, où l'herbe animée les recouvrait, mais posées dans la scène, sur l'herbe et sous les arbres. Deux ombres qui se croisent ne s'additionnent pas. Au dézoom, elles sont regroupées avec les forêts.
+- **Réglage « Intensité des ombres des arbres »** (monde) : légère (comme avant), normale, marquée ou très marquée. Appliqué tout de suite, sans réexport.
+- **Réglage « Hauteur du soleil »** (monde) : haut, moyen ou bas. Plus le soleil est bas, plus les ombres s'allongent et sortent de sous les couronnes. Pris en compte au prochain export (et dans l'aperçu de l'éditeur).
+- Les scènes exportées avant gardent leurs ombres dans l'image de fond : réexporter la carte pour profiter des nouvelles ombres.
+
 ## 0.1.26
 
 - **Mode diagnostic** (réglage client, anciennement « Compteur de performances ») : un panneau en haut à gauche qui dit ce qui coûte, pour viser juste quand quelque chose rame :

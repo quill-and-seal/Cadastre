@@ -16,7 +16,7 @@ import { paintStillWater } from "./water-gl.js";
 import { buildWallData, textureScale } from "./walls.js";
 import { isEmpty } from "./model.js";
 import { TREE_BY_TYPE } from "./trees.js";
-import { packTrees, TREE_PAGE, treePpc } from "./tree-pack.js";
+import { packTrees, TREE_PAGE, treePpc, sunFactor } from "./tree-pack.js";
 import { makeCanvas } from "./tree-paint.js";
 import { TERRAINS, BIOME_SOILS } from "./catalog.js";
 import { loadGroundTile } from "./ground-tiles.js";
@@ -158,14 +158,14 @@ const canvasBlob = async (canvas, type, quality) => (canvas.convertToBlob
   : new Promise((resolve) => canvas.toBlob(resolve, type, quality)));
 
 /** Arbres générés, avec la progression affichée. */
-async function exportTrees(map, scale) {
-  const ppc = treePpc(map.gridSize);
+async function exportTrees(map) {
+  const ppc = treePpc(map.gridSize), sun = sunFactor();
   const total = map.props.filter((p) => TREE_BY_TYPE.get(p.type)?.proc).length;
-  if (!total) return packTrees(map, ppc, { shadowPpc: scale });
+  if (!total) return packTrees(map, ppc, { sun });
   const label = (done) => game.i18n.format("CADASTRE.Export.Trees", { done, total });
   const note = ui.notifications?.info?.(label(0), { progress: true });
   try {
-    return await packTrees(map, ppc, { shadowPpc: scale, onProgress: (done) => note?.update?.({ pct: done / total, message: label(done) }) });
+    return await packTrees(map, ppc, { sun, onProgress: (done) => note?.update?.({ pct: done / total, message: label(done) }) });
   } finally {
     note?.remove?.();
   }
@@ -173,20 +173,26 @@ async function exportTrees(map, scale) {
 
 /** Envoie les pages d'arbres ; renvoie le drapeau de scène du calque des arbres. */
 async function uploadTrees(map, trees) {
-  const pages = [];
-  for (const [i, p] of trees.pages.entries()) {
-    // Seule la partie remplie de la page est gardée.
-    const h = Math.max(1, p.used);
-    const c = makeCanvas(TREE_PAGE, h);
-    c.getContext("2d").drawImage(p.color, 0, 0);
-    pages.push({ color: await uploadImage(await canvasBlob(c, "image/webp", 0.95), "webp", map.name, `-arbres${i}`), w: TREE_PAGE, h });
-  }
+  const upload = async (list, suffix, quality) => {
+    const out = [];
+    for (const [i, p] of list.entries()) {
+      // Seule la partie remplie de la page est gardée.
+      const h = Math.max(1, p.used);
+      const c = makeCanvas(TREE_PAGE, h);
+      c.getContext("2d").drawImage(p.color, 0, 0);
+      out.push({ color: await uploadImage(await canvasBlob(c, "image/webp", quality), "webp", map.name, `-${suffix}${i}`), w: TREE_PAGE, h });
+    }
+    return out;
+  };
+  const pages = await upload(trees.pages, "arbres", 0.95);
+  // Ombres : posées dans la scène entre l'herbe et les arbres (plus dans l'image de fond).
+  const shadows = { ppc: trees.shadowPpc, pages: await upload(trees.shadowPages, "ombres", 0.9) };
   // Drapeau compact : un modèle par dessin (morceaux en tableaux), chaque plante n'en garde
   // que la position, le numéro de modèle et sa rotation d'affichage.
   const r2 = (n) => Math.round(n * 100) / 100;
   const models = trees.models.map((m) => ({ ...m, pieces: m.pieces.map((q) => [q.page, q.u, q.v, q.w, q.h, q.ox, q.oy, q.ax, q.ay, q.lx, q.ly, q.hz, q.id]) }));
   const items = trees.items.map((t) => [r2(t.x), r2(t.y), t.m, t.spin || 0]);
-  return { v: 4, wind: normalizeWind(map.wind), pages, models, items };
+  return { v: 4, wind: normalizeWind(map.wind), pages, shadows, models, items };
 }
 
 /**
@@ -210,26 +216,17 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
   const biomeSoil = map.biome && BIOME_SOILS[map.biome.id];
   const grounds = TERRAINS.filter((t) => t.ground && (map.terrains[t.id]?.length || t.id === biomeSoil)).map((t) => t.ground);
   await Promise.all(grounds.map((g) => loadGroundTile(g)));
-  // Arbres générés : animés dans la scène, hors de l'image de fond ; leur ombre y reste.
-  const trees = await exportTrees(map, scale);
+  // Arbres générés et leurs ombres : dans la scène, hors de l'image de fond.
+  const trees = await exportTrees(map);
   // Sol, puis eau et herbe figées, puis chemins, objets et murs par-dessus. « view » : portion de
   // la carte (en cases) pour le fond découpé en tuiles, rendue à « s » pixels par case.
   const layersAt = (s, view = null, groundPpc = undefined) => {
     const ox = view ? view[0] * s : 0, oy = view ? view[1] * s : 0;
-    const f = s / scale;
     return [
       renderSVG(map, { scale: s, resolve, part: "ground", view, groundPpc }),
       (ctx) => { if (waterField) paintStillWater(ctx, waterField, normalizeWater(water.water), s, { ox, oy }); },
       (ctx) => (legacy ? paintStillGrassLegacy : paintStillGrass)(ctx, field, grassWind, s, { ox, oy }),
-      renderSVG(map, { scale: s, resolve, part: "top", treeArt: () => "", view, groundPpc }),
-      (ctx) => {
-        const W = ctx.canvas.width, H = ctx.canvas.height;
-        for (const sh of trees.shadows) {
-          const w = sh.img.width * f, h = sh.img.height * f, x = sh.x * s - sh.half * f - ox, y = sh.y * s - sh.half * f - oy;
-          if (x + w < 0 || y + h < 0 || x > W || y > H) continue;
-          ctx.drawImage(sh.img, x, y, w, h);
-        }
-      }
+      renderSVG(map, { scale: s, resolve, part: "top", treeArt: () => "", view, groundPpc })
     ];
   };
   const preview = await rasterizeCanvas(layersAt(scale));
