@@ -37,6 +37,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - 0.1.25 : description des tuiles en .xml (Foundry refuse les .dzi) ; végétation semée retirée sous l'eau, les pièces et les chemins.
 - 0.1.26 : mode diagnostic, réexport partiel des tuiles, forêts regroupées au dézoom.
 - 0.1.27 : ombres des arbres dans la scène (au-dessus de l'herbe), intensité et hauteur du soleil réglables.
+- 0.1.28 : ombres toujours au-dessus des brins d'herbe.
 
 ## Biomes (V1 : 20 biomes, un par issue)
 

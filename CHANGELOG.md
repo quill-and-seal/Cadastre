@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.28
+
+- **Ombres des arbres sous les brins d'herbe** : dans Foundry, le calque des ombres pouvait passer sous l'herbe animée ; les brins restaient alors clairs dans l'ombre. Les ombres sont maintenant dessinées avec les arbres, juste avant eux : elles assombrissent toujours l'herbe. Pas besoin de réexporter une scène exportée en 0.1.27.
+
 ## 0.1.27
 
 - **Ombres des arbres bien visibles** : elles ne sont plus peintes dans l'image de fond, où l'herbe animée les recouvrait, mais posées dans la scène, sur l'herbe et sous les arbres. Deux ombres qui se croisent ne s'additionnent pas. Au dézoom, elles sont regroupées avec les forêts.

@@ -20,8 +20,6 @@ import { pieceRecord } from "./tree-pack.js";
 
 /** Au-dessus de l'herbe (même rang, ordre 1), sous les tuiles et les jetons. */
 const SORT_LAYER = 100;
-/** Ombres des arbres : sur l'herbe (ordre 1), sous les arbres (ordre 2). */
-const SHADOW_SORT = 1.5;
 /** Intensités des ombres (réglage), de légère à très marquée. */
 export const SHADOW_LEVELS = [0.35, 0.6, 0.8, 1];
 
@@ -539,8 +537,9 @@ async function refresh() {
     parent.addChild(root);
     me.root = root;
 
-    // Ombres (scènes exportées depuis la 0.1.27 ; avant, elles sont dans l'image de fond) : un calque
-    // à part, sur l'herbe et sous les arbres, aplati puis rendu transparent d'un bloc, pour que deux
+    // Ombres (scènes exportées depuis la 0.1.27 ; avant, elles sont dans l'image de fond) : premier
+    // enfant du calque des arbres, donc dessinées juste avant eux et forcément par-dessus l'herbe,
+    // sans dépendre du tri de Foundry. Aplaties puis rendues transparentes d'un bloc, pour que deux
     // ombres qui se croisent ne s'additionnent pas.
     let shadowRoot = null;
     if (shadowPages.length) {
@@ -548,13 +547,12 @@ async function refresh() {
       shadowRoot.eventMode = "none";
       shadowRoot.vellumIgnore = true;
       shadowRoot._vellumPatch = true;
-      Object.assign(shadowRoot, { elevation: 0, sortLayer: SORT_LAYER, sort: SHADOW_SORT });
       const Alpha = PIXI.AlphaFilter ?? PIXI.filters?.AlphaFilter;
       if (Alpha) {
         me.shadowFilter = new Alpha(shadowLevel());
         shadowRoot.filters = [me.shadowFilter];
       } else shadowRoot.alpha = shadowLevel();
-      parent.addChild(shadowRoot);
+      root.addChildAt(shadowRoot, 0);
     }
     parent.sortDirty = true;
 
