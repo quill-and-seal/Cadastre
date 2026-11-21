@@ -23,6 +23,12 @@ import {
 
 /** Rang de dessin dans le groupe principal : au-dessus du fond de scène, sous les tuiles et les jetons. */
 const SORT_LAYER = 100;
+/**
+ * Vue de loin (pixels d'écran par case), l'herbe animée s'efface en fondu entre FAR_HI et FAR_LO :
+ * ses brins seraient plus serrés que les pixels et feraient une moquette floue qui scintille.
+ * Reste l'herbe figée de l'image de fond, la même, nette à tous les zooms (tuiles de Vellum).
+ */
+const FAR_LO = 120, FAR_HI = 180;
 /** Part maximale des brins au niveau léger. */
 const LIGHT_CAP = 0.35;
 
@@ -197,10 +203,13 @@ function refresh() {
       time = windClock();
       const view = viewRect(size, ox, oy);
       const pushers = trail.update(movers(), dt);
-      const visible = meshes.filter((m) => {
+      const k = Math.max(0, Math.min(1, (view.ppc - FAR_LO) / (FAR_HI - FAR_LO)));
+      const near = k * k * (3 - 2 * k);
+      root.alpha = near;
+      const visible = near > 0 ? meshes.filter((m) => {
         const c = m.chunk;
         return (m.mesh.visible = c.x1 >= view.x0 && c.x0 <= view.x1 && c.y1 >= view.y0 && c.y0 <= view.y1);
-      });
+      }) : [];
       root.visible = visible.length > 0;
       drawn = 0; chunksDrawn = visible.length;
       if (visible.length) {
@@ -224,7 +233,7 @@ function refresh() {
         frames++; frameMs += canvas.app.ticker.elapsedMS ?? 16; cpuMs += performance.now() - t0;
         const now = performance.now();
         if (now - lastStats > 500) {
-          stats.textContent = `Herbe : ${drawn.toLocaleString()} brins · ${chunksDrawn} morceaux · `
+          stats.textContent = (near > 0 ? `Herbe : ${drawn.toLocaleString()} brins · ${chunksDrawn} morceaux · ` : "Herbe : vue de loin, seule l'herbe figée du fond est affichée · ")
             + `${(frameMs / frames).toFixed(1)} ms/image (${Math.round(1000 / (frameMs / frames))} img/s) · calcul ${(cpuMs / frames).toFixed(2)} ms`
             + (useGust ? "" : " · vent calculé brin par brin");
           frames = 0; frameMs = 0; cpuMs = 0; lastStats = now;

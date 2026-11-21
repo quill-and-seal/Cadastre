@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.31
+
+- **Herbe plus belle vue de loin** : les brins animés ne s'affichent plus que de près. Sous environ 180 pixels d'écran par case, ils s'effacent en fondu (complètement sous 120) et laissent l'herbe figée de l'image de fond, la même, nette à tous les zooms avec Vellum : plus d'aspect moquette floue qui scintille, et l'affichage est plus léger. Ils reviennent en fondu en zoomant. Pas besoin de réexporter.
+
 ## 0.1.30
 
 - **Ombres encore plus sombres** : silhouette plus opaque et teinte plus foncée ; l'intensité par défaut passe à « Marquée ». Demande un réexport de la carte.
