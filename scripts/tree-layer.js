@@ -518,7 +518,7 @@ let state = null;
 
 /** Intensité des ombres réglée (0..1). */
 function shadowLevel() {
-  try { return Number(game.settings.get(MODULE_ID, "treeShadow")) || SHADOW_LEVELS[2]; } catch { return SHADOW_LEVELS[2]; }
+  try { return Number(game.settings.get(MODULE_ID, "treeShadow")) || SHADOW_LEVELS[3]; } catch { return SHADOW_LEVELS[3]; }
 }
 
 export function registerTrees() {
@@ -529,7 +529,7 @@ export function registerTrees() {
     config: true,
     type: Number,
     choices: Object.fromEntries(SHADOW_LEVELS.map((n, i) => [n, `CADASTRE.Settings.TreeShadows.${i}`])),
-    default: SHADOW_LEVELS[2],
+    default: SHADOW_LEVELS[3],
     // Appliquée à l'affichage : rien à réexporter.
     onChange: () => { if (state?.shadows) state.shadows.level = shadowLevel(); }
   });
@@ -643,7 +643,8 @@ async function refresh() {
             ? `Arbres : regroupés (dézoom) · ${baker.count} images · ${seen} arbres pas encore regroupés`
             : `Arbres : ${seen} / ${trees.length} à l'écran · ${parts.toLocaleString()} morceaux`)
             + ` · ${sharpener.sharp.size} affinés (${(sharpener.used * 4 / 1048576).toFixed(0)} Mo)`
-            + ` · calcul ${(cpuMs / frames).toFixed(2)} ms` + (animated ? "" : " · vent coupé");
+            + ` · calcul ${(cpuMs / frames).toFixed(2)} ms` + (animated ? "" : " · vent coupé")
+            + (shadows ? (shadows.todo ? ` · ombres : ${shadows.todo} dalles à peindre` : "") : " · ombres anciennes, dans l'image de fond : réexporter la carte");
           frames = 0; cpuMs = 0; lastStats = now;
         }
       }

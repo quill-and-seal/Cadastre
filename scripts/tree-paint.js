@@ -20,13 +20,13 @@ export const SUN_HEIGHTS = { high: 1, mid: 1.8, low: 2.8 };
  * intensité est appliquée à l'affichage (réglage « Intensité des ombres »). Aperçu de l'éditeur :
  * intensité par défaut.
  */
-const SHADOW_BODY = 0.85, SHADOW_FOOT = 0.45;
-export const SHADOW_DEFAULT = 0.8;
+const SHADOW_BODY = 0.92, SHADOW_FOOT = 0.4;
+export const SHADOW_DEFAULT = 1;
 /**
  * Teinte des ombres : un bleu-vert très sombre plutôt que du noir. Sous un ciel bleu, une ombre
  * sur l'herbe au soleil est froide : elle se lit comme une ombre, pas comme un sol plus foncé.
  */
-const SHADOW_COLOR = "rgb(8,22,38)";
+const SHADOW_COLOR = "rgb(5,14,28)";
 /** Marge autour de la couronne, en cases : les feuilles qui dépassent et le balancement au vent. */
 export const SPRITE_MARGIN = 0.45;
 

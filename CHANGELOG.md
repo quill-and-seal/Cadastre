@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.30
+
+- **Ombres encore plus sombres** : silhouette plus opaque et teinte plus foncée ; l'intensité par défaut passe à « Marquée ». Demande un réexport de la carte.
+- **Mode diagnostic** : la ligne « Arbres » signale une scène dont les ombres sont encore les anciennes, peintes dans l'image de fond (à réexporter), et les dalles d'ombres pas encore peintes.
+
 ## 0.1.29
 
 - **Ombres plus sombres et plus nettes** : bord plus net, plus foncées, et teintées d'un bleu-vert très sombre au lieu du noir. Une ombre sur l'herbe au soleil est froide : elle se lit comme une ombre, plus comme un sol foncé. L'intensité par défaut passe à « Normale » (0,8). Demande un réexport de la carte.
