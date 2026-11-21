@@ -12,6 +12,7 @@
  * sous l'herbe.
  */
 import { MODULE_ID, log } from "./constants.js";
+import { diagLine, diagLoaded } from "./diagnostic.js";
 import {
   buildField, fieldPixels, coastPixels, waterPixels, normalizeWater, surfaceUniforms, bedUniforms, bedLayout, quadTriangles, waterVisible,
   WaterSim, WATER_LEVELS, SURFACE_VERT, SURFACE_FRAG, BED_FRAG, FLOAT_VERT, FLOAT_FRAG, QUAD_CORNERS, INSTANCE_FLOATS
@@ -21,6 +22,9 @@ import {
 const SORT_LAYER = 99;
 
 let state = null;
+
+/** Le mode diagnostic a changé : l'eau est remise en place avec ou sans sa ligne. */
+export const refreshWater = () => refresh();
 
 export function registerWater() {
   game.settings.register(MODULE_ID, "waterLevel", {
@@ -45,7 +49,7 @@ export function registerWater() {
 }
 
 function teardown() {
-  document.getElementById("cadastre-water-stats")?.remove();
+  state?.stats?.remove();
   if (!state) return;
   canvas.app?.ticker?.remove(state.tick);
   if (!state.root.destroyed) state.root.destroy({ children: true });
@@ -68,7 +72,6 @@ function viewRect(size, ox, oy) {
   };
 }
 
-const statsOn = () => { try { return !!game.settings.get(MODULE_ID, "grassStats"); } catch { return false; } };
 
 function refresh() {
   teardown();
@@ -151,13 +154,7 @@ function refresh() {
     }
 
     // Compteur de performances.
-    let stats = null;
-    if (statsOn()) {
-      stats = document.createElement("div");
-      stats.id = "cadastre-water-stats";
-      stats.style.cssText = "position:fixed;left:8px;bottom:34px;z-index:100;padding:4px 8px;border-radius:4px;background:rgba(0,0,0,.7);color:#def;font:12px/1.4 monospace;pointer-events:none";
-      document.body.appendChild(stats);
-    }
+    const stats = diagLine("Eau");
     let time = 0, frames = 0, cpuMs = 0, lastStats = performance.now();
 
     const tick = () => {
@@ -193,7 +190,8 @@ function refresh() {
     };
     tick();
     canvas.app.ticker.add(tick);
-    state = { root, tick, texture, bed, coastTex, waterTex };
+    state = { root, tick, texture, bed, coastTex, waterTex, stats };
+    diagLoaded("eau");
   } catch (error) {
     log("Eau non animée", error);
     teardown();

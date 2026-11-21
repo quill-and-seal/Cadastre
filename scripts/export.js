@@ -21,7 +21,7 @@ import { makeCanvas } from "./tree-paint.js";
 import { TERRAINS, BIOME_SOILS } from "./catalog.js";
 import { loadGroundTile } from "./ground-tiles.js";
 import { GROUND_PPC } from "./ground.js";
-import { exportPyramid, vellumActive } from "./pyramid-export.js";
+import { exportPyramid, vellumActive, fingerprint, changedAreas, PRINT_PPC, TILES_VERSION } from "./pyramid-export.js";
 
 const FilePickerCls = () => foundry.applications?.apps?.FilePicker?.implementation ?? globalThis.FilePicker;
 const SceneCls = () => CONFIG.Scene.documentClass;
@@ -237,14 +237,20 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
   // Fond fin découpé en tuiles (Vellum) : seulement s'il apporte plus que le fond habituel.
   let fine = 100;
   try { fine = Number(game.settings.get(MODULE_ID, "backgroundPpc")) || 100; } catch { /* réglage absent */ }
-  let src;
+  let src, tilesFlag = null;
   if (vellumActive() && fine > scale * 1.2) {
     const key = `${slug(map.name)}-${sourceId ?? scene?.id ?? foundry.utils.randomID()}`;
+    // Réexport partiel : empreinte de la carte comparée à celle du dernier export de la scène.
+    const print = await rasterizeCanvas(layersAt(PRINT_PPC));
+    tilesFlag = { version: TILES_VERSION, key, ppc: fine, width: map.width, height: map.height, print: fingerprint(print, map.width, map.height) };
+    print.width = print.height = 0;
+    const dirty = changedAreas(scene?.getFlag(MODULE_ID, "tiles"), tilesFlag);
+    log(dirty ? `Réexport partiel : ${dirty.count} case(s) changée(s)` : "Export complet des tuiles");
     const label = (done, total) => game.i18n.format("CADASTRE.Export.Tiles", { done, total });
     const note = ui.notifications?.info?.(label(0, "…"), { progress: true });
     try {
-      src = await exportPyramid({
-        map, ppc: fine, preview, previewScale: scale, key,
+      const out = await exportPyramid({
+        map, ppc: fine, preview, previewScale: scale, key, dirty,
         render: async (s, view) => {
           // Motif des sols peints aussi fin que la bande rendue.
           const groundPpc = s <= GROUND_PPC ? undefined : Math.min(512, Math.ceil(s / GROUND_PPC) * GROUND_PPC);
@@ -253,6 +259,10 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
         },
         onProgress: (done, total) => note?.update?.({ pct: done / total, message: label(done, total) })
       });
+      src = out.src;
+      log(`Tuiles : ${out.sent} envoyée(s), ${out.skipped} inchangée(s), ${out.failed} en échec`);
+      // Une tuile manquante : le prochain export refait tout plutôt que de s'y fier.
+      if (out.failed) tilesFlag = null;
     } finally {
       note?.remove?.();
     }
@@ -301,6 +311,8 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
   if (wind) await scene.setFlag(MODULE_ID, "wind", wind);
   else if (scene.getFlag(MODULE_ID, "wind")) await scene.unsetFlag(MODULE_ID, "wind");
   // Arbres générés : animés par le calque du module (tree-layer.js).
+  if (tilesFlag) await scene.setFlag(MODULE_ID, "tiles", tilesFlag);
+  else if (scene.getFlag(MODULE_ID, "tiles")) await scene.unsetFlag(MODULE_ID, "tiles");
   if (treeFlag) await scene.setFlag(MODULE_ID, "trees", treeFlag);
   else if (scene.getFlag(MODULE_ID, "trees")) await scene.unsetFlag(MODULE_ID, "trees");
   await refreshThumbnail(scene);

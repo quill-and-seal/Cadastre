@@ -11,6 +11,7 @@
  * d'un bloc : ses étages glissent sous le vent, plus haut plus loin.
  * Effets coupés (réglage du vent à 0), les arbres restent, immobiles.
  */
+import { diagLine, diagLoaded, diagMemory, textureBytes } from "./diagnostic.js";
 import { MODULE_ID, log } from "./constants.js";
 import { normalizeWind, WIND_LEVELS } from "./wind.js";
 import { gustAt, windClock } from "./grass.js";
@@ -303,6 +304,105 @@ export class TreeSharpener {
   }
 }
 
+/**
+ * Forêts regroupées au dézoom : quand une case fait moins de BAKE_BELOW pixels à l'écran, le vent
+ * ne se voit plus et des milliers de morceaux d'arbres coûtent pour rien. Les arbres sont alors
+ * dessinés une fois, par zones de BAKE_CHUNK cases, dans quelques images fixes (BAKE_PPC pixels par
+ * case) affichées à leur place. En rezoomant (au-delà de BAKE_ABOVE), les vrais arbres reviennent.
+ * Les zones sont préparées petit à petit (quelques millisecondes par image), puis gardées.
+ */
+const BAKE_PPC = 32;
+const BAKE_BELOW = 26;
+const BAKE_ABOVE = 34;
+const BAKE_CHUNK = 8;
+const BAKE_MS = 4;
+
+export class TreeBaker {
+  constructor(root, trees, { size, ox, oy, renderer }) {
+    this.trees = trees;
+    this.size = size; this.ox = ox; this.oy = oy;
+    this.renderer = renderer;
+    this.layer = new PIXI.Container();
+    this.layer.eventMode = "none";
+    root.addChild(this.layer);
+    this.active = false;
+    // Zones : arbres rattachés à la zone de leur centre ; l'image déborde du plus grand d'entre eux.
+    const chunks = new Map();
+    for (const tr of trees) {
+      const cx = Math.floor(tr.x / BAKE_CHUNK), cy = Math.floor(tr.y / BAKE_CHUNK), id = `${cx},${cy}`;
+      let c = chunks.get(id);
+      if (!c) chunks.set(id, c = { cx, cy, trees: [], margin: 0, sprite: null, rt: null });
+      c.trees.push(tr);
+      c.margin = Math.max(c.margin, tr.r + 0.1);
+    }
+    this.chunks = [...chunks.values()];
+    this.bytes = 0;
+  }
+
+  /** @returns {boolean} arbres regroupés (le vent n'a alors rien à calculer) */
+  update(viewPpc, view) {
+    if (!this.renderer) return false;
+    if (!this.active && viewPpc < BAKE_BELOW) this.active = true;
+    else if (this.active && viewPpc > BAKE_ABOVE) this._leave();
+    if (!this.active) return false;
+    const [x0, y0, x1, y1] = view;
+    const t0 = performance.now();
+    for (const c of this.chunks) {
+      const m = c.margin;
+      const seen = (c.cx + 1) * BAKE_CHUNK + m >= x0 && c.cx * BAKE_CHUNK - m <= x1 && (c.cy + 1) * BAKE_CHUNK + m >= y0 && c.cy * BAKE_CHUNK - m <= y1;
+      if (!c.sprite && seen && performance.now() - t0 < BAKE_MS) this._bake(c);
+      if (c.sprite) {
+        c.sprite.visible = seen;
+        for (const tr of c.trees) tr.box.visible = false;
+      } else {
+        // Pas encore préparée : ses vrais arbres restent, immobiles.
+        for (const tr of c.trees) tr.box.visible = seen;
+      }
+    }
+    return true;
+  }
+
+  _leave() {
+    this.active = false;
+    for (const c of this.chunks) if (c.sprite) c.sprite.visible = false;
+  }
+
+  _bake(c) {
+    const { size, ox, oy } = this;
+    const m = c.margin;
+    const wx = c.cx * BAKE_CHUNK - m, wy = c.cy * BAKE_CHUNK - m;
+    const span = BAKE_CHUNK + 2 * m;
+    const px = Math.ceil(span * BAKE_PPC);
+    // Avec réductions (mipmaps) : vue de très loin, la forêt reste lisse au lieu de scintiller.
+    const rt = PIXI.RenderTexture.create({ width: px, height: px, scaleMode: PIXI.SCALE_MODES?.LINEAR ?? 1, mipmap: PIXI.MIPMAP_MODES?.ON ?? 1 });
+    const k = BAKE_PPC / size;
+    const transform = new PIXI.Matrix(k, 0, 0, k, -(ox + wx * size) * k, -(oy + wy * size) * k);
+    // Petites plantes d'abord, comme dans le calque.
+    let first = true;
+    for (const tr of c.trees) {
+      const was = tr.box.visible;
+      tr.box.visible = true;
+      this.renderer.render(tr.box, { renderTexture: rt, transform, clear: first });
+      tr.box.visible = was;
+      first = false;
+    }
+    const sprite = new PIXI.Sprite(rt);
+    sprite.position.set(ox + wx * size, oy + wy * size);
+    sprite.scale.set(1 / k);
+    this.layer.addChild(sprite);
+    c.rt = rt; c.sprite = sprite;
+    this.bytes += px * px * 4 * 4 / 3;
+    diagMemory("forêts regroupées", this.bytes);
+  }
+
+  get count() { return this.chunks.filter((c) => c.sprite?.visible).length; }
+
+  destroy() {
+    for (const c of this.chunks) c.rt?.destroy(true);
+    diagMemory("forêts regroupées", 0);
+  }
+}
+
 /** Plantes du drapeau, quelle que soit sa version (v4 : modèles partagés, morceaux en tableaux). */
 export function expandItems(data) {
   if ((data.v ?? 1) < 4) return data.items;
@@ -335,6 +435,10 @@ function teardown() {
   state.dead = true;
   if (state.tick) canvas.app?.ticker?.remove(state.tick);
   state.sharpener?.destroy();
+  state.baker?.destroy();
+  state.stats?.remove();
+  diagMemory("arbres", 0);
+  diagMemory("arbres affinés", 0);
   if (state.root && !state.root.destroyed) state.root.destroy({ children: true });
   state = null;
 }
@@ -374,8 +478,14 @@ async function refresh() {
     const trees = treeSprites2(root, expandItems(data), pages, { size, ox, oy, ppc });
     const sharpener = me.sharpener = new TreeSharpener(trees, size, pages);
     sharpener.renderer = canvas.app.renderer;
+    const baker = me.baker = new TreeBaker(root, trees, { size, ox, oy, renderer: canvas.app.renderer });
+    const stats = me.stats = diagLine("Arbres");
+    const pageBytes = pages.reduce((n, p) => n + textureBytes(p.color?.baseTexture), 0);
+    diagMemory("arbres", pageBytes);
+    let frames = 0, cpuMs = 0, lastStats = performance.now();
     let last = windClock();
     me.tick = () => {
+      const c0 = stats ? performance.now() : 0;
       const t = windClock(), dt = Math.max(0, Math.min(0.1, t - last));
       last = t;
       const r = canvas.app.renderer, inv = canvas.stage.worldTransform.clone().invert();
@@ -383,10 +493,27 @@ async function refresh() {
       const x0 = (Math.min(p0.x, p1.x) - ox) / size, y0 = (Math.min(p0.y, p1.y) - oy) / size;
       const x1 = (Math.max(p0.x, p1.x) - ox) / size, y1 = (Math.max(p0.y, p1.y) - oy) / size;
       const viewPpc = size * Math.abs(canvas.stage.scale.x);
-      stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated, viewPpc);
+      // Dézoomé : forêts regroupées en quelques images fixes, rien à animer.
+      if (!baker.update(viewPpc * (r.resolution ?? 1), [x0, y0, x1, y1])) stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated, viewPpc);
       sharpener.update(viewPpc * (r.resolution ?? 1), performance.now(), [x0, y0, x1, y1]);
+      if (stats) {
+        frames++; cpuMs += performance.now() - c0;
+        const now = performance.now();
+        if (now - lastStats > 500) {
+          let seen = 0, parts = 0;
+          for (const tr of trees) if (tr.box.visible) { seen++; parts += tr.parts.length; }
+          diagMemory("arbres affinés", sharpener.used * 4);
+          stats.textContent = (baker.active
+            ? `Arbres : regroupés (dézoom) · ${baker.count} images · ${seen} arbres pas encore regroupés`
+            : `Arbres : ${seen} / ${trees.length} à l'écran · ${parts.toLocaleString()} morceaux`)
+            + ` · ${sharpener.sharp.size} affinés (${(sharpener.used * 4 / 1048576).toFixed(0)} Mo)`
+            + ` · calcul ${(cpuMs / frames).toFixed(2)} ms` + (animated ? "" : " · vent coupé");
+          frames = 0; cpuMs = 0; lastStats = now;
+        }
+      }
     };
     me.tick();
+    diagLoaded("arbres");
     canvas.app.ticker.add(me.tick);
   } catch (error) {
     log("Arbres non affichés", error);

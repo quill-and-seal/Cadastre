@@ -13,6 +13,8 @@
 import { MODULE_ID, log } from "./constants.js";
 import { startLegacyGrass, stopLegacyGrass } from "./wind-layer-legacy.js";
 import { refreshTrees } from "./tree-layer.js";
+import { refreshWater } from "./water-layer.js";
+import { diagLine, diagLoaded, refreshDiagnostic } from "./diagnostic.js";
 import { normalizeWind, WIND_LEVELS } from "./wind.js";
 import {
   bladeField, lod, windUniforms, packPushers, PushTrail, grassVert, GRASS_FRAG, BLADE_CORNERS, BLADE_BYTES,
@@ -62,7 +64,7 @@ export function registerWind() {
     config: true,
     type: Boolean,
     default: false,
-    onChange: () => refresh()
+    onChange: () => { refreshDiagnostic(); refresh(); refreshWater(); refreshTrees(); }
   });
   Hooks.on("canvasReady", () => refresh());
   Hooks.on("canvasTearDown", () => teardown());
@@ -76,7 +78,7 @@ export const legacyGrass = () => { try { return game.settings.get(MODULE_ID, "gr
 
 function teardown() {
   stopLegacyGrass();
-  document.getElementById("cadastre-grass-stats")?.remove();
+  state?.stats?.remove();
   if (!state) return;
   canvas.app?.ticker?.remove(state.tick);
   if (!state.root.destroyed) state.root.destroy({ children: true });
@@ -174,13 +176,7 @@ function refresh() {
     };
 
     // Compteur de l'herbe.
-    let stats = null;
-    if (game.settings.get(MODULE_ID, "grassStats")) {
-      stats = document.createElement("div");
-      stats.id = "cadastre-grass-stats";
-      stats.style.cssText = "position:fixed;left:8px;bottom:8px;z-index:100;padding:4px 8px;border-radius:4px;background:rgba(0,0,0,.7);color:#dfe;font:12px/1.4 monospace;pointer-events:none";
-      document.body.appendChild(stats);
-    }
+    const stats = diagLine("Herbe");
     let time = 0, frames = 0, frameMs = 0, cpuMs = 0, lastStats = performance.now(), drawn = 0, chunksDrawn = 0;
 
     const tick = () => {
@@ -225,7 +221,8 @@ function refresh() {
     };
     tick();
     canvas.app.ticker.add(tick);
-    state = { root, tick, gustTexture };
+    state = { root, tick, gustTexture, stats };
+    diagLoaded("herbe");
   } catch (error) {
     log("Vent non affiché", error);
     teardown();

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.26
+
+- **Mode diagnostic** (réglage client, anciennement « Compteur de performances ») : un panneau en haut à gauche qui dit ce qui coûte, pour viser juste quand quelque chose rame :
+  - images par seconde, temps moyen et pire temps d'une image ;
+  - **gels** du navigateur (tâches de plus de 50 ms), quel que soit le module responsable ;
+  - temps de chargement de la scène, des arbres, de l'herbe et de l'eau ;
+  - mémoire graphique totale, et la part de Cadastre (images des arbres, arbres affinés, forêts regroupées) ;
+  - une ligne par calque : arbres à l'écran, morceaux, arbres affinés ; brins d'herbe ; particules d'eau ; temps de calcul.
+- **Réexport partiel des tuiles** : Cadastre garde une empreinte de la carte à chaque export (un petit rendu de toute la carte). Au réexport, seules les tuiles des cases dont le dessin a changé sont redessinées et renvoyées : une retouche ne prend plus que quelques secondes. Le premier export, un changement de finesse ou de taille, ou une tuile perdue en route refont tout.
+- **Forêts regroupées au dézoom** : quand une case fait moins de 26 pixels à l'écran, le vent ne se voit plus ; les arbres sont alors dessinés une fois, par zones de 8 × 8 cases, dans quelques images fixes (préparées petit à petit, sans à-coup), et reviennent en rezoomant. Une grande forêt vue de loin coûte presque rien à afficher.
+
 ## 0.1.25
 
 - **Export en tuiles impossible** (« File … has a disallowed extension ".dzi" ») : Foundry refuse d'envoyer les fichiers `.dzi`. La description de la découpe est maintenant envoyée en `.xml` ; il faut **Vellum 0.4.5**, qui sait la lire.

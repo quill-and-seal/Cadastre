@@ -35,6 +35,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - 0.1.23 : calques ignorés par Vellum (plus de gel d'une minute au zoom).
 - 0.1.24 : fond net de près, découpé en tuiles fines pour Vellum ; arbres préchargés avec la scène.
 - 0.1.25 : description des tuiles en .xml (Foundry refuse les .dzi) ; végétation semée retirée sous l'eau, les pièces et les chemins.
+- 0.1.26 : mode diagnostic, réexport partiel des tuiles, forêts regroupées au dézoom.
 
 ## Biomes (V1 : 20 biomes, un par issue)
 
