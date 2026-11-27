@@ -48,12 +48,12 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - 0.1.36 : éditeur, herbe animée sous les arbres et objets.
 - 0.1.37 : heure du soleil en direct, ombres dynamiques (arbres au vent, objets, murs).
 - 0.1.38 : ombre portée par chaque branche, qui bouge avec elle.
-- 0.1.39 : biome Marais (chenaux, plantes d'eau, bois mort, ponts de planches, lucioles), plantes écartées par les jetons.
+- 0.2.0 : biome Marais (chenaux, plantes d'eau, bois mort, ponts de planches, lucioles), plantes écartées par les jetons.
 
 ## Biomes (V1 : 20 biomes, un par issue)
 
 - ✅ Forêt de feuillus, forêt de conifères (0.1.19).
-- ✅ Marais (0.1.39).
+- ✅ Marais (0.2.0).
 - À venir : plaine, bocage, verger, terre de lavande, champs de blé, vignoble, berges de rivière, mangrove, plaine rocheuse, garrigue, montagne, lande, savane, désert, oasis, jungle, toundra / taïga enneigée.
 
 ## 0.2 — Palisade, Vellum, étages, zones retouchables

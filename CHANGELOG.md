@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.39
+## 0.2.0
 
 - **Nouveau biome : Marais** (issue #19). Sol de vase olive et kaki (flaques, mousse, brins de paille, bulles), grands chenaux d'eau sombre vert-bleu qui se rejoignent et s'élargissent en étangs, îlots de vase, lentilles d'eau en paquets le long des berges.
 - Plantes du marais, générées comme les arbres : roseaux à plumeau, massettes, joncs, nénuphars en fleurs (sur l'eau seulement), saules têtards.
