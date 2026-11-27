@@ -231,7 +231,14 @@ export function buildField(flag, { hideMasked = false } = {}) {
     const m = r.length / 2;
     for (let i = 0; i < m; i++) { const j = (i + 1) % m; shore.push([r[i * 2], r[i * 2 + 1], r[j * 2], r[j * 2 + 1]]); }
   }
-  const shoreB = bucketSegments(shore);
+  // Berges vraies : sans les bords de l'eau posés sur le bord de la carte, où l'eau continue
+  // (le courant n'y bute pas, pas d'écume, le fond ne remonte pas).
+  const onEdge = (x, y) => [x <= 1e-3 ? 1 : x >= flag.width - 1e-3 ? 2 : 0, y <= 1e-3 ? 1 : y >= flag.height - 1e-3 ? 2 : 0];
+  const bank = shore.filter(([ax, ay, bx, by]) => {
+    const [a1, a2] = onEdge(ax, ay), [b1, b2] = onEdge(bx, by);
+    return !((a1 && a1 === b1) || (a2 && a2 === b2));
+  });
+  const shoreB = bucketSegments(bank);
   // Rivières.
   const segs = [];
   const frames = flag.rivers.map((rv) => riverFrames(rv.pts));
@@ -330,7 +337,7 @@ export function buildField(flag, { hideMasked = false } = {}) {
     let d = 2;
     NEAR[0] = 0; NEAR[1] = 0;
     for (const si of near(shoreB, x, y, 2)) {
-      const [ax, ay, bx, by] = shore[si];
+      const [ax, ay, bx, by] = bank[si];
       const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1e-9;
       const h = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L2));
       const ex = x - ax - dx * h, ey = y - ay - dy * h, e = Math.hypot(ex, ey);
@@ -435,7 +442,7 @@ export function buildField(flag, { hideMasked = false } = {}) {
     }
   }
   // Plages et falaises : distance au rivage de part et d'autre, jusque sur la terre.
-  field.coast = buildCoast(field, flag.coast, shore, inWater);
+  field.coast = buildCoast(field, flag.coast, bank, inWater);
   // Types d'eau : peints par zones, le type par défaut ailleurs ; fondus à leurs limites.
   field.types = waterTypes(field, data, flag.water?.texture);
   // Un rocher garde le courant qui l'aborde (rivière ou courant tracé).

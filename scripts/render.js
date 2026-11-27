@@ -197,6 +197,8 @@ export function renderWater(map, prefix = "cad") {
   const bank = marsh ? MARSH_BANK.bank : WATER.bank, bankDark = marsh ? MARSH_BANK.bankDark : WATER.bankDark, bw = marsh ? MARSH_BANK.width : 0.56;
   const d = ringsPath(rings);
   if (!d) return "";
+  // Traits de berge : sans les bords posés sur le bord de la carte, où l'eau continue.
+  const e = bankPath(rings, map.width, map.height) || "M0 0";
   const r = `filterUnits="userSpaceOnUse" ${region(map)}`;
   const id = (k) => `${prefix}-w${k}`;
   const round = `stroke-linejoin="round" stroke-linecap="round" fill="none"`;
@@ -217,18 +219,43 @@ export function renderWater(map, prefix = "cad") {
     + `<g clip-path="url(#${prefix}-clip)">`
     // Berge : bande de terre cerclée d'encre côté rive, plus sombre près de l'eau.
     + `<g${mask}><g filter="url(#${id("rough")})">`
-      + `<path d="${d}" stroke="${WATER.ink}" stroke-width="${bw + 0.1}" ${round}/>`
-      + `<path d="${d}" stroke="${bank}" stroke-width="${bw}" ${round}/>`
-      + `<path d="${d}" stroke="${bankDark}" stroke-width="0.22" ${round}/>`
+      + `<path d="${e}" stroke="${WATER.ink}" stroke-width="${bw + 0.1}" ${round}/>`
+      + `<path d="${e}" stroke="${bank}" stroke-width="${bw}" ${round}/>`
+      + `<path d="${e}" stroke="${bankDark}" stroke-width="0.22" ${round}/>`
     + `</g></g>`
     + `<g clip-path="url(#${id("clip")})">`
       + `<path d="${d}" fill="${marsh ? MARSH_BANK.deep : WATER.deep}"/>`
       + `<path d="${d}" fill="url(#${id("bed")})"/>`
-      + `<path d="${d}" stroke="${marsh ? MARSH_BANK.shallow : WATER.shallow}" stroke-width="1.5" stroke-opacity="0.9" ${round} filter="url(#${id("soft")})"/>`
-      + `<path d="${d}" stroke="${marsh ? MARSH_BANK.rim : WATER.rim}" stroke-width="0.32" stroke-opacity="0.75" ${round} filter="url(#${id("rimblur")})"/>`
+      + `<path d="${e}" stroke="${marsh ? MARSH_BANK.shallow : WATER.shallow}" stroke-width="1.5" stroke-opacity="0.9" ${round} filter="url(#${id("soft")})"/>`
+      + `<path d="${e}" stroke="${marsh ? MARSH_BANK.rim : WATER.rim}" stroke-width="0.32" stroke-opacity="0.75" ${round} filter="url(#${id("rimblur")})"/>`
     + `</g>`
-    + `<path d="${d}" stroke="${WATER.ink}" stroke-width="0.04" stroke-opacity="0.7" ${round}${mask}/>`
+    + `<path d="${e}" stroke="${WATER.ink}" stroke-width="0.04" stroke-opacity="0.7" ${round}${mask}/>`
     + `</g>`;
+}
+
+/** Contours de l'eau en traits ouverts, sans les bords qui longent le bord de la carte. */
+function bankPath(rings, w, h) {
+  const edge = (x, y) => [x <= 1e-3 ? 1 : x >= w - 1e-3 ? 2 : 0, y <= 1e-3 ? 1 : y >= h - 1e-3 ? 2 : 0];
+  let out = "";
+  for (const r of rings) {
+    const n = r.length / 2;
+    if (n < 2) continue;
+    // Départ juste après un bord de carte, s'il y en a un, pour ne pas couper un trait en deux.
+    const border = (k) => {
+      const q = (k + 1) % n, [a1, a2] = edge(r[k * 2], r[k * 2 + 1]), [b1, b2] = edge(r[q * 2], r[q * 2 + 1]);
+      return (a1 && a1 === b1) || (a2 && a2 === b2);
+    };
+    let s0 = 0;
+    for (let k = 0; k < n; k++) if (border(k)) { s0 = (k + 1) % n; break; }
+    let pen = false;
+    for (let t = 0; t < n; t++) {
+      const k = (s0 + t) % n, q = (k + 1) % n;
+      if (border(k)) { pen = false; continue; }
+      if (!pen) { out += `M${f3(r[k * 2])} ${f3(r[k * 2 + 1])}`; pen = true; }
+      out += `L${f3(r[q * 2])} ${f3(r[q * 2 + 1])}`;
+    }
+  }
+  return out;
 }
 
 /**

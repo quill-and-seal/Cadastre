@@ -4,6 +4,7 @@
 
 - **Bouton « Générer les courants »** (outil Eau, mode Courants) : pose des courants le long des chenaux de toute l'eau de la carte, peinte à la main ou non. Une eau qui sort de la carte par plusieurs endroits reçoit un courant principal d'une sortie à l'autre, et un affluent depuis chaque autre sortie ; un chenal fermé et allongé reçoit un courant d'un bout à l'autre ; un étang rond reste calme. Les tracés suivent le milieu des chenaux, à la vitesse du curseur. Régénérer remplace les courants générés ; ceux tracés à la main restent. **Retirer** enlève les courants générés.
 - Le marais utilise la même génération : ses courants sont posés de façon plus sûre (il arrivait qu'aucun ne le soit).
+- **Le bord de la carte ne bloque plus l'eau** : là où l'eau touche le bord de la carte, il n'y a plus de berge (ni bande de terre, ni liseré clair, ni écume) ; le courant y file sans buter ni ralentir, et le fond ne remonte pas.
 
 ## 0.2.1
 
