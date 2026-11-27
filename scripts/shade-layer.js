@@ -20,6 +20,18 @@ export const SHADOW_LEVELS = [0.35, 0.6, 0.8, 1];
 const MASK_PPC = 16, ERASE_PPC = 16;
 /** Couleur des ombres (comme tree-paint.js). */
 export const SHADE_COLOR = 0x050e1c;
+/** Opacité d'une ombre pleine, à l'intensité la plus forte. */
+const SHADE_BODY = 0.9;
+const SHADE_RGB = [(SHADE_COLOR >> 16) / 255, ((SHADE_COLOR >> 8) & 255) / 255, (SHADE_COLOR & 255) / 255];
+const FLAT_FRAG = `
+varying vec2 vTextureCoord;
+uniform sampler2D uSampler;
+uniform vec3 uColor;
+uniform float uAlpha;
+void main() {
+  float a = texture2D(uSampler, vTextureCoord).a * uAlpha;
+  gl_FragColor = vec4(uColor * a, a);
+}`;
 
 let shade = null;
 
@@ -82,10 +94,11 @@ export function shadeLayer() {
   root.vellumIgnore = true;
   root._vellumPatch = true;
   Object.assign(root, { elevation: 0, sortLayer: SORT_LAYER, sort: SORT });
-  const Alpha = PIXI.AlphaFilter ?? PIXI.filters?.AlphaFilter;
-  const filter = Alpha ? new Alpha(shadowLevel()) : null;
-  if (filter) root.filters = [filter];
-  else root.alpha = shadowLevel();
+  // Aplati puis peint d'une seule couleur, à l'intensité réglée : les morceaux d'arbres (verts)
+  // deviennent des ombres, et deux ombres qui se croisent ne s'additionnent pas.
+  const filter = new PIXI.Filter(undefined, FLAT_FRAG, { uColor: new Float32Array(SHADE_RGB), uAlpha: shadowLevel() * SHADE_BODY });
+  filter.resolution = Math.max(0.5, (canvas.app?.renderer?.resolution ?? 1) * 0.75);
+  root.filters = [filter];
   const content = root.addChild(new PIXI.Container());
   const heights = content.addChild(new PIXI.Container());
   const trees = content.addChild(new PIXI.Container());
@@ -107,8 +120,7 @@ export function shadeLayer() {
 export function refreshShadeLevel() {
   if (!shade) return;
   const level = shadowLevel() * sunState().light;
-  if (shade.filter) shade.filter.alpha = level;
-  else shade.root.alpha = level;
+  shade.filter.uniforms.uAlpha = level * SHADE_BODY;
   if (shade.mask) shade.mask.level = level;
 }
 

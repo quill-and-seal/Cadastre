@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.38
+
+- **Les ombres des arbres bougent vraiment** : chaque morceau d'arbre (tronc, branches) porte maintenant sa propre ombre, décalée selon sa hauteur le long des rayons du soleil et tournée comme lui quand le vent le balance. Les ombres des branches bougent avec les branches, et suivent l'heure du soleil.
+- Ombres plus nettes et ajourées (on voit la lumière passer entre les branches), peintes d'une seule couleur par le calque des ombres.
+- Fonctionne aussi sur les scènes exportées depuis la 0.1.27, sans réexport (les ombres des objets et des murs demandent toujours un export en 0.1.37 ou plus).
+
 ## 0.1.37
 
 - **Soleil qui tourne : ombres dynamiques.** Nouveau réglage **Heure du soleil** (5 h à 21 h), changeable en pleine partie : toutes les ombres tournent et s'allongent en direct, chez tous les joueurs. Le soleil se lève à l'est, passe au sud à midi (ombres courtes vers le haut de la carte), se couche à l'ouest ; à l'aube et au crépuscule, ombres longues et plus pâles. Macro : `game.modules.get("cadastre").api.setSunTime(18)`. Remplace le réglage « Hauteur du soleil ».
