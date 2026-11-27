@@ -62,7 +62,41 @@ export const SPECIES = {
   // Souche : bois coupé, cernes, racines, un peu de mousse. Ne bouge pas au vent.
   stump: { form: "stump", trunkW: 0.32, rigid: true, bark: ["#3a2a1c", "#6a4c32"], wood: ["#b58a5c", "#d8b483"], leaves: { dark: "#2f5a22", mid: "#4f8a34", light: "#8cbf55" } },
   // Champignons : quelques chapeaux en grappe (cèpes bruns ou amanites rouges à points blancs).
-  mushrooms: { form: "caps", rigid: true, trunkW: 0.1, bark: ["#5a4632", "#8a7050"], leaves: { dark: "#5a3a1c", mid: "#8a5a2c", light: "#c89a5c" } }
+  mushrooms: { form: "caps", rigid: true, trunkW: 0.1, bark: ["#5a4632", "#8a7050"], leaves: { dark: "#5a3a1c", mid: "#8a5a2c", light: "#c89a5c" } },
+
+  /* Marais. Touffes (form « clump ») : tiges dressées, vues d'en haut, et feuilles en lanières. */
+  // Roseau commun (Phragmites) : tiges de 2 à 3 m, feuilles grises-vertes qui partent de la tige,
+  // plumeau violacé au sommet, penché.
+  reed: {
+    form: "clump", stems: [70, 100], height: 1.7, lean: 0.1, blades: [2, 4], bladeM: 0.3, bladeW: 0.08, basal: false, spreadR: 0.8,
+    flower: { kind: "plume", m: 0.32, colors: ["#7a5a66", "#8c6a62", "#9c7e68"], prob: 0.7 }, trunkW: 0.012,
+    bark: ["#6f7a4a", "#a8a46c"], leaves: { dark: "#3f5a32", mid: "#6a8a4a", light: "#b4c47c" }
+  },
+  // Massette (quenouille) : longues feuilles en lames qui retombent du pied, épis bruns en cigare.
+  cattail: {
+    form: "clump", stems: [8, 14], height: 1.4, lean: 0.14, blades: [0, 0], bladeM: 1.0, bladeW: 0.02, basal: [14, 22],
+    flower: { kind: "spike", m: 0.26, colors: ["#4a2e1a", "#5a3820", "#3e2616"], prob: 0.9 }, trunkW: 0.012,
+    bark: ["#5f7a3e", "#9cb06a"], leaves: { dark: "#2f5a2c", mid: "#5a8a3e", light: "#a2c46c" }
+  },
+  // Jonc : touffe serrée de tiges fines, vert sombre, qui s'ouvre en gerbe ; petites grappes brunes.
+  rush: {
+    form: "clump", stems: [0, 0], height: 0.7, lean: 0.4, blades: [0, 0], bladeM: 0.6, bladeW: 0.012, basal: [60, 90], gerbe: true,
+    flower: { kind: "tuft", m: 0.03, colors: ["#6a4a26", "#7c5a30", "#5a3c1e"], prob: 0.25 }, trunkW: 0.01,
+    bark: ["#3a5a2a", "#6a8a44"], leaves: { dark: "#1f4a24", mid: "#3c7032", light: "#7aa852" }
+  },
+  // Nénuphar : feuilles rondes fendues posées sur l'eau, quelques fleurs blanches ou roses. Immobile.
+  lily: {
+    form: "lily", rigid: true, pads: [12, 22], padM: [0.2, 0.42], flowers: [1, 3], trunkW: 0.01,
+    bark: ["#3a5a2a", "#6a8a44"], leaves: { dark: "#24562a", mid: "#3f8236", light: "#8fc45d" },
+    flowerColors: [["#f6f3ea", "#e9e2d0"], ["#f2c4d4", "#e494b0"]]
+  },
+  // Saule têtard : tronc court et trapu taillé en tête, gerbe de longues pousses droites, feuilles
+  // étroites vert argenté.
+  willow: {
+    form: "broad", depth: 2, fork: 2, spread: 0.75, lai: 2.2, leaf: "willow", leafM: 0.09, perTwig: 10,
+    trunkH: 1.25, gnarl: 0.02, rise: 0.15, taper: 0.9, laterals: 0, rootL: 0.3, trunkW: 0.22, limbs: 18, split: 1, pollard: true,
+    bark: ["#4a4036", "#8a7a66"], leaves: { dark: "#3a563c", mid: "#6a8a60", light: "#bccfa6" }
+  }
 };
 
 export const norm = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
@@ -250,6 +284,99 @@ function growFern(rand, sp) {
   return { segs, tips, leaves, pieces };
 }
 
+/**
+ * Touffe de marais (roseau, massette, jonc). Tiges dressées depuis une petite base, chacune
+ * penchée vers l'extérieur ; feuilles en lanières (le long des tiges, ou au pied) ; fleurs au
+ * sommet (plumeau, épi, grappe). Pour le vent : six secteurs qui ondulent chacun à son rythme.
+ */
+function growClump(rand, sp) {
+  const segs = [], tips = [], leaves = [];
+  const SECTORS = 6;
+  const pieces = [{ id: 0, at: null }];
+  for (let i = 1; i <= SECTORS; i++) pieces.push({ id: i, at: [0, 0, 0] });
+  const sector = (az) => 1 + (Math.floor(((az / (Math.PI * 2)) % 1 + 1) % 1 * SECTORS) % SECTORS);
+  const H = sp.height, Lb = sp.bladeM / CASE_M;
+  const blade = (p, ang, L, W, piece, extra = {}) =>
+    leaves.push({ p, ang, L, W, f: 0.8 + rand() * 0.4, shape: "blade", off: 0, shade: rand(), seed: rand(), tp: rand(), piece, ...extra });
+  // Tiges.
+  const [s0, s1] = sp.stems, n = s0 + Math.floor(rand() * (s1 - s0 + 1));
+  const lean0 = rand() * Math.PI * 2;
+  for (let i = 0; i < n; i++) {
+    const a = rand() * Math.PI * 2, d = rand() * (sp.spreadR ?? 0.55);
+    const base = [Math.cos(a) * d, Math.sin(a) * d, 0];
+    // Penchée vers l'extérieur, et un peu dans le sens commun (le vent dominant).
+    const out = d > 0.05 ? a : rand() * Math.PI * 2;
+    // Les tiges du bord s'ouvrent vers l'extérieur, celles du cœur restent droites : touffe pleine.
+    const tilt = sp.lean * (0.6 + rand() * 0.8) * (0.25 + d / (sp.spreadR ?? 0.55));
+    const h = H * (0.75 + rand() * 0.35);
+    const dx = Math.cos(out) * tilt + Math.cos(lean0) * 0.08, dy = Math.sin(out) * tilt + Math.sin(lean0) * 0.08;
+    const top = [base[0] + dx * h, base[1] + dy * h, h];
+    const piece = sector(Math.atan2(top[1], top[0]));
+    segs.push({ a: base, b: top, w: 1, w2: 0.6, d: 99, twig: true, piece });
+    tips.push({ p: top, dir: norm([dx, dy, 1]), d: 1, len: h });
+    // Feuilles le long de la tige, alternées, qui s'écartent à l'horizontale.
+    const [b0, b1] = sp.blades, nb = b0 + Math.floor(rand() * (b1 - b0 + 1));
+    for (let k = 0; k < nb; k++) {
+      const t = 0.3 + 0.6 * (k + rand() * 0.5) / Math.max(1, nb);
+      const q = [base[0] + dx * h * t, base[1] + dy * h * t, h * t];
+      blade(q, out + (k % 2 ? 1 : -1) * (0.6 + rand() * 1.4), Lb * (0.7 + rand() * 0.5), sp.bladeW, piece);
+    }
+    // Fleur au sommet.
+    const fl = sp.flower;
+    if (fl && rand() < (fl.prob ?? 0.85)) {
+      const color = fl.colors[Math.floor(rand() * fl.colors.length)], m = (fl.m / CASE_M) * (0.8 + rand() * 0.4);
+      const droop = Math.atan2(dy, dx) + (rand() - 0.5) * 0.6;
+      leaves.push({ [fl.kind]: true, p: [top[0], top[1], top[2] + 0.01], ang: droop, L: m, color, shade: rand(), seed: rand(), tp: rand(), piece });
+    }
+  }
+  // Feuilles du pied : longues lames qui montent puis retombent tout autour (massette, jonc).
+  if (sp.basal) {
+    const [c0, c1] = sp.basal, nb = c0 + Math.floor(rand() * (c1 - c0 + 1));
+    for (let i = 0; i < nb; i++) {
+      const az = rand() * Math.PI * 2, d = Math.sqrt(rand()) * 0.35;
+      const p = [Math.cos(az) * d, Math.sin(az) * d, 0];
+      const out = d > 0.05 ? az + (rand() - 0.5) * 0.8 : rand() * Math.PI * 2;
+      // Vue d'en haut, une lame dressée paraît plus courte : sa longueur projetée.
+      const rise = sp.gerbe ? 0.55 + rand() * 0.35 : 0.25 + rand() * 0.55;
+      const L = Lb * (0.65 + rand() * 0.55) * Math.cos(rise);
+      const z = H * (sp.gerbe ? 0.5 + rand() * 0.4 : 0.15 + rand() * 0.55);
+      const piece = sector(out);
+      blade([p[0], p[1], z], out, L, sp.bladeW / Math.max(0.3, Math.cos(rise)), piece);
+      tips.push({ p: [p[0] + Math.cos(out) * L, p[1] + Math.sin(out) * L, z], dir: [Math.cos(out), Math.sin(out), 0], d: 1, len: L });
+      // Jonc : petite grappe brune sur le côté de certaines tiges.
+      const fl = sp.flower;
+      if (sp.gerbe && fl && rand() < (fl.prob ?? 0.2)) {
+        const t = 0.6 + rand() * 0.25;
+        const color = fl.colors[Math.floor(rand() * fl.colors.length)];
+        leaves.push({ tuft: true, p: [p[0] + Math.cos(out) * L * t, p[1] + Math.sin(out) * L * t, z + 0.01], ang: out, L: (fl.m / CASE_M) * (0.8 + rand() * 0.5), color, shade: rand(), seed: rand(), tp: rand(), piece });
+      }
+    }
+  }
+  return { segs, tips, leaves, pieces };
+}
+
+/** Nénuphars : feuilles rondes fendues, à plat sur l'eau, et quelques fleurs. */
+function growLily(rand, sp) {
+  const tips = [], leaves = [];
+  const [p0, p1] = sp.pads, n = p0 + Math.floor(rand() * (p1 - p0 + 1));
+  const placed = [];
+  for (let i = 0; i < n * 4 && placed.length < n; i++) {
+    const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * 0.85;
+    const L = ((sp.padM[0] + rand() * (sp.padM[1] - sp.padM[0])) / CASE_M);
+    const p = [Math.cos(a) * d, Math.sin(a) * d, 0.004 + rand() * 0.004];
+    placed.push({ p, L });
+    leaves.push({ pad: true, p, L, ang: rand() * Math.PI * 2, shade: rand(), seed: rand(), tp: 0 });
+    tips.push({ p: [p[0], p[1], 0], dir: [1, 0, 0], d: 1, len: 0 });
+  }
+  const [f0, f1] = sp.flowers, nf = f0 + Math.floor(rand() * (f1 - f0 + 1));
+  for (let i = 0; i < nf && placed.length; i++) {
+    const host = placed[Math.floor(rand() * placed.length)];
+    const c = sp.flowerColors[rand() < 0.75 ? 0 : 1];
+    leaves.push({ flower: true, p: [host.p[0] + (rand() - 0.5) * host.L * 0.3, host.p[1] + (rand() - 0.5) * host.L * 0.3, 0.02], L: (0.09 + rand() * 0.04) / CASE_M, ang: rand() * Math.PI * 2, color: c[0], color2: c[1], shade: rand(), seed: rand(), tp: 0 });
+  }
+  return { segs: [], tips, leaves };
+}
+
 /** Souche : racines qui plongent tout autour, plateau de bois coupé au centre. */
 function growStump(rand) {
   const segs = [], tips = [];
@@ -336,7 +463,7 @@ function foliage(tree, rand, sp, detail = 1) {
     }
     return leaves;
   }
-  const W = sp.leaf === "oak" ? 0.42 : sp.leaf === "beech" ? 0.36 : 0.34;
+  const W = sp.leaf === "oak" ? 0.42 : sp.leaf === "beech" ? 0.36 : sp.leaf === "willow" ? 0.15 : 0.34;
   const target = Math.min(MAX_LEAVES, Math.round(sp.lai * crown / (Lc * Lc * W * 1.2)));
   // Les rameaux (fins, dessinés) partent des branches des deux derniers niveaux ; les feuilles
   // s'y alternent de chaque côté, plus une au bout.
@@ -392,6 +519,12 @@ export function leafShape(l, kind, N = 36) {
     if (kind === "beech") {
       // Ovale pointue, bord légèrement ondulé.
       w = l.W * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.8)), 0.85) * (1 + 0.05 * Math.sin(t * 38));
+    } else if (kind === "willow") {
+      // Lancéolée, longue et étroite.
+      w = l.W * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.9)), 1.1);
+    } else if (kind === "blade") {
+      // Lanière : large au pied, qui s'affine jusqu'à la pointe.
+      w = l.W * Math.pow(1 - t, 0.55) * Math.min(1, t * 10 + 0.4);
     } else if (kind === "fern") {
       // Foliole étroite, dentée en peigne.
       w = l.W * Math.pow(1 - t, 0.7) * Math.min(1, t * 6) * (i % 2 ? 1 : 0.55);
@@ -416,7 +549,7 @@ export function leafShape(l, kind, N = 36) {
 export function buildTree(kind, seed, radius, { detail = 1, rotation = 0, cull = true } = {}) {
   const sp = SPECIES[kind] ?? SPECIES.oak;
   const rand = mulberry32(seed >>> 0);
-  const grow = { conifer: growConifer, fern: growFern, stump: growStump, caps: growCaps }[sp.form] ?? growBroadleaf;
+  const grow = { conifer: growConifer, fern: growFern, stump: growStump, caps: growCaps, clump: growClump, lily: growLily }[sp.form] ?? growBroadleaf;
   const tree = fit(grow(rand, sp), radius);
   for (const g of tree.segs) if (g.w2 === undefined) g.w2 = g.w * 0.75;
   if (!tree.segs.length) tree.zmax = Math.max(0.05, ...(tree.leaves ?? []).map((l) => l.p[2]));

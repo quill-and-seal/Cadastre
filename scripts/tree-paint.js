@@ -100,7 +100,7 @@ export function paintTree(built, ppc, { wind = true, sun = 1 } = {}) {
     sc.save(); sc.globalAlpha = SHADOW_BODY; sc.filter = `blur(${shadowBlur(S, Math.max(1, sun))}px)`; sc.drawImage(raw, 0, 0); sc.restore();
     // sun = 0 : silhouette vue d'en haut, que la scène projette elle-même selon l'heure (le pied
     // du tronc y est dessiné à part) ; sinon, ombre déjà projetée, assombrie au pied du tronc.
-    if (sun > 0) {
+    if (sun > 0 && sp.form !== "lily") {
       const g0 = sc.createRadialGradient(cx, cy, 0, cx, cy, tree.R * S * 0.6);
       g0.addColorStop(0, `rgba(0,0,0,${SHADOW_FOOT})`); g0.addColorStop(1, "rgba(0,0,0,0)");
       sc.fillStyle = g0; sc.beginPath(); sc.arc(cx, cy, tree.R * S * 0.6, 0, Math.PI * 2); sc.fill();
@@ -218,6 +218,84 @@ export function paintTree(built, ppc, { wind = true, sun = 1 } = {}) {
       ctx.beginPath(); ctx.arc(x - rr * 0.35, y - rr * 0.4, rr * (l.cap ? 0.35 : 0.25), 0, Math.PI * 2); ctx.fill();
       continue;
     }
+    if (l.plume) {
+      // Plumeau de roseau : panicule soyeuse, penchée, faite de fins épillets.
+      const lr = mulberry32((l.seed * 4294967296) >>> 0), c = hex(l.color);
+      const ca = Math.cos(l.ang), sa = Math.sin(l.ang);
+      ctx.lineCap = "round";
+      for (let k = 0; k < 14; k++) {
+        const t = lr(), along = Lp * (0.15 + 0.85 * t), side = (lr() - 0.5) * Lp * 0.35 * Math.sin(Math.PI * t);
+        const bx = x + ca * along - sa * side, by = y + sa * along + ca * side;
+        const len = Lp * (0.12 + lr() * 0.12), a2 = l.ang + (lr() - 0.5) * 0.9;
+        ctx.strokeStyle = rgb(mix(c, [235, 220, 200], lr() * 0.45), 0.85); ctx.lineWidth = Math.max(0.7, Lp * 0.045);
+        ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(a2) * len, by + Math.sin(a2) * len); ctx.stroke();
+      }
+      ctx.strokeStyle = rgb(mix(c, [0, 0, 0], 0.3)); ctx.lineWidth = Math.max(0.6, Lp * 0.03);
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + ca * Lp, y + sa * Lp); ctx.stroke();
+      continue;
+    }
+    if (l.spike) {
+      // Épi de massette : cigare brun velouté, et sa pointe fine.
+      const c = hex(l.color), ca = Math.cos(l.ang), sa = Math.sin(l.ang), r = Math.max(0.8, Lp * 0.16);
+      const x1 = x + ca * Lp, y1 = y + sa * Lp;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = INK; ctx.lineWidth = r * 2 + Math.max(1, r * 0.4);
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x1, y1); ctx.stroke();
+      ctx.strokeStyle = rgb(c); ctx.lineWidth = r * 2;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x1, y1); ctx.stroke();
+      ctx.strokeStyle = rgb(mix(c, [255, 230, 200], 0.25)); ctx.lineWidth = r * 0.8;
+      ctx.beginPath(); ctx.moveTo(x - sa * r * 0.4, y + ca * r * 0.4); ctx.lineTo(x1 - sa * r * 0.4, y1 + ca * r * 0.4); ctx.stroke();
+      ctx.strokeStyle = rgb([120, 110, 70]); ctx.lineWidth = Math.max(0.5, r * 0.25);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 + ca * Lp * 0.35, y1 + sa * Lp * 0.35); ctx.stroke();
+      continue;
+    }
+    if (l.tuft) {
+      // Grappe de jonc : quelques capsules brunes serrées.
+      const lr = mulberry32((l.seed * 4294967296) >>> 0), c = hex(l.color);
+      for (let k = 0; k < 6; k++) {
+        const a = lr() * Math.PI * 2, d = Lp * 0.5 * lr(), r = Math.max(0.6, Lp * (0.18 + lr() * 0.1));
+        ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, r + 0.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = rgb(mix(c, [230, 200, 150], lr() * 0.3)); ctx.beginPath(); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, r, 0, Math.PI * 2); ctx.fill();
+      }
+      continue;
+    }
+    if (l.pad) {
+      // Feuille de nénuphar : disque fendu jusqu'au centre, nervures rayonnantes, bord un peu relevé.
+      const rr = Math.max(1, Lp / 2), notch = 0.22;
+      const a0 = l.ang + notch, a1 = l.ang + Math.PI * 2 - notch;
+      const pad = new Path2D();
+      pad.moveTo(x, y); pad.arc(x, y, rr, a0, a1); pad.closePath();
+      ctx.fillStyle = INK; ctx.save(); ctx.lineWidth = Math.max(1, rr * 0.08); ctx.strokeStyle = INK_A; ctx.stroke(pad); ctx.restore();
+      const base = mix(cMid, l.shade > 0.5 ? cLight : cDark, Math.abs(l.shade - 0.5) * 0.6);
+      ctx.fillStyle = rgb(base); ctx.fill(pad);
+      const g = ctx.createRadialGradient(x - rr * 0.3, y - rr * 0.35, rr * 0.1, x, y, rr);
+      g.addColorStop(0, rgb(cLight, 0.35)); g.addColorStop(1, rgb(cDark, 0.25));
+      ctx.fillStyle = g; ctx.fill(pad);
+      ctx.strokeStyle = rgb(mix(base, cLight, 0.5), 0.55); ctx.lineWidth = Math.max(0.5, rr * 0.03);
+      ctx.beginPath();
+      for (let k = 1; k < 12; k++) { const a = a0 + (a1 - a0) * k / 12; ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * rr * 0.9, y + Math.sin(a) * rr * 0.9); }
+      ctx.stroke();
+      continue;
+    }
+    if (l.flower) {
+      // Fleur de nénuphar : deux couronnes de pétales pointus, cœur jaune.
+      const lr = mulberry32((l.seed * 4294967296) >>> 0), c1 = hex(l.color), c2 = hex(l.color2 ?? l.color), rr = Math.max(1.5, Lp / 2);
+      for (const [ring, k0, col] of [[1, 12, c2], [0.7, 10, c1]]) {
+        for (let k = 0; k < k0; k++) {
+          const a = l.ang + (k / k0) * Math.PI * 2 + (ring < 1 ? 0.3 : 0) + (lr() - 0.5) * 0.15;
+          const r = rr * ring, w = r * 0.32;
+          const tipx = x + Math.cos(a) * r, tipy = y + Math.sin(a) * r, nx = -Math.sin(a) * w, ny = Math.cos(a) * w;
+          const pe = new Path2D();
+          pe.moveTo(x, y); pe.quadraticCurveTo(x + Math.cos(a) * r * 0.5 + nx, y + Math.sin(a) * r * 0.5 + ny, tipx, tipy);
+          pe.quadraticCurveTo(x + Math.cos(a) * r * 0.5 - nx, y + Math.sin(a) * r * 0.5 - ny, x, y);
+          ctx.strokeStyle = INK_A; ctx.lineWidth = Math.max(0.6, rr * 0.04); ctx.stroke(pe);
+          ctx.fillStyle = rgb(mix(col, [255, 255, 255], lr() * 0.25)); ctx.fill(pe);
+        }
+      }
+      ctx.fillStyle = "#e8b83a"; ctx.beginPath(); ctx.arc(x, y, rr * 0.22, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#f6d86a"; ctx.beginPath(); ctx.arc(x - rr * 0.05, y - rr * 0.05, rr * 0.12, 0, Math.PI * 2); ctx.fill();
+      continue;
+    }
     if (l.needle) {
       // Touffe de 5 aiguilles.
       const lr = mulberry32((l.seed * 4294967296) >>> 0);
@@ -278,7 +356,7 @@ export function paintTree(built, ppc, { wind = true, sun = 1 } = {}) {
         const r = Math.max(trunkW * Math.max(it.g.w, it.g.w2) / 2, 0.5) + 3;
         grow(cx + it.g.a[0] * S, cy + it.g.a[1] * S, r); grow(cx + it.g.b[0] * S, cy + it.g.b[1] * S, r);
       } else {
-        const r = it.l.L * S * 1.25 + 3, x = cx + it.l.p[0] * S, y = cy + it.l.p[1] * S;
+        const r = it.l.L * S * 1.45 + 3, x = cx + it.l.p[0] * S, y = cy + it.l.p[1] * S;
         grow(x, y, r);
         fx += x; fy += y; nf++;
       }
