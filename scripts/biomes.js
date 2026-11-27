@@ -74,14 +74,24 @@ export function biomeArea(map) {
 
 /**
  * Retire les plantes semées par un biome (ou au pinceau Biome) qui se retrouvent là où rien ne
- * pousse : eau, pièce, chemin, sol nu peints après coup. Les plantes posées à la main restent.
+ * pousse : eau, pièce, chemin, sol nu peints après coup. Les arbres posés à la main sont retirés
+ * seulement quand de l'eau vient d'être peinte sous leur pied (before : la carte avant le
+ * changement) ; un arbre posé exprès dans l'eau reste. Les objets restent toujours.
+ * @param {object} [before]  carte avant le changement
  * @returns {number}  plantes retirées
  */
-export function pruneBiome(map) {
-  if (!map.props.some((p) => p.b)) return 0;
-  const area = biomeArea(map);
+export function pruneBiome(map, before = null) {
+  const sown = map.props.some((p) => p.b);
+  const manual = before ? map.props.filter((p) => !p.b && TREE_BY_TYPE.has(p.type)) : [];
+  if (!sown && !manual.length) return 0;
+  const area = sown ? biomeArea(map) : null;
+  let drowned = null;
+  if (manual.length) {
+    const now = waterRings(map), was = waterRings(before);
+    drowned = new Set(manual.filter((p) => poly.pointInRings(now, p.x, p.y) && !poly.pointInRings(was, p.x, p.y)));
+  }
   const n = map.props.length;
-  map.props = map.props.filter((p) => !p.b || poly.pointInRings(area, p.x, p.y));
+  map.props = map.props.filter((p) => (p.b ? poly.pointInRings(area, p.x, p.y) : !drowned?.has(p)));
   return n - map.props.length;
 }
 

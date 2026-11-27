@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.34
+
+- **Éditeur : peindre de l'eau sous un arbre posé à la main le retire**, comme les plantes semées par un biome. Un arbre posé exprès dans l'eau (eau déjà là quand on le pose) reste, et les objets (rochers, barques…) restent toujours. Annulable comme toute retouche.
+
 ## 0.1.33
 
 - **Les ombres des arbres agissent sur l'eau** : sur l'eau animée, l'ombre n'est plus une couche sombre posée par-dessus ; c'est l'eau qui se dessine à l'ombre. Sans soleil, elle perd ses taches de lumière, ses reflets du ciel et ses éclats, s'assombrit en bleuissant, et laisse mieux voir le fond. L'écume et les feuilles qui flottent s'assombrissent aussi. Suit le réglage « Intensité des ombres des arbres ». Avec l'animation de l'eau coupée, l'ombre reste posée sur l'eau du fond comme avant. Pas besoin de réexporter.

@@ -60,3 +60,20 @@ test("eau peinte après le biome : la végétation semée dessous disparaît, pa
   assert.ok(!map.props.some((p) => p.b && inside(p)));
   assert.ok(map.props.some((p) => p.id === hand.id));
 });
+
+test("eau peinte sous un arbre posé à la main : retiré ; arbre posé exprès dans l'eau, objets : gardés", async () => {
+  const { pruneBiome } = await import("../scripts/biomes.js");
+  const map = createMap({ width: 20, height: 14 });
+  paintArea(map, rectRings(12, 2, 18, 8), "water");
+  const wet = addProp(map, "tree-oak", 15, 5);       // posé exprès dans l'eau
+  const dry = addProp(map, "tree-oak", 5, 5);
+  const before = JSON.parse(JSON.stringify(map));
+  paintArea(map, rectRings(4, 4, 7, 7), "water");
+  assert.equal(pruneBiome(map, before), 1);
+  assert.ok(!map.props.some((p) => p.id === dry.id));
+  assert.ok(map.props.some((p) => p.id === wet.id));
+  // Sans la carte d'avant (ouverture d'une carte), rien n'est retiré à la main.
+  const again = addProp(map, "tree-oak", 5.5, 5.5);
+  assert.equal(pruneBiome(map), 0);
+  assert.ok(map.props.some((p) => p.id === again.id));
+});

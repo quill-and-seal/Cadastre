@@ -889,7 +889,12 @@ export class MapEditor {
       return;
     }
     // Eau, rivière, pièce, chemin, mur ou sol nu posé sur une végétation semée : elle disparaît dessous.
-    if (pruneBiome(this.map) > 0) full = true;
+    // Eau peinte sous un arbre posé à la main : il disparaît aussi (pas un arbre posé exprès dans l'eau).
+    let prev = null;
+    if (terrain && this.map.props.some((p) => !p.b && TREE_BY_TYPE.has(p.type))) {
+      try { prev = JSON.parse(before); } catch { prev = null; }
+    }
+    if (pruneBiome(this.map, prev) > 0) full = true;
     this.undoStack.push(before);
     if (this.undoStack.length > HISTORY_LIMIT) this.undoStack.shift();
     this.redoStack = [];
