@@ -329,3 +329,20 @@ test("île : l'eau la contourne, s'écrase devant, file sur les côtés et ralen
   assert.ok(at(17.3, 8).vx < free * 0.5, "plus lente à l'abri, derrière");
   assert.ok(f.press[Math.floor(8 * FIELD_RES) * f.W + Math.floor(12.9 * FIELD_RES)] > 0.3, "écume là où elle s'écrase");
 });
+
+test("courant tracé : même débit partout, plus vif dans l'étroit, nul dans un bras sans issue", async () => {
+  const { addCurrent } = await import("../scripts/water-data.js");
+  const R = (x0, y0, x1, y1) => [[x0, y0, x1, y0, x1, y1, x0, y1]];
+  const map = createMap({ width: 30, height: 20 });
+  paintArea(map, R(0, 0, 30, 20), "grass");
+  // Chenal large (6 cases), puis étroit (2 cases), d'un bord à l'autre ; bras sans issue vers le bas.
+  paintArea(map, R(0, 4, 14, 10), "water");
+  paintArea(map, R(14, 6, 30, 8), "water");
+  paintArea(map, R(6, 10, 8, 18), "water");
+  addCurrent(map.waterData, [[1, 7], [29, 7]], 0.5);
+  const f = buildField(waterFlag(map));
+  const at = (x, y) => sampleField(f, x, y);
+  assert.ok(at(22, 7).vx > at(10, 7).vx * 1.3, `plus vif dans l'étroit : ${at(22, 7).vx} / ${at(10, 7).vx}`);
+  assert.ok(at(10, 5).vx > 0.1, "tout le chenal avance, pas seulement le trait");
+  assert.ok(Math.hypot(at(7, 16).vx, at(7, 16).vy) < 0.05, "bras sans issue : eau dormante");
+});

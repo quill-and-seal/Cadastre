@@ -11,7 +11,7 @@ import { TREE_BY_TYPE, TREE_PREFIX, treeRadius } from "./trees.js";
 import { BIOME_SOILS, mulberry32 } from "./catalog.js";
 import { waterRings } from "./render.js";
 import { flattenNodes } from "./curves.js";
-import { paintZone } from "./water-data.js";
+import { paintZone, addCurrent } from "./water-data.js";
 
 export const BIOMES = [
   {
@@ -130,6 +130,7 @@ export function pruneBiome(map, before = null) {
 export function applyBiome(map, biomeId, rand, { density = 1 } = {}) {
   map.props = map.props.filter((p) => !p.b);
   map.paths = (map.paths ?? []).filter((q) => !q.b);
+  if (map.waterData) map.waterData.currents = map.waterData.currents.filter((c) => !c.b);
   const biome = BIOME_BY_ID.get(biomeId);
   if (!biome) { map.biome = null; return 0; }
   map.biome = { id: biome.id, density };
@@ -157,6 +158,7 @@ function marshWater(rings, b, rand, cover) {
   const W = b.x1 - b.x0, H = b.y1 - b.y0, area = poly.totalArea(rings);
   const target = area * cover;
   let water = [];
+  const lines = [];
   // Part d'eau : la zone couvre presque toujours l'eau (les débords sur ses bords comptent peu).
   const wet = () => poly.totalArea(water);
   const channels = Math.max(1, Math.round(area / 220));
@@ -168,7 +170,8 @@ function marshWater(rings, b, rand, cover) {
     let head = Math.atan2(b.y0 + H / 2 - y, b.x0 + W / 2 - x) + (rand() - 0.5) * 1.2;
     const steps = Math.ceil(Math.hypot(W, H) * (0.6 + rand() * 0.5) / 0.8);
     const w0 = 0.7 + rand() * 0.6, ph = rand() * 6.28;
-    const blobs = [], pts = [[x, y]];
+    const blobs = [], pts = [[x, y]], line = [[x, y]];
+    lines.push(line);
     // Le chenal en tronçons de six pas, chacun de sa largeur (tracés épais, peu de sommets).
     const flush = (i) => {
       if (pts.length < 2) return;
@@ -180,6 +183,7 @@ function marshWater(rings, b, rand, cover) {
       x += Math.cos(head) * 0.8; y += Math.sin(head) * 0.8;
       if (x < b.x0 - 2 || y < b.y0 - 2 || x > b.x1 + 2 || y > b.y1 + 2) break;
       pts.push([x, y]);
+      line.push([x, y]);
       if (pts.length >= 6) flush(i);
       // Étang : le chenal s'élargit.
       if (rand() < 0.045) blobs.push(blob(x + (rand() - 0.5) * 2, y + (rand() - 0.5) * 2, 1.8 + rand() * 2.6, rand));
@@ -200,7 +204,33 @@ function marshWater(rings, b, rand, cover) {
     if (poly.pointInRings(water, x, y) && poly.pointInRings(water, x + r * 1.6, y) && poly.pointInRings(water, x - r * 1.6, y)) isles.push(blob(x, y, r, rand));
   }
   if (isles.length) water = poly.difference(water, isles);
-  return poly.intersection(water, rings);
+  return { water: poly.intersection(water, rings), lines };
+}
+
+/**
+ * Courants du marais : un courant lent le long de chaque grand chenal, tous dans le même sens
+ * général (l'eau descend d'un côté de la carte vers l'autre), qui se rejoignent là où les chenaux
+ * se croisent. Marqués b : retirés avec le biome.
+ */
+function addMarshCurrents(map, water, lines, rand) {
+  if (!map.waterData) return;
+  const a = rand() * Math.PI * 2, dx = Math.cos(a), dy = Math.sin(a);
+  for (const line of lines) {
+    // Plus longue portion du chenal restée dans l'eau.
+    let best = [], run = [];
+    for (const p of line) {
+      if (poly.pointInRings(water, p[0], p[1])) run.push(p);
+      else { if (run.length > best.length) best = run; run = []; }
+    }
+    if (run.length > best.length) best = run;
+    if (best.length * 0.8 < 8) continue;
+    // Dans le sens général du courant. Les points du chenal sont espacés de 0,8 case : gardés tels quels.
+    let pts = best;
+    const [fx, fy] = pts[0], [lx, ly] = pts.at(-1);
+    if ((lx - fx) * dx + (ly - fy) * dy < 0) pts = pts.slice().reverse();
+    const c = addCurrent(map.waterData, pts, 0.3 + rand() * 0.2);
+    if (c) c.b = true;
+  }
 }
 
 /** Eau du biome (marais) : chenaux et étangs, ou flaques, dans la zone semée. */
@@ -209,7 +239,8 @@ function addPuddles(map, rings, biome, rand, density) {
   const b = pd && poly.ringsBounds(rings);
   if (!b) return;
   let water;
-  if (pd.channels) water = marshWater(rings, b, rand, Math.min(0.7, pd.cover * density));
+  let lines = null;
+  if (pd.channels) ({ water, lines } = marshWater(rings, b, rand, Math.min(0.7, pd.cover * density)));
   else {
     const blobs = [], want = Math.round(poly.totalArea(rings) * pd.density * density + rand() - 0.5);
     for (let i = 0, tries = 0; i < want && tries < want * 10; tries++) {
@@ -224,6 +255,7 @@ function addPuddles(map, rings, biome, rand, density) {
   M.paintArea(map, water, "water");
   // Eau du biome (marais : boueuse, sombre et verte, lentilles d'eau).
   if (pd.type && map.waterData) paintZone(map.waterData, water, pd.type);
+  if (lines) addMarshCurrents(map, water, lines, rand);
   if (pd.bridges) addBridges(map, rings, water, b, rand, density);
 }
 

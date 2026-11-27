@@ -359,31 +359,8 @@ export function buildField(flag, { hideMasked = false } = {}) {
   field.adj = new Float32Array(size);
   // Là où le courant vient s'écraser contre une berge : l'eau y blanchit.
   field.press = new Float32Array(size);
-  const flows = [];
-  for (const c of data.currents) for (const p of currentSamples(c)) flows.push([...p, c.speed]);
-  const flowB = new Map();
-  flows.forEach((p, k) => {
-    for (let y = Math.floor(p[1] - CURRENT_REACH); y <= Math.floor(p[1] + CURRENT_REACH); y++) {
-      for (let x = Math.floor(p[0] - CURRENT_REACH); x <= Math.floor(p[0] + CURRENT_REACH); x++) {
-        const key = x * 65536 + y;
-        if (!flowB.has(key)) flowB.set(key, []);
-        flowB.get(key).push(k);
-      }
-    }
-  });
-  /** Courant tracé en un point : moyenne des traits proches, qui s'efface en s'en éloignant. */
-  const drawnAt = (x, y) => {
-    const list = flowB.get(Math.floor(x) * 65536 + Math.floor(y));
-    if (!list) return null;
-    let ax = 0, ay = 0, sw = 0;
-    for (const k of list) {
-      const [px, py, tx, ty, sp] = flows[k], d2 = (x - px) ** 2 + (y - py) ** 2;
-      if (d2 > CURRENT_REACH * CURRENT_REACH) continue;
-      const w = Math.exp(-d2 / (2 * CURRENT_SIGMA * CURRENT_SIGMA));
-      ax += w * tx * sp; ay += w * ty * sp; sw += w;
-    }
-    return sw > 0 ? [ax / (sw + 0.15) * BASE_SPEED, ay / (sw + 0.15) * BASE_SPEED] : null;
-  };
+  // Courants tracés : écoulement calculé dans toute l'eau (voir solveCurrents).
+  const drawnAt = solveCurrents(shore, flag.width, flag.height, data.currents);
   const calm = data.calm.length ? { rings: data.calm, box: poly.ringsBounds(data.calm) } : null;
   const isCalm = (x, y) => !!calm && x >= calm.box.x0 && x <= calm.box.x1 && y >= calm.box.y0 && y <= calm.box.y1 && poly.pointInRings(calm.rings, x, y);
 
@@ -406,12 +383,6 @@ export function buildField(flag, { hideMasked = false } = {}) {
         // Profondeur relative : celle de la rivière, mais là où elle s'ouvre sur un lac, celle du lac.
         field.n[o] = rv?.[2] != null ? Math.min(rv[2], lake) : lake;
         let vx = rv ? rv[0] : 0, vy = rv ? rv[1] : 0;
-        const drawn = flows.length ? drawnAt(x, y) : null;
-        if (drawn) {
-          // Contre la berge, le courant tracé s'éteint.
-          const bank = Math.sqrt(Math.min(1, D / 0.5));
-          vx += drawn[0] * bank; vy += drawn[1] * bank;
-        }
         // Une île en travers du courant : l'eau la contourne, plus vite sur les côtés, comme
         // autour d'un rocher (écoulement autour d'un cylindre de même surface).
         if (islands.length && (vx || vy)) {
@@ -426,6 +397,12 @@ export function buildField(flag, { hideMasked = false } = {}) {
           }
           const sp = Math.hypot(vx, vy);
           if (sp > U * 1.6) { vx *= U * 1.6 / sp; vy *= U * 1.6 / sp; }
+        }
+        // Courant tracé (il contourne déjà les îles de lui-même) ; freiné tout contre la berge.
+        const drawn = drawnAt ? drawnAt(x, y) : null;
+        if (drawn) {
+          const bank = 0.35 + 0.65 * Math.sqrt(Math.min(1, D / 0.6));
+          vx += drawn[0] * bank; vy += drawn[1] * bank;
         }
         // Contre une berge (île, rive), l'eau ne la traverse pas : elle s'y écrase et la contourne,
         // et reste plus lente à l'abri, derrière.
@@ -495,9 +472,181 @@ export function buildField(flag, { hideMasked = false } = {}) {
 const BANK_REACH = 1.6;
 /** Longueur du jet d'une rivière à son embouchure, en demi-largeurs. */
 const JET_LENGTH = 7;
-/** Portée d'un courant tracé et largeur de son influence (cases). */
-const CURRENT_REACH = 3;
-const CURRENT_SIGMA = 1.1;
+/** Courants tracés : échantillons du calcul par case, portée d'un trait (cases), distance sur laquelle le courant s'éteint loin des traits (cases). */
+const SOLVE_RES = 2;
+const SEED_RADIUS = 0.7;
+const CURRENT_FADE = 14;
+
+/**
+ * Courants tracés → écoulement de toute l'eau, comme un fluide qu'on ne peut pas comprimer :
+ *  1. les traits donnent la direction et la vitesse là où ils passent ;
+ *  2. ce mouvement se propage dans l'eau qui les entoure (en s'éteignant loin des traits),
+ *     sans traverser les berges ;
+ *  3. projection : on retire ce qui ferait s'accumuler ou se vider l'eau. Le même débit passe
+ *     partout, donc l'eau accélère dans les passages étroits, ralentit dans les étangs, contourne
+ *     les îlots, et s'arrête dans les bras sans issue.
+ * Calcul sur une grille grossière (SOLVE_RES par case), lue ensuite en interpolant.
+ * @returns {((x:number, y:number) => number[]|null)|null}  vitesse (cases/s) en un point de l'eau
+ */
+export function solveCurrents(shore, width, height, currents) {
+  if (!currents?.length) return null;
+  const C = SOLVE_RES, W = Math.max(1, Math.ceil(width * C)), H = Math.max(1, Math.ceil(height * C)), n = W * H;
+  // Eau : règle pair-impair sur les contours, au centre de chaque cellule.
+  const wet = new Uint8Array(n);
+  for (let j = 0; j < H; j++) {
+    const y = (j + 0.5) / C, xs = [];
+    for (const [ax, ay, bx, by] of shore) if ((ay <= y) !== (by <= y)) xs.push(ax + ((y - ay) / (by - ay)) * (bx - ax));
+    xs.sort((a, b) => a - b);
+    for (let s = 0; s + 1 < xs.length; s += 2) {
+      for (let i = Math.max(0, Math.ceil(xs[s] * C - 0.5)); i < W && (i + 0.5) / C < xs[s + 1]; i++) wet[j * W + i] = 1;
+    }
+  }
+  // 1. Traits : vitesse imposée autour de chacun.
+  const su = new Float32Array(n), sv = new Float32Array(n), sw = new Float32Array(n);
+  let top = 0;
+  for (const c of currents) {
+    const sp = c.speed * BASE_SPEED;
+    top = Math.max(top, sp);
+    for (const [px, py, tx, ty] of currentSamples(c, 0.25)) {
+      const r = Math.ceil(SEED_RADIUS * C);
+      const ci = Math.floor(px * C), cj = Math.floor(py * C);
+      for (let j = cj - r; j <= cj + r; j++) for (let i = ci - r; i <= ci + r; i++) {
+        if (i < 0 || j < 0 || i >= W || j >= H || !wet[j * W + i]) continue;
+        const d2 = ((i + 0.5) / C - px) ** 2 + ((j + 0.5) / C - py) ** 2;
+        if (d2 > SEED_RADIUS * SEED_RADIUS) continue;
+        const w = Math.exp(-d2 / (2 * (SEED_RADIUS * 0.5) ** 2)), o = j * W + i;
+        su[o] += w * tx * sp; sv[o] += w * ty * sp; sw[o] += w;
+      }
+    }
+  }
+  if (!top) return null;
+  const u = new Float32Array(n), v = new Float32Array(n), fix = new Float32Array(n);
+  for (let o = 0; o < n; o++) if (sw[o] > 0) { u[o] = su[o] / sw[o]; v[o] = sv[o] / sw[o]; fix[o] = Math.min(1, sw[o]); }
+  const nb = (o, i, j, out) => {
+    let k = 0;
+    if (i > 0 && wet[o - 1]) out[k++] = o - 1;
+    if (i < W - 1 && wet[o + 1]) out[k++] = o + 1;
+    if (j > 0 && wet[o - W]) out[k++] = o - W;
+    if (j < H - 1 && wet[o + W]) out[k++] = o + W;
+    return k;
+  };
+  const N4 = new Int32Array(4);
+  // 2. Propagation (Gauss-Seidel, balayages alternés), qui s'éteint sur CURRENT_FADE cases.
+  const decay = 1 - 1 / (4 * (CURRENT_FADE * C) ** 2);
+  const iters = Math.min(600, 120 + Math.round(Math.sqrt(n) * 1.5));
+  for (let it = 0; it < iters; it++) {
+    const rev = it & 1;
+    for (let jj = 0; jj < H; jj++) {
+      const j = rev ? H - 1 - jj : jj;
+      for (let ii = 0; ii < W; ii++) {
+        const i = rev ? W - 1 - ii : ii, o = j * W + i;
+        if (!wet[o] || fix[o] >= 1) continue;
+        const k = nb(o, i, j, N4);
+        if (!k) continue;
+        let au = 0, av = 0;
+        for (let q = 0; q < k; q++) { au += u[N4[q]]; av += v[N4[q]]; }
+        const f = fix[o], gu = (au / k) * decay, gv = (av / k) * decay;
+        u[o] = f * (su[o] / (sw[o] || 1)) + (1 - f) * gu;
+        v[o] = f * (sv[o] / (sw[o] || 1)) + (1 - f) * gv;
+      }
+    }
+  }
+  // 3. Projection sur une grille décalée : vitesses portées par les faces entre cellules, faces
+  // fermées contre la terre (berges étanches) ; la pression retire ce qui s'accumule.
+  const fu = new Float32Array((W + 1) * H), fv = new Float32Array(W * (H + 1));
+  // Face ouverte : de l'eau des deux côtés, ou de l'eau qui sort de la carte (le bord de la
+  // carte n'est pas une berge : l'eau y entre et en sort librement, pression nulle dehors).
+  const openU = (i, j) => (i === 0 ? wet[j * W] : i === W ? wet[j * W + W - 1] : wet[j * W + i - 1] && wet[j * W + i]);
+  const openV = (i, j) => (j === 0 ? wet[i] : j === H ? wet[(H - 1) * W + i] : wet[(j - 1) * W + i] && wet[j * W + i]);
+  const div = new Float32Array(n), p = new Float32Array(n), kOpen = new Uint8Array(n);
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const o = j * W + i;
+    if (wet[o]) kOpen[o] = (openU(i, j) ? 1 : 0) + (openU(i + 1, j) ? 1 : 0) + (openV(i, j) ? 1 : 0) + (openV(i, j + 1) ? 1 : 0);
+  }
+  const SOR = 1.85;
+  const project = (sweeps) => {
+    fu.fill(0); fv.fill(0);
+    for (let j = 0; j < H; j++) for (let i = 0; i <= W; i++) {
+      if (openU(i, j)) fu[j * (W + 1) + i] = i === 0 ? u[j * W] : i === W ? u[j * W + W - 1] : (u[j * W + i - 1] + u[j * W + i]) / 2;
+    }
+    for (let j = 0; j <= H; j++) for (let i = 0; i < W; i++) {
+      if (openV(i, j)) fv[j * W + i] = j === 0 ? v[i] : j === H ? v[(H - 1) * W + i] : (v[(j - 1) * W + i] + v[j * W + i]) / 2;
+    }
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      const o = j * W + i;
+      if (wet[o]) div[o] = fu[j * (W + 1) + i + 1] - fu[j * (W + 1) + i] + fv[(j + 1) * W + i] - fv[j * W + i];
+    }
+    for (let it = 0; it < sweeps; it++) {
+      for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+        const o = j * W + i, k = kOpen[o];
+        if (!k) continue;
+        let s = 0;
+        if (i > 0 && openU(i, j)) s += p[o - 1];
+        if (i < W - 1 && openU(i + 1, j)) s += p[o + 1];
+        if (j > 0 && openV(i, j)) s += p[o - W];
+        if (j < H - 1 && openV(i, j + 1)) s += p[o + W];
+        p[o] += SOR * ((s - div[o]) / k - p[o]);
+      }
+    }
+    const pAt = (i, j) => (i < 0 || j < 0 || i >= W || j >= H ? 0 : p[j * W + i]);
+    for (let j = 0; j < H; j++) for (let i = 0; i <= W; i++) if (openU(i, j)) fu[j * (W + 1) + i] -= pAt(i, j) - pAt(i - 1, j);
+    for (let j = 0; j <= H; j++) for (let i = 0; i < W; i++) if (openV(i, j)) fv[j * W + i] -= pAt(i, j) - pAt(i, j - 1);
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      const o = j * W + i;
+      if (!wet[o]) { u[o] = v[o] = 0; continue; }
+      u[o] = (fu[j * (W + 1) + i] + fu[j * (W + 1) + i + 1]) / 2;
+      v[o] = (fv[j * W + i] + fv[(j + 1) * W + i]) / 2;
+    }
+  };
+  // Les traits gardent leur force : on les réimpose et on reprojette, quelques fois (dans un
+  // étang fermé, il en sort un tourbillon : le courant le long du trait, le retour le long des rives).
+  // Viscosité : le courant entraîne l'eau voisine (le jet s'élargit au lieu de rester un trait).
+  const tu = new Float32Array(n), tv = new Float32Array(n);
+  const smooth = (times) => {
+    for (let t = 0; t < times; t++) {
+      for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+        const o = j * W + i;
+        if (!wet[o]) continue;
+        const k = nb(o, i, j, N4);
+        let au = u[o], av = v[o];
+        for (let q = 0; q < k; q++) { au += u[N4[q]]; av += v[N4[q]]; }
+        tu[o] = au / (k + 1); tv[o] = av / (k + 1);
+      }
+      u.set(tu); v.set(tv);
+    }
+  };
+  project(iters * 2);
+  // Réimposés de moins en moins : à la fin, c'est l'eau qui répartit le débit (plus vite dans
+  // l'étroit, plus lent dans le large), le trait ne donne plus que l'élan.
+  for (const hold of [1, 0.6, 0.35, 0.15]) {
+    smooth(3);
+    for (let o = 0; o < n; o++) {
+      const f = fix[o] * hold;
+      if (!f) continue;
+      u[o] = f * (su[o] / sw[o]) + (1 - f) * u[o];
+      v[o] = f * (sv[o] / sw[o]) + (1 - f) * v[o];
+    }
+    project(Math.round(iters * 0.75));
+  }
+  const cap = top * 2.2;
+  for (let o = 0; o < n; o++) {
+    const sp = Math.hypot(u[o], v[o]);
+    if (sp > cap) { u[o] *= cap / sp; v[o] *= cap / sp; }
+  }
+  return (x, y) => {
+    const fx = x * C - 0.5, fy = y * C - 0.5, i0 = Math.floor(fx), j0 = Math.floor(fy), tx = fx - i0, ty = fy - j0;
+    let ax = 0, ay = 0, aw = 0;
+    for (let dj = 0; dj < 2; dj++) for (let di = 0; di < 2; di++) {
+      const i = i0 + di, j = j0 + dj;
+      if (i < 0 || j < 0 || i >= W || j >= H) continue;
+      const o = j * W + i;
+      if (!wet[o]) continue;
+      const w = (di ? tx : 1 - tx) * (dj ? ty : 1 - ty);
+      ax += u[o] * w; ay += v[o] * w; aw += w;
+    }
+    return aw > 1e-4 ? [ax / aw, ay / aw] : null;
+  };
+}
 /** Fondu entre deux types d'eau voisins, en échantillons de chaque côté. */
 const TYPE_BLEND = 3;
 

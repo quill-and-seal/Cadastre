@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- **Courants plus réalistes.** Les courants tracés ne poussent plus seulement l'eau autour de la flèche : l'eau s'écoule comme un vrai fluide dans toute l'étendue d'eau. Elle remplit le chenal et suit ses virages, accélère dans les passages étroits et ralentit dans les étangs (le même débit passe partout), se partage devant un îlot et file plus vite sur ses côtés, reste dormante dans les bras sans issue, et tourne en rond dans un étang fermé (courant le long de la flèche, retour le long des rives). Le bord de la carte laisse l'eau entrer et sortir.
+- **Le marais génère ses courants** : un courant lent le long de chaque grand chenal, tous dans le même sens général, qui se rejoignent aux croisements. Ce sont des courants tracés ordinaires (outil Eau) : on peut les retoucher ou les effacer. Réappliquer ou retirer le biome les remplace.
+- Demande un réexport des scènes pour voir les nouveaux courants.
+
 ## 0.2.0
 
 - **Nouveau biome : Marais** (issue #19). Sol de vase olive et kaki (flaques, mousse, brins de paille, bulles), grands chenaux d'eau sombre vert-bleu qui se rejoignent et s'élargissent en étangs, îlots de vase, lentilles d'eau en paquets le long des berges.

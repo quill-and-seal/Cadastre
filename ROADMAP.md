@@ -49,6 +49,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - 0.1.37 : heure du soleil en direct, ombres dynamiques (arbres au vent, objets, murs).
 - 0.1.38 : ombre portée par chaque branche, qui bouge avec elle.
 - 0.2.0 : biome Marais (chenaux, plantes d'eau, bois mort, ponts de planches, lucioles), plantes écartées par les jetons.
+- 0.2.1 : courants calculés comme un fluide, courants du marais.
 
 ## Biomes (V1 : 20 biomes, un par issue)
 

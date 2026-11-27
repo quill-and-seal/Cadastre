@@ -107,6 +107,9 @@ test("marais : flaques d'eau, nénuphars sur l'eau seulement, roseaux près de l
     assert.ok(!P.pointInRings(water, a.x, a.y) && !P.pointInRings(water, b.x, b.y), "pont posé sur deux rives");
     assert.ok(P.pointInRings(water, (a.x + b.x) / 2, (a.y + b.y) / 2), "pont au-dessus de l'eau");
   }
+  const currents = map.waterData.currents.filter((c) => c.b);
+  assert.ok(currents.length > 0, "des courants le long des chenaux");
+  for (const c of currents) assert.ok(c.speed <= 0.5, "courant lent");
   const flies = fireflySpots(map);
   assert.ok(flies.length > 20);
   // Réappliquer le biome remplace ses ponts.
@@ -114,4 +117,5 @@ test("marais : flaques d'eau, nénuphars sur l'eau seulement, roseaux près de l
   assert.ok(map.paths.every((q) => !q.b || q.planks) && map.paths.filter((q) => q.b).length < bridges.length * 3);
   applyBiome(map, null, mulberry32(1));
   assert.equal(map.paths.filter((q) => q.b).length, 0);
+  assert.equal(map.waterData.currents.filter((c) => c.b).length, 0, "courants du biome retirés");
 });
