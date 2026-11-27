@@ -31,7 +31,18 @@
       "Coords": "{x}, {y}",
       "Snap": "Snap to grid (Ctrl inverts)",
       "AnimateWater": "Animate the water (paused: still water, as in the exported image)",
-      "WindPreview": "Animate the wind in the grass (the mouse parts the grass like a token)"
+      "WindPreview": "Animate the wind in the grass (the mouse parts the grass like a token)",
+      "GridShort": "Grid",
+      "SnapShort": "Snap",
+      "WaterShort": "Water",
+      "WindShort": "Wind",
+      "MapPanel": "Map",
+      "MapPanelHint": "Map settings: name, size, wind, water",
+      "Library": "Library",
+      "ExportShort": "Export",
+      "ZoomIn": "Zoom in",
+      "ZoomOut": "Zoom out",
+      "Size": "{width} × {height} squares · {px} px per square"
     },
     "Tools": {
       "select": "Select (1)",

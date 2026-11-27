@@ -24,7 +24,7 @@ export class CadastreEditorApp extends ApplicationV2 {
   static DEFAULT_OPTIONS = {
     classes: ["cadastre-editor"],
     window: { icon: "fa-solid fa-map-location-dot", resizable: true },
-    position: { width: 1180, height: 780 }
+    position: { width: 1400, height: 860 }
   };
 
   static open(entry) {

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.35
+
+- **Nouvelle interface de l'éditeur** : la carte occupe toute la fenêtre et les commandes flottent par-dessus, dans des panneaux sombres translucides aux bords arrondis.
+  - En haut à gauche : le nom de la carte, sa taille, et un point orange quand il reste des modifications non enregistrées.
+  - En haut : annuler, rétablir, et les pastilles Grille, Aimant, Eau animée, Vent (vertes quand elles sont actives).
+  - En haut à droite : Carte (réglages de la carte : nom, taille, vent, eau, ouverts à la demande), Bibliothèque, Enregistrer, Exporter.
+  - En bas au centre : les outils dans une barre ronde, l'outil actif en blanc avec son nom au-dessus.
+  - À droite : les options de l'outil choisi, avec son aide en bas.
+  - En bas : coordonnées sous le curseur, et zoom (−, pourcentage à l'échelle de la scène, +, voir toute la carte).
+  - « Voir toute la carte » range la carte entre les panneaux. Fenêtre étroite : les pastilles ne gardent que leur icône.
+  - Police Manrope (fournie avec le module, licence SIL OFL), accent vert menthe. Fenêtre plus grande par défaut (1400 × 860).
+
 ## 0.1.34
 
 - **Éditeur : peindre de l'eau sous un arbre posé à la main le retire**, comme les plantes semées par un biome. Un arbre posé exprès dans l'eau (eau déjà là quand on le pose) reste, et les objets (rochers, barques…) restent toujours. Annulable comme toute retouche.

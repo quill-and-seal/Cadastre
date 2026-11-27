@@ -31,7 +31,18 @@
       "Coords": "{x} ; {y}",
       "Snap": "Aimanter à la grille (Ctrl inverse)",
       "AnimateWater": "Animer l'eau (pause : eau figée, comme dans l'image exportée)",
-      "WindPreview": "Animer le vent dans l'herbe (la souris écarte l'herbe comme un jeton)"
+      "WindPreview": "Animer le vent dans l'herbe (la souris écarte l'herbe comme un jeton)",
+      "GridShort": "Grille",
+      "SnapShort": "Aimant",
+      "WaterShort": "Eau animée",
+      "WindShort": "Vent",
+      "MapPanel": "Carte",
+      "MapPanelHint": "Réglages de la carte : nom, taille, vent, eau",
+      "Library": "Bibliothèque",
+      "ExportShort": "Exporter",
+      "ZoomIn": "Zoomer",
+      "ZoomOut": "Dézoomer",
+      "Size": "{width} × {height} cases · {px} px par case"
     },
     "Tools": {
       "select": "Sélection (1)",

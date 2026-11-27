@@ -192,30 +192,17 @@ export class MapEditor {
 
   _build() {
     const t = this.t;
-    const btn = (action, icon, title, label = "") =>
-      `<button type="button" data-action="${action}" title="${esc(title)}"><i class="fa-solid ${icon}"></i>${label ? `<span>${esc(label)}</span>` : ""}</button>`;
+    const pill = (action, icon, title, label) =>
+      `<button type="button" class="cad-pill" data-action="${action}" title="${esc(title)}"><i class="fa-solid ${icon}"></i><span>${esc(label)}</span></button>`;
+    const round = (action, icon, title) =>
+      `<button type="button" class="cad-round" data-action="${action}" title="${esc(title)}" aria-label="${esc(title)}"><i class="fa-solid ${icon}"></i></button>`;
 
     this.root.classList.add("cad-editor");
     this.root.tabIndex = 0;
+    // La carte occupe toute la fenêtre ; les commandes flottent par-dessus, dans des panneaux
+    // sombres translucides (seuls ces panneaux prennent la souris).
     this.root.innerHTML = `
-      <header class="cad-topbar">
-        ${btn("undo", "fa-rotate-left", t("CADASTRE.Editor.Undo"))}
-        ${btn("redo", "fa-rotate-right", t("CADASTRE.Editor.Redo"))}
-        <span class="cad-sep"></span>
-        ${btn("grid", "fa-border-all", t("CADASTRE.Editor.Grid"))}
-        ${btn("snap", "fa-magnet", t("CADASTRE.Editor.Snap"))}
-        ${btn("fit", "fa-expand", t("CADASTRE.Editor.Fit"))}
-        ${btn("water", "fa-water", t("CADASTRE.Editor.AnimateWater"))}
-        ${btn("wind", "fa-wind", t("CADASTRE.Editor.WindPreview"))}
-        <span class="cad-dirty" hidden>${esc(t("CADASTRE.Editor.Unsaved"))}</span>
-        <span class="cad-spacer"></span>
-        ${this.onSave ? btn("save", "fa-floppy-disk", t("CADASTRE.Editor.SaveHint"), t("CADASTRE.Editor.Save")) : ""}
-        ${this.onExport ? btn("export", "fa-map", t("CADASTRE.Editor.Export"), t("CADASTRE.Editor.Export")) : ""}
-      </header>
       <div class="cad-body">
-        <nav class="cad-tools">
-          ${TOOLS.map((tool) => `<button type="button" data-tool="${tool.id}" title="${esc(t(`CADASTRE.Tools.${tool.id}`))}"><i class="fa-solid ${tool.icon}"></i></button>`).join("")}
-        </nav>
         <div class="cad-viewport">
           <svg class="cad-svg" xmlns="${SVG_NS}">
             <g class="cad-defs"></g>
@@ -241,9 +228,29 @@ export class MapEditor {
             </g>
           </svg>
         </div>
-        <aside class="cad-panel">
-          <section class="cad-tool-options"></section>
-          <section class="cad-map-options">
+        <div class="cad-hud">
+          <header class="cad-head">
+            <h1 class="cad-title"></h1>
+            <div class="cad-sub"><span class="cad-size"></span><span class="cad-dirty" hidden>${esc(t("CADASTRE.Editor.Unsaved"))}</span></div>
+          </header>
+          <div class="cad-quick cad-glass">
+            ${round("undo", "fa-rotate-left", t("CADASTRE.Editor.Undo"))}
+            ${round("redo", "fa-rotate-right", t("CADASTRE.Editor.Redo"))}
+            <span class="cad-sep"></span>
+            ${pill("grid", "fa-border-all", t("CADASTRE.Editor.Grid"), t("CADASTRE.Editor.GridShort"))}
+            ${pill("snap", "fa-magnet", t("CADASTRE.Editor.Snap"), t("CADASTRE.Editor.SnapShort"))}
+            ${pill("water", "fa-water", t("CADASTRE.Editor.AnimateWater"), t("CADASTRE.Editor.WaterShort"))}
+            ${pill("wind", "fa-wind", t("CADASTRE.Editor.WindPreview"), t("CADASTRE.Editor.WindShort"))}
+          </div>
+          <div class="cad-topright">
+            <button type="button" class="cad-pill cad-glass" data-action="map-panel" title="${esc(t("CADASTRE.Editor.MapPanelHint"))}"><i class="fa-solid fa-map"></i><span>${esc(t("CADASTRE.Editor.MapPanel"))}</span></button>
+            ${this.onOpenLibrary ? `<button type="button" class="cad-pill cad-glass" data-action="open-library" title="${esc(t("CADASTRE.Panel.ManageLibrary"))}"><i class="fa-solid fa-book-atlas"></i><span>${esc(t("CADASTRE.Editor.Library"))}</span></button>` : ""}
+            ${this.onSave ? `<button type="button" class="cad-round cad-glass" data-action="save" title="${esc(t("CADASTRE.Editor.SaveHint"))}" aria-label="${esc(t("CADASTRE.Editor.SaveHint"))}"><i class="fa-solid fa-floppy-disk"></i></button>` : ""}
+            ${this.onExport ? `<button type="button" class="cad-primary" data-action="export" title="${esc(t("CADASTRE.Editor.Export"))}"><i class="fa-solid fa-map-location-dot"></i><span>${esc(t("CADASTRE.Editor.ExportShort"))}</span></button>` : ""}
+          </div>
+          <aside class="cad-panel cad-glass">
+            <section class="cad-tool-options"></section>
+          <section class="cad-map-options" hidden>
             <h3>${esc(t("CADASTRE.Panel.Map"))}</h3>
             <label>${esc(t("CADASTRE.Panel.Name"))}<input type="text" name="name"></label>
             <div class="cad-row">
@@ -267,9 +274,21 @@ export class MapEditor {
               return `<label>${label}<div class="cad-slider"><input type="range" name="${name}" min="${kind}" max="${max}" step="${step}"><output></output></div></label>`;
             }).join("")}
           </section>
-        </aside>
-      </div>
-      <footer class="cad-status"><span class="cad-coords"></span><span class="cad-hint"></span></footer>`;
+            <p class="cad-hint"></p>
+          </aside>
+          <div class="cad-toolname"></div>
+          <nav class="cad-tools cad-glass">
+            ${TOOLS.map((tool) => `<button type="button" data-tool="${tool.id}" title="${esc(t(`CADASTRE.Tools.${tool.id}`))}" aria-label="${esc(t(`CADASTRE.Tools.${tool.id}`))}"><i class="fa-solid ${tool.icon}"></i></button>`).join("")}
+          </nav>
+          <div class="cad-status cad-glass"><i class="fa-solid fa-crosshairs"></i><span class="cad-coords">–</span></div>
+          <div class="cad-zoom cad-glass">
+            ${round("zoom-out", "fa-minus", t("CADASTRE.Editor.ZoomOut"))}
+            <span class="cad-zoom-value"></span>
+            ${round("zoom-in", "fa-plus", t("CADASTRE.Editor.ZoomIn"))}
+            ${round("fit", "fa-expand", t("CADASTRE.Editor.Fit"))}
+          </div>
+        </div>
+      </div>`;
 
     const $ = (sel) => this.root.querySelector(sel);
     this.el = {
@@ -277,7 +296,8 @@ export class MapEditor {
       bg: $(".cad-bg"), terrain: $(".cad-terrain"), paths: $(".cad-paths"), props: $(".cad-props"), walls: $(".cad-walls"),
       grid: $(".cad-grid"), border: $(".cad-border"), overlay: $(".cad-overlay"), extraDefs: $(".cad-extra-defs"),
       toolOptions: $(".cad-tool-options"), mapOptions: $(".cad-map-options"),
-      coords: $(".cad-coords"), hint: $(".cad-hint"), dirty: $(".cad-dirty")
+      coords: $(".cad-coords"), hint: $(".cad-hint"), dirty: $(".cad-dirty"),
+      title: $(".cad-title"), size: $(".cad-size"), toolName: $(".cad-toolname"), zoom: $(".cad-zoom-value")
     };
 
     this._listeners = [];
@@ -400,13 +420,20 @@ export class MapEditor {
     const { s, tx, ty } = this.view;
     for (const g of [this.el.world, this.el.worldMid, this.el.worldTop]) g.setAttribute("transform", `translate(${tx} ${ty}) scale(${s})`);
     this.el.border.setAttribute("stroke-width", String(1.5 / s));
+    // 100 % : la carte à la taille de la scène exportée.
+    if (this.el.zoom) this.el.zoom.textContent = `${Math.round((s / (this.map.gridSize || 100)) * 100)} %`;
   }
 
   fit() {
     const r = this.el.viewport.getBoundingClientRect();
     if (!r.width || !r.height) return;
-    const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min((r.width - 32) / this.map.width, (r.height - 32) / this.map.height)));
-    this.view = { s, tx: (r.width - this.map.width * s) / 2, ty: (r.height - this.map.height * s) / 2 };
+    // La carte se range entre les commandes qui flottent par-dessus : titre et barres en haut,
+    // outils en bas, panneau à droite (quand la fenêtre est assez large pour lui laisser la place).
+    const panel = r.width > 900 ? 330 : 24;
+    const L = 24, R = panel, T = 76, B = 84;
+    const w = Math.max(80, r.width - L - R), h = Math.max(80, r.height - T - B);
+    const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min(w / this.map.width, h / this.map.height)));
+    this.view = { s, tx: L + (w - this.map.width * s) / 2, ty: T + (h - this.map.height * s) / 2 };
     this._applyView();
     this._renderOverlay();
   }
@@ -605,6 +632,9 @@ export class MapEditor {
     this._fillPreview = null;
     for (const b of this.root.querySelectorAll("[data-tool]")) b.classList.toggle("active", b.dataset.tool === tool);
     this.el.hint.textContent = `${this.t(`CADASTRE.Hints.${tool}`)} ${this.t("CADASTRE.Hints.pan")}`;
+    this.el.toolName.textContent = this.t(`CADASTRE.Tools.${tool}`);
+    // Choisir un outil ramène ses options à la place des réglages de la carte.
+    this._showMapPanel(false);
     this.el.viewport.dataset.tool = tool;
     this._renderPanel();
     this._renderOverlay();
@@ -845,6 +875,31 @@ export class MapEditor {
     this.root.querySelector('[data-action="water"]')?.classList.toggle("active", this.animateWater);
     this.root.querySelector('[data-action="wind"]')?.classList.toggle("active", !!this.windPreview?.enabled);
     this.el.dirty.hidden = !this.dirty;
+    this.el.title.textContent = this.map.name || this.t("CADASTRE.Title");
+    this.el.size.textContent = this.t("CADASTRE.Editor.Size", { width: this.map.width, height: this.map.height, px: this.map.gridSize });
+    this.root.querySelector('[data-action="map-panel"]')?.classList.toggle("active", !!this.mapPanel);
+  }
+
+  /** Réglages de la carte (nom, taille, vent, eau) à la place des options de l'outil. */
+  _showMapPanel(show) {
+    this.mapPanel = show;
+    if (!this.el) return;
+    this.el.mapOptions.hidden = !show;
+    this.el.toolOptions.hidden = show;
+    this.el.hint.hidden = show;
+    this.root.querySelector('[data-action="map-panel"]')?.classList.toggle("active", show);
+  }
+
+  /** Zoom au centre de la vue. */
+  zoomBy(factor) {
+    const r = this.el.viewport.getBoundingClientRect();
+    const mx = r.width / 2, my = r.height / 2;
+    const { s, tx, ty } = this.view;
+    const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, s * factor));
+    const k = next / s;
+    this.view = { s: next, tx: mx - (mx - tx) * k, ty: my - (my - ty) * k };
+    this._applyView();
+    this._renderOverlay();
   }
 
   _setDirty(dirty) {
@@ -1099,6 +1154,9 @@ export class MapEditor {
       case "grid": this.showGrid = !this.showGrid; this._updateTopbar(); return this.renderMap(false, false);
       case "snap": this.snap = !this.snap; return this._updateTopbar();
       case "fit": return this.fit();
+      case "zoom-in": return this.zoomBy(1.25);
+      case "zoom-out": return this.zoomBy(0.8);
+      case "map-panel": this._showMapPanel(!this.mapPanel); return this._updateTopbar();
       case "wind":
         this.windPreview.setEnabled(!this.windPreview.enabled);
         return this._updateTopbar();
