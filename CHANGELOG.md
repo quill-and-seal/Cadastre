@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.36
+
+- **Éditeur : l'herbe animée ne passe plus au-dessus des arbres.** L'aperçu du vent était dessiné par-dessus les chemins, objets, arbres et murs ; il est maintenant entre le sol (et l'eau) et eux, comme dans la scène.
+
 ## 0.1.35
 
 - **Nouvelle interface de l'éditeur** : la carte occupe toute la fenêtre et les commandes flottent par-dessus, dans des panneaux sombres translucides aux bords arrondis.

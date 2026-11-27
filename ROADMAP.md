@@ -45,6 +45,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - 0.1.33 : l'eau se dessine à l'ombre des arbres (sans reflets, plus sombre).
 - 0.1.34 : l'eau peinte retire aussi les arbres posés à la main.
 - 0.1.35 : nouvelle interface de l'éditeur (carte plein cadre, commandes flottantes).
+- 0.1.36 : éditeur, herbe animée sous les arbres et objets.
 
 ## Biomes (V1 : 20 biomes, un par issue)
 

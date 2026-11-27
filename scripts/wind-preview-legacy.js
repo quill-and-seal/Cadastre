@@ -17,8 +17,8 @@ export class WindPreviewLegacy {
     this.enabled = false;            // vent animé
     this.canvas = document.createElement("canvas");
     this.canvas.className = "cad-wind";
-    // Entre la carte et la grille : sélection, aperçus et grille restent au-dessus de l'herbe.
-    editor.el.viewport.insertBefore(this.canvas, editor.el.svgTop ?? null);
+    // Sous les chemins, objets, arbres et murs (comme dans la scène), au-dessus du sol et de l'eau.
+    editor.el.viewport.insertBefore(this.canvas, editor.el.svgMid ?? editor.el.svgTop ?? null);
     try {
       this.renderer = new GrassRenderer(this.canvas);
     } catch (error) {
