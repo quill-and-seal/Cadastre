@@ -125,6 +125,7 @@ L'**outil Biome** (touche B) fait de toute la carte un biome : choisis-le puis *
 |---|---|---|
 | Forêt de feuillus | Litière de forêt | Chênes, hêtres, bouleaux, buissons, fougères, souches, champignons |
 | Forêt de conifères | Aiguilles et mousse | Sapins, épicéas, myrtilles, fougères, souches, champignons |
+| Marais | Vase | Chenaux, étangs et îlots, nénuphars, joncs, massettes, roseaux, saules têtards, bois mort (chicots, genoux de cyprès, troncs couchés), ponts de planches, lucioles (celles d'Ember s'il est actif) |
 
 Les sols de forêt sont peints élément par élément à taille réelle (feuilles mortes, brindilles, glands, mousse, aiguilles, pommes de pin…) ; leur tuile est calculée à la première utilisation.
 

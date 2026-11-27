@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.39
+
+- **Nouveau biome : Marais** (issue #19). Sol de vase olive et kaki (flaques, mousse, brins de paille, bulles), grands chenaux d'eau sombre vert-bleu qui se rejoignent et s'élargissent en étangs, îlots de vase, lentilles d'eau en paquets le long des berges.
+- Plantes du marais, générées comme les arbres : roseaux à plumeau, massettes, joncs, nénuphars en fleurs (sur l'eau seulement), saules têtards.
+- **Bois mort** : chicots aux racines nues, genoux de cyprès qui sortent de l'eau, troncs couchés avec leur galette de racines.
+- **Ponts de planches procéduraux** jetés au-dessus des chenaux étroits, d'une rive à l'autre : planches grises inégales, de biais, quelques-unes manquantes ou cassées, longerons et pieux. Réappliquer le biome les remplace. Tout chemin peut devenir une passerelle : case « Planches (passerelle) » quand il est sélectionné.
+- **Interaction** : les jetons écartent les petites plantes (roseaux, joncs, fougères…) en passant, qui se redressent ensuite.
+- **Lucioles** au-dessus des marais, plus nombreuses quand le soleil baisse ou que la scène est sombre ; elles s'écartent des jetons. Avec **Ember** actif, l'export pose des émetteurs Ember « lucioles » à la place (marqués Cadastre, remplacés à chaque réexport). Réglage « Lucioles » pour les couper.
+- **Demande un réexport** des cartes de marais pour les lucioles.
+
 ## 0.1.38
 
 - **Les ombres des arbres bougent vraiment** : chaque morceau d'arbre (tronc, branches) porte maintenant sa propre ombre, décalée selon sa hauteur le long des rayons du soleil et tournée comme lui quand le vent le balance. Les ombres des branches bougent avec les branches, et suivent l'heure du soleil.

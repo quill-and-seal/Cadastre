@@ -132,6 +132,7 @@
       "EdgeWidth": "Edge width",
       "NoEdge": "None",
       "SelPath": "Path",
+      "PathPlanks": "Planks (boardwalk)",
       "PathClosed": "Closed path (loop)",
       "Biome": "Biome",
       "BiomeWhole": "Whole map",
@@ -152,7 +153,15 @@
         "bilberry": "Bilberries",
         "fern": "Fern",
         "stump": "Stump",
-        "mushrooms": "Mushrooms"
+        "mushrooms": "Mushrooms",
+        "reed": "Reed",
+        "cattail": "Cattail",
+        "rush": "Rush",
+        "lily": "Water lily",
+        "willow": "Pollard willow",
+        "snag": "Snag",
+        "knees": "Cypress knees",
+        "log": "Fallen log"
       },
       "TreeRadius": "Scatter area (radius)",
       "TreeDensity": "Density",
@@ -244,7 +253,8 @@
     },
     "Biomes": {
       "broadleaf": "Broadleaf forest",
-      "conifer": "Conifer forest"
+      "conifer": "Conifer forest",
+      "marsh": "Marsh"
     },
     "Terrains": {
       "stone": "Flagstones",
@@ -256,7 +266,8 @@
       "sand": "Sand",
       "rock": "Rock",
       "litter": "Forest litter",
-      "needles": "Needles and moss"
+      "needles": "Needles and moss",
+      "mud": "Mud"
     },
     "Props": {
       "barrel": "Barrel",
@@ -370,6 +381,8 @@
         "300": "Very fine (300 px per square, recommended)",
         "400": "Maximum (400 px per square)"
       },
+      "Fireflies": "Fireflies",
+      "FirefliesHint": "Fireflies drifting over marshes, more of them as the sun sets or the scene gets dark. They move away from tokens.",
       "TreeShadow": "Shadow intensity",
       "TreeShadowHint": "Strength of the shadows of trees, objects and walls. Applied immediately, no re-export needed.",
       "TreeShadows": {

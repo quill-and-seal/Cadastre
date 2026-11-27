@@ -817,6 +817,7 @@ export class MapEditor {
           <label>${esc(t("CADASTRE.Panel.FlowSpeed"))}<input type="number" data-field="selPathSpeed" min="0.2" max="3" step="0.1" value="${q.speed}"></label>
         </div>` : ""}
         <label class="cad-check"><input type="checkbox" data-field="selPathClosed" ${q.closed ? "checked" : ""} ${q.nodes.length < 3 ? "disabled" : ""}> ${esc(t("CADASTRE.Panel.PathClosed"))}</label>
+        ${q.terrain !== "water" ? `<label class="cad-check"><input type="checkbox" data-field="selPathPlanks" ${q.planks ? "checked" : ""}> ${esc(t("CADASTRE.Panel.PathPlanks"))}</label>` : ""}
         ${actions()}`;
     }
     if (sel.type === "door") {
@@ -1204,6 +1205,7 @@ export class MapEditor {
     else if (field === "selPathWidth") changed = M.updatePath(this.map, id, { width: value });
     else if (field === "selPathEdgeWidth") changed = M.updatePath(this.map, id, { edgeWidth: value });
     else if (field === "selPathClosed") changed = M.updatePath(this.map, id, { closed: value });
+    else if (field === "selPathPlanks") changed = M.updatePath(this.map, id, { planks: value });
     else if (field === "selPathFlow") changed = M.updatePath(this.map, id, { flow: Number(value) });
     else if (field === "selPathSpeed") changed = M.updatePath(this.map, id, { speed: value });
     else if (field === "selPathTerrain" || field === "selPathEdge") {

@@ -29,6 +29,8 @@ const SORT_LAYER = 100;
  * (radians) ; SWAY : balancement propre ; STIFF / DAMP : ressort et amortissement.
  */
 const MAX_TURN = 0.11, SWAY = 0.035, STIFF = 9, DAMP = 3.2, CONIFER_SHIFT = 0.09;
+/** Jetons dans les plantes basses : rotation des tiges écartées (radians), plantes concernées (rayon en cases). */
+const PUSH_TURN = 0.55, PUSH_MAX_R = 1.8;
 
 /** Poussée du vent sur l'arbre : la force réglée, modulée par la rafale locale (0..1 de l'herbe). */
 export const treePush = (strength, g) => strength * (0.35 + 0.9 * g);
@@ -107,13 +109,22 @@ export function treeSprites2(root, items, pages, { size, ox, oy, ppc, shadowPage
  * Une image : le vent lu de part et d'autre de chaque arbre visible (view : rectangle en cases),
  * puis chaque branche avance d'un pas de ressort vers l'angle que lui donne le vent.
  */
-export function stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated = true, viewPpc = 100) {
+export function stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated = true, viewPpc = 100, pushers = []) {
   for (const tr of trees) {
     // Direction du vent dans le repère de la plante (petites plantes tournées à l'affichage).
     const sr = -tr.box.rotation, dx = dir[0] * Math.cos(sr) - dir[1] * Math.sin(sr), dy = dir[0] * Math.sin(sr) + dir[1] * Math.cos(sr);
     const vis = tr.x + tr.r >= x0 && tr.x - tr.r <= x1 && tr.y + tr.r >= y0 && tr.y - tr.r <= y1;
     tr.box.visible = vis;
-    if (!vis || !animated || tr.item.rigid || tr.parts.length < 2) continue;
+    if (!vis || tr.item.rigid || tr.parts.length < 2) continue;
+    // Jetons qui traversent une plante basse (roseaux, joncs…) : ses tiges s'écartent.
+    let near = null;
+    if (pushers.length && tr.r < PUSH_MAX_R) {
+      for (const q of pushers) {
+        if (Math.hypot(q.x - tr.x, q.y - tr.y) < tr.r + q.r + 0.3) (near ??= []).push(q);
+      }
+    }
+    if (!animated && !near && !tr.pushed) continue;
+    tr.pushed = !!near;
     // Trop petit à l'écran pour qu'un balancement se voie : on ne calcule rien.
     if (tr.r * viewPpc < 18) continue;
     // La rafale traverse la couronne : vent lu au vent, au centre et sous le vent.
@@ -130,7 +141,19 @@ export function stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated = 
       // Couple du vent sur la branche : maximal quand elle est de travers, nul dans l'axe du vent.
       const cross = p.ux * dy - p.uy * dx;
       const turn = conifer ? 0 : 1;
-      const target = push * (MAX_TURN * turn * cross + SWAY * turn * Math.sin(t * p.w + p.ph));
+      let target = push * (MAX_TURN * turn * cross + SWAY * turn * Math.sin(t * p.w + p.ph));
+      if (near) {
+        // Repère de la plante : jeton ramené au pied, tourné comme elle.
+        for (const q of near) {
+          const rx = q.x - tr.x, ry = q.y - tr.y;
+          const lx = rx * Math.cos(sr) - ry * Math.sin(sr), ly = rx * Math.sin(sr) + ry * Math.cos(sr);
+          const vx = sx - lx, vy = sy - ly, d = Math.hypot(vx, vy), reach = q.r + 0.35;
+          if (d >= reach) continue;
+          // Couple qui éloigne la tige du jeton.
+          const side = p.ux * vy - p.uy * vx;
+          target += Math.sign(side || 1) * PUSH_TURN * (1 - d / reach);
+        }
+      }
       // Ressort amorti (pas de temps borné) : la branche a du poids.
       const h = Math.min(dt, 0.05);
       p.v += (STIFF * (target - p.th) - DAMP * p.v) * h;
@@ -534,6 +557,17 @@ export function expandItems(data) {
 
 let state = null;
 
+/** Jetons visibles, en cases (centre et rayon) : ils écartent les plantes basses qu'ils traversent. */
+export function tokenPushers(size, ox, oy) {
+  const out = [];
+  for (const token of canvas.tokens?.placeables ?? []) {
+    if (!token.visible) continue;
+    const c = token.center;
+    out.push({ x: (c.x - ox) / size, y: (c.y - oy) / size, r: Math.max(token.w, token.h) / size / 2 });
+  }
+  return out;
+}
+
 export function registerTrees() {
   Hooks.on("canvasReady", () => refresh());
   // « Précharger chez les joueurs » de Vellum : les images des arbres et de leurs ombres partent avec la scène.
@@ -628,7 +662,7 @@ async function refresh() {
       const x1 = (Math.max(p0.x, p1.x) - ox) / size, y1 = (Math.max(p0.y, p1.y) - oy) / size;
       const viewPpc = size * Math.abs(canvas.stage.scale.x);
       // Dézoomé : forêts regroupées en quelques images fixes, rien à animer.
-      if (!baker.update(viewPpc * (r.resolution ?? 1), [x0, y0, x1, y1])) stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated, viewPpc);
+      if (!baker.update(viewPpc * (r.resolution ?? 1), [x0, y0, x1, y1])) stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated, viewPpc, tokenPushers(size, ox, oy));
       sharpener.update(viewPpc * (r.resolution ?? 1), performance.now(), [x0, y0, x1, y1]);
       shadows?.update([x0, y0, x1, y1], sunState());
       if (stats) {

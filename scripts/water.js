@@ -1070,8 +1070,8 @@ float caustic(vec2 q, float fine) {
 }
 // Types d'eau (poids : claire, profonde, boueuse, tropicale) : couleurs fondues.
 void waterColors(vec4 w, out vec3 deep, out vec3 shallow) {
-  deep = vec3(0.04, 0.20, 0.26) * w.x + vec3(0.02, 0.09, 0.15) * w.y + vec3(0.22, 0.22, 0.13) * w.z + vec3(0.02, 0.30, 0.42) * w.w;
-  shallow = vec3(0.30, 0.55, 0.52) * w.x + vec3(0.12, 0.33, 0.38) * w.y + vec3(0.40, 0.38, 0.24) * w.z + vec3(0.30, 0.74, 0.70) * w.w;
+  deep = vec3(0.04, 0.20, 0.26) * w.x + vec3(0.02, 0.09, 0.15) * w.y + vec3(0.04, 0.10, 0.08) * w.z + vec3(0.02, 0.30, 0.42) * w.w;
+  shallow = vec3(0.30, 0.55, 0.52) * w.x + vec3(0.12, 0.33, 0.38) * w.y + vec3(0.15, 0.24, 0.17) * w.z + vec3(0.30, 0.74, 0.70) * w.w;
 }
 void main() {
   vec4 f = texture2D(uField, vPos / uMapSize);
@@ -1199,6 +1199,19 @@ void main() {
   col += vec3(0.55, 0.70, 0.80) * 0.07 * sky * uGlow * refl * sunlit;
   float glint = pow(max(0.0, noise(q0 / 3.0 + 11.0) * w0 + noise(q1 / 3.0 + 11.0) * (1.0 - w0)), 9.0);
   col += vec3(1.0) * glint * 0.9 * uGlow * (0.4 + 0.6 * depth) * tiny * refl * sunlit;
+  // Eau boueuse (marais) : lentilles d'eau, en petits disques verts groupés en nappes, surtout
+  // le long des bords ; au cœur des nappes, un tapis continu.
+  if (tw.z > 0.01) {
+    float clump = smoothstep(0.48, 0.7, fbm(px / 60.0 + 3.1) * 0.75 + n * 0.5) * tw.z;
+    vec3 cl = cCells(px / 7.0);
+    float r0 = 0.2 + 0.14 * cl.z;
+    float disc = smoothstep(r0, r0 - 0.06, cl.x) * step(1.0 - clump * 1.3, cl.z);
+    float ring = smoothstep(r0 + 0.05, r0, cl.x) - smoothstep(r0, r0 - 0.04, cl.x);
+    float mat = smoothstep(0.8, 0.95, clump);
+    vec3 green = vec3(0.30, 0.47, 0.15) * (0.8 + 0.35 * cl.z);
+    col = mix(col, col * 0.55, ring * step(1.0 - clump * 1.3, cl.z) * 0.6);
+    col = mix(col, green, max(mat * 0.85, disc * 0.95));
+  }
   // Liseré d'eau claire et d'écume contre la berge (pas sur une côte : la vague le remplace).
   float bank = 1.0 - cwk;
   col = mix(col, shallow * 1.2, smoothstep(0.86, 0.98, n) * 0.5 * bank);

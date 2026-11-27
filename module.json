@@ -2,7 +2,7 @@
   "id": "cadastre",
   "title": "Cadastre",
   "description": "Éditeur de cartes dans Foundry VTT : on peint les sols, on trace pièces, murs et portes, on pose le mobilier, puis la carte devient une scène prête à jouer, murs compris.",
-  "version": "0.1.38",
+  "version": "0.1.39",
   "compatibility": {
     "minimum": "14",
     "verified": "14"

@@ -26,6 +26,7 @@ import { registerWind } from "./wind-layer.js";
 import { registerTrees } from "./tree-layer.js";
 import { registerSun, setSunTime, sunState } from "./sun.js";
 import { registerShade } from "./shade-layer.js";
+import { registerFireflies } from "./firefly-layer.js";
 import { isMapEntry } from "./storage.js";
 import { exportMap } from "./export.js";
 import { registerBackground } from "./pyramid-export.js";
@@ -35,7 +36,7 @@ import * as model from "./model.js";
 
 Hooks.once("init", () => {
   // Chaque partie s'enregistre à part : si l'une échoue, les autres (eau, vent) restent actives.
-  for (const [name, register] of [["bibliothèque", registerLibrarySettings], ["eau", registerWater], ["vent", registerWind], ["soleil", registerSun], ["ombres", registerShade], ["arbres", registerTrees], ["fond", registerBackground], ["diagnostic", registerDiagnostic]]) {
+  for (const [name, register] of [["bibliothèque", registerLibrarySettings], ["eau", registerWater], ["vent", registerWind], ["soleil", registerSun], ["ombres", registerShade], ["arbres", registerTrees], ["lucioles", registerFireflies], ["fond", registerBackground], ["diagnostic", registerDiagnostic]]) {
     try {
       register();
     } catch (error) {

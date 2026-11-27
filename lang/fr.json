@@ -132,6 +132,7 @@
       "EdgeWidth": "Largeur de la bordure",
       "NoEdge": "Aucune",
       "SelPath": "Chemin",
+      "PathPlanks": "Planches (passerelle)",
       "PathClosed": "Chemin fermé (boucle)",
       "Biome": "Biome",
       "BiomeWhole": "Toute la carte",
@@ -152,7 +153,15 @@
         "bilberry": "Myrtilles",
         "fern": "Fougère",
         "stump": "Souche",
-        "mushrooms": "Champignons"
+        "mushrooms": "Champignons",
+        "reed": "Roseau",
+        "cattail": "Massette",
+        "rush": "Jonc",
+        "lily": "Nénuphar",
+        "willow": "Saule têtard",
+        "snag": "Chicot",
+        "knees": "Genoux de cyprès",
+        "log": "Tronc couché"
       },
       "TreeRadius": "Zone semée (rayon)",
       "TreeDensity": "Densité",
@@ -244,7 +253,8 @@
     },
     "Biomes": {
       "broadleaf": "Forêt de feuillus",
-      "conifer": "Forêt de conifères"
+      "conifer": "Forêt de conifères",
+      "marsh": "Marais"
     },
     "Terrains": {
       "stone": "Dalles",
@@ -256,7 +266,8 @@
       "sand": "Sable",
       "rock": "Roche",
       "litter": "Litière de forêt",
-      "needles": "Aiguilles et mousse"
+      "needles": "Aiguilles et mousse",
+      "mud": "Vase"
     },
     "Props": {
       "barrel": "Tonneau",
@@ -370,6 +381,8 @@
         "300": "Très fin (300 px par case, recommandé)",
         "400": "Maximal (400 px par case)"
       },
+      "Fireflies": "Lucioles",
+      "FirefliesHint": "Lucioles qui tournoient au-dessus des marais, plus nombreuses quand le soleil baisse ou que la scène est sombre. Elles s'écartent des jetons.",
       "TreeShadow": "Intensité des ombres",
       "TreeShadowHint": "Force des ombres des arbres, des objets et des murs. Appliquée tout de suite, sans réexport.",
       "TreeShadows": {

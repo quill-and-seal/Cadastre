@@ -188,8 +188,13 @@ function riverbedPattern(id) {
  * Eau peinte : fond profond, eau claire le long des rives (dégradé flou), galets du fond,
  * reflet sur le bord, berge de terre et trait d'encre autour.
  */
+/** Berge d'un marais : vase sombre plutôt que terre rouge, plus étroite. */
+const MARSH_BANK = { bank: "#4a4228", bankDark: "#2e2816", width: 0.36, deep: "#0f2620", shallow: "#2c4234", rim: "#6a7a5a" };
+
 export function renderWater(map, prefix = "cad") {
   const rings = waterRings(map);
+  const marsh = map.biome?.id === "marsh";
+  const bank = marsh ? MARSH_BANK.bank : WATER.bank, bankDark = marsh ? MARSH_BANK.bankDark : WATER.bankDark, bw = marsh ? MARSH_BANK.width : 0.56;
   const d = ringsPath(rings);
   if (!d) return "";
   const r = `filterUnits="userSpaceOnUse" ${region(map)}`;
@@ -212,15 +217,15 @@ export function renderWater(map, prefix = "cad") {
     + `<g clip-path="url(#${prefix}-clip)">`
     // Berge : bande de terre cerclée d'encre côté rive, plus sombre près de l'eau.
     + `<g${mask}><g filter="url(#${id("rough")})">`
-      + `<path d="${d}" stroke="${WATER.ink}" stroke-width="0.66" ${round}/>`
-      + `<path d="${d}" stroke="${WATER.bank}" stroke-width="0.56" ${round}/>`
-      + `<path d="${d}" stroke="${WATER.bankDark}" stroke-width="0.22" ${round}/>`
+      + `<path d="${d}" stroke="${WATER.ink}" stroke-width="${bw + 0.1}" ${round}/>`
+      + `<path d="${d}" stroke="${bank}" stroke-width="${bw}" ${round}/>`
+      + `<path d="${d}" stroke="${bankDark}" stroke-width="0.22" ${round}/>`
     + `</g></g>`
     + `<g clip-path="url(#${id("clip")})">`
-      + `<path d="${d}" fill="${WATER.deep}"/>`
+      + `<path d="${d}" fill="${marsh ? MARSH_BANK.deep : WATER.deep}"/>`
       + `<path d="${d}" fill="url(#${id("bed")})"/>`
-      + `<path d="${d}" stroke="${WATER.shallow}" stroke-width="1.5" stroke-opacity="0.9" ${round} filter="url(#${id("soft")})"/>`
-      + `<path d="${d}" stroke="${WATER.rim}" stroke-width="0.32" stroke-opacity="0.75" ${round} filter="url(#${id("rimblur")})"/>`
+      + `<path d="${d}" stroke="${marsh ? MARSH_BANK.shallow : WATER.shallow}" stroke-width="1.5" stroke-opacity="0.9" ${round} filter="url(#${id("soft")})"/>`
+      + `<path d="${d}" stroke="${marsh ? MARSH_BANK.rim : WATER.rim}" stroke-width="0.32" stroke-opacity="0.75" ${round} filter="url(#${id("rimblur")})"/>`
     + `</g>`
     + `<path d="${d}" stroke="${WATER.ink}" stroke-width="0.04" stroke-opacity="0.7" ${round}${mask}/>`
     + `</g>`;
@@ -238,6 +243,11 @@ export function renderPaths(map, prefix = "cad") {
     const pts = flattenNodes(q.nodes, q.closed, 0.01);
     if (pts.length < 2) continue;
     const d = polylinePath(q.closed ? [...pts, pts[0]] : pts) + (q.closed ? "Z" : "");
+    if (q.planks) {
+      const art = plankBridge(q, pts);
+      shadow += art.shadow; body += art.body;
+      continue;
+    }
     const outer = q.width + (q.edge ? 2 * q.edgeWidth : 0);
     const cap = `stroke-linecap="round" stroke-linejoin="round" fill="none"`;
     shadow += `<path d="${d}" stroke="#000" stroke-opacity="0.35" stroke-width="${f3(outer + 0.12)}" ${cap}/>`;
@@ -248,6 +258,77 @@ export function renderPaths(map, prefix = "cad") {
     body += `<path data-path="${q.id}" d="${d}" stroke="${terrainFill(prefix, q.terrain)}" stroke-width="${f3(q.width)}" ${cap}/>`;
   }
   return shadow ? `<g clip-path="url(#${prefix}-clip)"><g filter="url(#${prefix}-blur)">${shadow}</g>${body}</g>` : "";
+}
+
+/** Graine stable tirée de l'identifiant d'un élément. */
+function idSeed(id) {
+  let h = 2166136261;
+  for (const c of String(id)) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  return h >>> 0;
+}
+
+const PLANK_TONES = ["#6e5f4b", "#5e5242", "#7a6b55", "#4f4536", "#665a47", "#5a4a36", "#73624a"];
+
+/**
+ * Passerelle de planches : deux longerons, des planches posées en travers, inégales, un peu de
+ * biais, quelques-unes manquantes ou cassées, des pieux aux bouts et le long des longerons.
+ */
+function plankBridge(q, pts) {
+  const rand = mulberry32(idSeed(q.id)), w = q.width, half = w / 2;
+  // Longueurs cumulées le long de la ligne.
+  const acc = [0];
+  for (let i = 1; i < pts.length; i++) acc.push(acc[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  const L = acc.at(-1);
+  const at = (s) => {
+    let i = 1;
+    while (i < acc.length - 1 && acc[i] < s) i++;
+    const t = (s - acc[i - 1]) / Math.max(1e-6, acc[i] - acc[i - 1]);
+    const [ax, ay] = pts[i - 1], [bx, by] = pts[i];
+    const len = Math.hypot(bx - ax, by - ay) || 1;
+    return { x: ax + (bx - ax) * t, y: ay + (by - ay) * t, dx: (bx - ax) / len, dy: (by - ay) / len };
+  };
+  const side = (k) => polylinePath(pts.map(([x, y], i) => {
+    const p = at(acc[i]);
+    return [x - p.dy * k, y + p.dx * k];
+  }));
+  let shadow = `<path d="${polylinePath(pts)}" stroke="#000" stroke-opacity="0.4" stroke-width="${f3(w + 0.1)}" stroke-linecap="butt" fill="none"/>`;
+  let body = "";
+  // Longerons, sous les planches.
+  for (const k of [-half * 0.72, half * 0.72]) {
+    body += `<path d="${side(k)}" stroke="#2c1f12" stroke-width="0.11" stroke-linecap="round" fill="none"/>`;
+  }
+  // Pieux : aux deux bouts et environ toutes les 1,6 case, juste hors du tablier.
+  const posts = Math.max(1, Math.round(L / 1.6));
+  for (let i = 0; i <= posts; i++) {
+    const p = at((i / posts) * L);
+    for (const sgn of [-1, 1]) {
+      if (rand() < 0.15 && i > 0 && i < posts) continue;
+      const r = 0.07 + rand() * 0.035, o = half + 0.02;
+      const cx = p.x - p.dy * o * sgn, cy = p.y + p.dx * o * sgn;
+      shadow += `<circle cx="${f3(cx)}" cy="${f3(cy)}" r="${f3(r + 0.05)}" fill="#000" fill-opacity="0.5"/>`;
+      body += `<circle cx="${f3(cx)}" cy="${f3(cy)}" r="${f3(r)}" fill="#3a2816" stroke="#1e140a" stroke-width="0.025"/>`
+        + `<circle cx="${f3(cx - r * 0.25)}" cy="${f3(cy - r * 0.25)}" r="${f3(r * 0.45)}" fill="#5a4229"/>`;
+    }
+  }
+  // Planches en travers.
+  const step = 0.21;
+  for (let s = 0.08; s < L - 0.05; s += step * (0.92 + rand() * 0.16)) {
+    const r = rand();
+    if (r < 0.06 && s > 0.6 && s < L - 0.6) continue; // planche manquante
+    const p = at(s), ang = (Math.atan2(p.dy, p.dx) * 180) / Math.PI + (rand() - 0.5) * 7;
+    const len = w * (0.9 + rand() * 0.18), th = step * (0.78 + rand() * 0.12);
+    let x0 = -len / 2 + (rand() - 0.5) * 0.08, x1 = len / 2 + (rand() - 0.5) * 0.08;
+    if (r < 0.12) { if (rand() < 0.5) x0 = -len * (0.05 + rand() * 0.2); else x1 = len * (0.05 + rand() * 0.2); } // cassée
+    const tone = PLANK_TONES[Math.floor(rand() * PLANK_TONES.length)];
+    // Repère de la planche : u le long de la planche (en travers du pont), v le long du pont.
+    body += `<g transform="translate(${f3(p.x)} ${f3(p.y)}) rotate(${f3(ang + 90)})">`
+      + `<rect x="${f3(x0)}" y="${f3(-th / 2)}" width="${f3(x1 - x0)}" height="${f3(th)}" rx="0.025" fill="${tone}" stroke="#24180c" stroke-width="0.02"/>`
+      + `<path d="M${f3(x0 + 0.05)} ${f3(-th * 0.12)}H${f3(x1 - 0.08)}M${f3(x0 + 0.12)} ${f3(th * 0.22)}H${f3(x1 - 0.2)}" stroke="#000" stroke-opacity="0.18" stroke-width="0.012"/>`
+      + `<path d="M${f3(x0 + 0.03)} ${f3(-th / 2 + 0.02)}H${f3(x1 - 0.03)}" stroke="#fff" stroke-opacity="0.1" stroke-width="0.018"/>`
+      + (rand() < 0.5 ? `<circle cx="${f3(x0 + 0.08)}" cy="0" r="0.018" fill="#1a120a"/><circle cx="${f3(x1 - 0.08)}" cy="0" r="0.018" fill="#1a120a"/>` : "")
+      + `</g>`;
+  }
+  return { shadow, body };
 }
 
 /** Dessin d'un type d'objet dans son rectangle w×h (catalogue : SVG, bibliothèque : image). */

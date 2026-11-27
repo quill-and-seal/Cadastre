@@ -201,7 +201,10 @@ export const TERRAINS = [
   { id: "litter", soft: true, swatch: "#7a5428", w: 8, h: 8, base: "#4a3420", ground: "litter",
     pattern: painted("litter", 8, "#3a2614", "#7a5428", 0.4, 17) + speckles(53, 600, ["#9a5a22", "#c48a3a", "#5a3820", "#7d6a2a"], 0.02, 0.05, 8, 8) },
   { id: "needles", soft: true, swatch: "#6e4a28", w: 8, h: 8, base: "#4a3018", ground: "needles",
-    pattern: painted("needles", 8, "#3a2414", "#6e4426", 0.3, 19) + speckles(59, 300, ["#3a6020", "#5a8228", "#8e5a2c"], 0.03, 0.09, 8, 8) }
+    pattern: painted("needles", 8, "#3a2414", "#6e4426", 0.3, 19) + speckles(59, 300, ["#3a6020", "#5a8228", "#8e5a2c"], 0.03, 0.09, 8, 8) },
+  // Vase de marais : terre gorgée d'eau, luisante, flaques, tiges mortes et algues.
+  { id: "mud", soft: true, swatch: "#5a5430", w: 8, h: 8, base: "#4a4428", ground: "mud",
+    pattern: painted("mud", 8, "#3a3420", "#6a6236", 0.3, 23) + speckles(61, 260, ["#4a5a32", "#2e2618", "#7a7044"], 0.02, 0.06, 8, 8) }
 ];
 
 /** Rides de vent sur le sable, très douces. */
@@ -238,7 +241,7 @@ function rockCracks() {
 export const TERRAIN_IDS = new Set(TERRAINS.map((t) => t.id));
 
 /** Sol de fond de chaque biome (biomes.js). */
-export const BIOME_SOILS = { broadleaf: "litter", conifer: "needles" };
+export const BIOME_SOILS = { broadleaf: "litter", conifer: "needles", marsh: "mud" };
 
 /**
  * Objets : `svg` est dessiné dans un rectangle de `w`×`h` cases (orientation 0).

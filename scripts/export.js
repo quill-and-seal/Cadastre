@@ -15,6 +15,7 @@ import { waterFlag, buildField, normalizeWater } from "./water.js";
 import { paintStillWater } from "./water-gl.js";
 import { buildWallData, textureScale } from "./walls.js";
 import { isEmpty } from "./model.js";
+import { fireflySpots } from "./biomes.js";
 import { TREE_BY_TYPE } from "./trees.js";
 import { packTrees, TREE_PAGE, treePpc } from "./tree-pack.js";
 import { heightSVG, HEIGHT_PPC, MAX_HEIGHT } from "./height-export.js";
@@ -330,6 +331,50 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
   else if (scene.getFlag(MODULE_ID, "shade")) await scene.unsetFlag(MODULE_ID, "shade");
   if (treeFlag) await scene.setFlag(MODULE_ID, "trees", treeFlag);
   else if (scene.getFlag(MODULE_ID, "trees")) await scene.unsetFlag(MODULE_ID, "trees");
+  // Lucioles du marais : animées par leur calque (firefly-layer.js).
+  // Avec Ember actif, ce sont ses lucioles (preset « fireflies ») qui sont posées.
+  const flies = fireflySpots(map);
+  const ember = await emberFireflies(scene, flies, map.gridSize);
+  if (flies && !ember) await scene.setFlag(MODULE_ID, "fireflies", { v: 1, pts: flies });
+  else if (scene.getFlag(MODULE_ID, "fireflies")) await scene.unsetFlag(MODULE_ID, "fireflies");
   await refreshThumbnail(scene);
   return { scene, created, reduced, missing };
 }
+
+/**
+ * Lucioles par Ember (module ember-particles), s'il est actif : des émetteurs « fireflies » là où
+ * les lucioles du marais se regroupent. Ceux d'un export précédent (marqués cadastre) sont
+ * remplacés. Sans lumière Foundry, pour rester léger.
+ * @returns {Promise<boolean>}  true : Ember s'en charge
+ */
+async function emberFireflies(scene, spots, size) {
+  const api = game.modules.get("ember-particles");
+  if (!api?.active || !api.api?.createEmitter) return false;
+  try {
+    const old = Object.entries(api.api.getEmitters(scene) ?? {}).filter(([, e]) => e?.cadastre).map(([id, e]) => e.id ?? id);
+    for (const id of old) await api.api.deleteEmitter(id, scene);
+    if (!spots?.length) return true;
+    // Regroupement par carrés de 7 cases : un émetteur au centre de chaque groupe d'au moins 3.
+    const cells = new Map();
+    for (const [x, y] of spots) {
+      const k = `${Math.floor(x / 7)},${Math.floor(y / 7)}`;
+      const c = cells.get(k) ?? { x: 0, y: 0, n: 0 };
+      c.x += x; c.y += y; c.n++;
+      cells.set(k, c);
+    }
+    const ox = scene.dimensions?.sceneX ?? 0, oy = scene.dimensions?.sceneY ?? 0;
+    for (const c of cells.values()) {
+      if (c.n < 3) continue;
+      await api.api.createEmitter({
+        preset: "fireflies", label: "Cadastre — lucioles", cadastre: true,
+        x: Math.round(ox + (c.x / c.n) * size), y: Math.round(oy + (c.y / c.n) * size),
+        radius: 2.6, density: Math.min(1.6, 0.6 + c.n / 12), light: "off"
+      }, scene);
+    }
+    return true;
+  } catch (error) {
+    log("Lucioles d'Ember non posées, celles de Cadastre les remplacent", error);
+    return false;
+  }
+}
+

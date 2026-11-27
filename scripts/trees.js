@@ -167,10 +167,42 @@ export const TREES = [
   { id: "bilberry", w: 0.7, h: 0.7, tree: true, proc: "bilberry", spin: true, make: (seed) => lobedCanopy(seed, 0.7, { lobes: [6, 8], palette: { dark: "#2a5a24", mid: "#3f8236", light: "#7fb455" } }) },
   { id: "fern", w: 1.2, h: 1.2, tree: true, proc: "fern", spin: true, make: (seed) => fernIcon(seed, 1.2) },
   { id: "stump", w: 1, h: 1, tree: true, proc: "stump", spin: true, make: (seed) => stumpIcon(seed, 1) },
-  { id: "mushrooms", w: 0.3, h: 0.3, tree: true, proc: "mushrooms", spin: true, make: (seed) => capsIcon(seed, 0.3) }
+  { id: "mushrooms", w: 0.3, h: 0.3, tree: true, proc: "mushrooms", spin: true, make: (seed) => capsIcon(seed, 0.3) },
+  // Marais. water : pousse sur l'eau (nénuphar), et nulle part ailleurs.
+  { id: "reed", w: 2, h: 2, tree: true, proc: "reed", spin: true, make: (seed) => clumpIcon(seed, 2, { n: 26, color: "#6a8a4a", tip: "#8c6a62" }) },
+  { id: "cattail", w: 1.7, h: 1.7, tree: true, proc: "cattail", spin: true, make: (seed) => clumpIcon(seed, 1.7, { n: 16, color: "#4f7e3a", tip: "#4a2e1a", spike: true }) },
+  { id: "rush", w: 1, h: 1, tree: true, proc: "rush", spin: true, make: (seed) => clumpIcon(seed, 1, { n: 30, color: "#2f5e2c" }) },
+  { id: "lily", w: 1.4, h: 1.4, tree: true, proc: "lily", spin: true, water: true, make: (seed) => lilyIcon(seed, 1.4) },
+  { id: "snag", w: 1.8, h: 1.8, tree: true, proc: "snag", spin: true, make: (seed) => stumpIcon(seed, 1.8, { bark: "#3e362a", wood: "#7a6a50", roots: 8 }) },
+  { id: "knees", w: 1.2, h: 1.2, tree: true, proc: "knees", spin: true, water: true, make: (seed) => capsIcon(seed, 1.2, "#5e4c36") },
+  { id: "log", w: 3, h: 3, tree: true, proc: "log", spin: true, make: (seed) => logIcon(seed, 3) },
+  { id: "willow", w: 4, h: 4, tree: true, proc: "willow", make: (seed) => lobedCanopy(seed, 4, { lobes: [12, 16], palette: { dark: "#3a563c", mid: "#6a8a60", light: "#bccfa6" } }) }
 ];
 
 /** Icônes simples (palette, silhouette le temps du calcul). */
+function clumpIcon(seed, size, { n, color, tip = null, spike = false }) {
+  const rand = mulberry32(seed), c = size / 2;
+  let d = "", t = "";
+  for (let i = 0; i < n; i++) {
+    const a = rand() * Math.PI * 2, L = size * (0.25 + rand() * 0.22), x = c + Math.cos(a) * L, y = c + Math.sin(a) * L;
+    d += `M${r3(c + Math.cos(a) * size * 0.05)} ${r3(c + Math.sin(a) * size * 0.05)}L${r3(x)} ${r3(y)}`;
+    if (tip && rand() < 0.4) t += spike
+      ? `<path d="M${r3(x)} ${r3(y)}l${r3(Math.cos(a) * size * 0.08)} ${r3(Math.sin(a) * size * 0.08)}" stroke="${tip}" stroke-width="${r3(size * 0.05)}" stroke-linecap="round"/>`
+      : circle(x, y, size * 0.035, `fill="${tip}"`);
+  }
+  return `<path d="${d}" stroke="${INK}" stroke-width="${r3(size * 0.04)}" stroke-linecap="round" fill="none"/>`
+    + `<path d="${d}" stroke="${color}" stroke-width="${r3(size * 0.025)}" stroke-linecap="round" fill="none"/>` + t;
+}
+function lilyIcon(seed, size) {
+  const rand = mulberry32(seed), c = size / 2;
+  let out = "";
+  for (let i = 0; i < 7; i++) {
+    const a = rand() * Math.PI * 2, d = rand() * size * 0.35, r = size * (0.08 + rand() * 0.06), x = c + Math.cos(a) * d, y = c + Math.sin(a) * d;
+    const n = rand() * Math.PI * 2, n0 = n + 0.25, n1 = n - 0.25;
+    out += `<path d="M${r3(x)} ${r3(y)}L${r3(x + Math.cos(n0) * r)} ${r3(y + Math.sin(n0) * r)}A${r3(r)} ${r3(r)} 0 1 1 ${r3(x + Math.cos(n1) * r)} ${r3(y + Math.sin(n1) * r)}Z" fill="#4e8f3e" stroke="${INK}" stroke-width="${r3(size * 0.015)}"/>`;
+  }
+  return out + circle(c, c, size * 0.05, `fill="#f4f1ea" stroke="${INK}" stroke-width="${r3(size * 0.01)}"`);
+}
 function fernIcon(seed, size) {
   const rand = mulberry32(seed), c = size / 2, n = 9;
   let d = "";
@@ -181,16 +213,30 @@ function fernIcon(seed, size) {
   return `<path d="${d}" stroke="${INK}" stroke-width="${r3(size * 0.09)}" stroke-linecap="round" fill="none"/>`
     + `<path d="${d}" stroke="#4a8f38" stroke-width="${r3(size * 0.06)}" stroke-linecap="round" fill="none"/>`;
 }
-function stumpIcon(seed, size) {
+function stumpIcon(seed, size, { bark = "#5a4030", wood = "#c49a68", roots = 0 } = {}) {
   const c = size / 2, k = 0.9 + mulberry32(seed)() * 0.2;
+  let r = "";
+  for (let i = 0; i < roots; i++) {
+    const a = (i / roots) * Math.PI * 2;
+    r += `M${r3(c)} ${r3(c)}L${r3(c + Math.cos(a) * size * 0.45)} ${r3(c + Math.sin(a) * size * 0.45)}`;
+  }
+  if (roots) return `<path d="${r}" stroke="${bark}" stroke-width="${r3(size * 0.06)}" stroke-linecap="round"/>`
+    + circle(c, c, size * 0.17 * k, `fill="${bark}" stroke="${INK}" stroke-width="0.03"`) + circle(c, c, size * 0.12, `fill="${wood}"`);
   return circle(c, c, size * 0.3 * k, `fill="#5a4030" stroke="${INK}" stroke-width="0.03"`) + circle(c, c, size * 0.24, `fill="#c49a68"`)
     + circle(c, c, size * 0.14, `fill="none" stroke="#8a6438" stroke-width="0.012"`) + circle(c, c, size * 0.07, `fill="none" stroke="#8a6438" stroke-width="0.012"`);
 }
-function capsIcon(seed, size) {
+function capsIcon(seed, size, color = "#8a5a2e") {
   const rand = mulberry32(seed), c = size / 2;
   let out = "";
-  for (let i = 0; i < 4; i++) out += circle(c + (rand() - 0.5) * size * 0.5, c + (rand() - 0.5) * size * 0.5, size * (0.1 + rand() * 0.08), `fill="#8a5a2e" stroke="${INK}" stroke-width="0.008"`);
+  for (let i = 0; i < 4; i++) out += circle(c + (rand() - 0.5) * size * 0.5, c + (rand() - 0.5) * size * 0.5, size * (0.1 + rand() * 0.08), `fill="${color}" stroke="${INK}" stroke-width="0.008"`);
   return out;
+}
+function logIcon(seed, size) {
+  const rand = mulberry32(seed), c = size / 2, L = size * (0.34 + rand() * 0.1), w = size * (0.09 + rand() * 0.04), a = rand() * Math.PI;
+  const dx = Math.cos(a) * L, dy = Math.sin(a) * L, d = `M${r3(c - dx)} ${r3(c - dy)}L${r3(c + dx)} ${r3(c + dy)}`;
+  return `<path d="${d}" stroke="${INK}" stroke-width="${r3(w + 0.06)}" stroke-linecap="round"/>`
+    + `<path d="${d}" stroke="#5a5040" stroke-width="${r3(w)}" stroke-linecap="round"/>`
+    + circle(c - dx, c - dy, w * 0.75, `fill="#3e362a" stroke="${INK}" stroke-width="0.02"`);
 }
 
 export const TREE_PREFIX = "tree-";

@@ -62,6 +62,12 @@ export const SPECIES = {
   // Souche : bois coupé, cernes, racines, un peu de mousse. Ne bouge pas au vent.
   stump: { form: "stump", trunkW: 0.32, rigid: true, bark: ["#3a2a1c", "#6a4c32"], wood: ["#b58a5c", "#d8b483"], leaves: { dark: "#2f5a22", mid: "#4f8a34", light: "#8cbf55" } },
   // Champignons : quelques chapeaux en grappe (cèpes bruns ou amanites rouges à points blancs).
+  // Bois mort du marais. Chicot : souche grise, cassée, aux longues racines nues, étalées.
+  snag: { form: "stump", roots: [6, 9], rootL: [0.5, 0.9], trunkW: 0.3, rigid: true, bark: ["#2e2820", "#5e5444"], wood: ["#6a5c46", "#8c7c60"], leaves: { dark: "#2f5a22", mid: "#4f8a34", light: "#8cbf55" } },
+  // Pneumatophores (« genoux » de cyprès) : bosses de bois qui sortent de l'eau.
+  knees: { form: "caps", count: [6, 12], capM: [0.16, 0.34], capColors: ["#4a3c2c", "#5e4c36", "#3c3024", "#6a5a44"], rigid: true, trunkW: 0.1, bark: ["#3a2c1e", "#6a5640"], leaves: { dark: "#3a2c1e", mid: "#5e4a34", light: "#8a7556" } },
+  // Tronc couché : bois gris, moussu, souche de racines à un bout, moignons de branches.
+  log: { form: "log", trunkW: 0.3, rigid: true, bark: ["#2c261e", "#665a48"], wood: ["#7a6a50", "#a08c6a"], leaves: { dark: "#2f5a22", mid: "#4f8a34", light: "#8cbf55" } },
   mushrooms: { form: "caps", rigid: true, trunkW: 0.1, bark: ["#5a4632", "#8a7050"], leaves: { dark: "#5a3a1c", mid: "#8a5a2c", light: "#c89a5c" } },
 
   /* Marais. Touffes (form « clump ») : tiges dressées, vues d'en haut, et feuilles en lanières. */
@@ -378,11 +384,12 @@ function growLily(rand, sp) {
 }
 
 /** Souche : racines qui plongent tout autour, plateau de bois coupé au centre. */
-function growStump(rand) {
+function growStump(rand, sp) {
   const segs = [], tips = [];
-  const nr = 4 + Math.floor(rand() * 3), ar = rand() * Math.PI * 2;
+  const [r0, r1] = sp.roots ?? [4, 6], [l0, l1] = sp.rootL ?? [0.3, 0.6];
+  const nr = r0 + Math.floor(rand() * (r1 - r0 + 1)), ar = rand() * Math.PI * 2;
   for (let i = 0; i < nr; i++) {
-    const a = ar + (i / nr) * Math.PI * 2 + (rand() - 0.5) * 0.6, L = 0.3 + rand() * 0.3;
+    const a = ar + (i / nr) * Math.PI * 2 + (rand() - 0.5) * 0.6, L = l0 + rand() * (l1 - l0);
     let prev = [Math.cos(a) * 0.2, Math.sin(a) * 0.2, 0.25], wa = 1.1;
     for (let k = 1; k <= 4; k++) {
       const t = k / 4, ab = a + (rand() - 0.5) * 0.3;
@@ -396,16 +403,56 @@ function growStump(rand) {
   return { segs, tips, stumpR: 0.36 + rand() * 0.06 };
 }
 
+/**
+ * Tronc couché : un fût un peu courbe qui s'affine, à plat ; à son pied, la galette de racines
+ * arrachées ; quelques moignons de branches cassées.
+ */
+function growLog(rand) {
+  const segs = [], tips = [], z = 0.12, bend = (rand() - 0.5) * 0.25, n = 6;
+  const at = (t) => [-1 + 2 * t, Math.sin(t * Math.PI) * bend, z];
+  let prev = at(0);
+  for (let k = 1; k <= n; k++) {
+    const q = at(k / n);
+    segs.push({ a: prev, b: q, w: 1 - 0.3 * ((k - 1) / n), w2: 1 - 0.3 * (k / n), d: 0 });
+    prev = q;
+  }
+  tips.push({ p: prev, dir: [1, 0, 0], d: 1, len: 0 });
+  // Racines au pied : en éventail, du côté de la souche.
+  const nr = 5 + Math.floor(rand() * 4);
+  for (let i = 0; i < nr; i++) {
+    const a = Math.PI + (i / (nr - 1) - 0.5) * 2.6 + (rand() - 0.5) * 0.3, L = 0.18 + rand() * 0.22;
+    let p0 = [-1 + Math.cos(a) * 0.05, Math.sin(a) * 0.12, z], wa = 0.55;
+    for (let k = 1; k <= 3; k++) {
+      const t = k / 3, ab = a + (rand() - 0.5) * 0.4;
+      const q = [-1 + Math.cos(ab) * (0.05 + L * t), Math.sin(ab) * (0.12 + L * t), z * (1 - 0.6 * t)];
+      segs.push({ a: p0, b: q, w: wa, w2: wa * 0.6, d: 1, root: true });
+      p0 = q; wa *= 0.6;
+    }
+    tips.push({ p: p0, dir: [Math.cos(a), Math.sin(a), 0], d: 1, len: L });
+  }
+  // Moignons de branches.
+  const nb = 2 + Math.floor(rand() * 3);
+  for (let i = 0; i < nb; i++) {
+    const t = 0.25 + rand() * 0.6, base = at(t), sgn = rand() < 0.5 ? -1 : 1;
+    const a = sgn * (0.7 + rand() * 0.6), L = 0.12 + rand() * 0.25;
+    const q = [base[0] + Math.cos(a) * L, base[1] + Math.sin(a) * L, z * 1.2];
+    segs.push({ a: base, b: q, w: 0.35, w2: 0.18, d: 1 });
+    tips.push({ p: q, dir: [Math.cos(a), Math.sin(a), 0], d: 1, len: L });
+  }
+  return { segs, tips, leaves: [] };
+}
+
 /** Champignons : quelques chapeaux serrés, une même espèce par grappe. */
-function growCaps(rand) {
+function growCaps(rand, sp) {
   const tips = [], leaves = [];
-  const red = rand() < 0.35, n = 3 + Math.floor(rand() * 6);
-  const colors = red ? ["#b8281c", "#c93a22", "#a51f18"] : ["#6e4422", "#8a5a2e", "#5c3a1e"];
+  const [c0, c1] = sp.count ?? [3, 8], [m0, m1] = sp.capM ?? [0.04, 0.11];
+  const red = !sp.capColors && rand() < 0.35, n = c0 + Math.floor(rand() * (c1 - c0 + 1));
+  const colors = sp.capColors ?? (red ? ["#b8281c", "#c93a22", "#a51f18"] : ["#6e4422", "#8a5a2e", "#5c3a1e"]);
   for (let i = 0; i < n; i++) {
     const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * 0.8;
-    const size = (0.04 + rand() * 0.07) / CASE_M;
+    const size = (m0 + rand() * (m1 - m0)) / CASE_M;
     const p = [Math.cos(a) * d, Math.sin(a) * d, size * (0.5 + rand())];
-    leaves.push({ cap: true, p, L: size, ang: rand() * Math.PI * 2, color: colors[Math.floor(rand() * 3)], dots: red, shade: rand(), seed: rand(), tp: 0 });
+    leaves.push({ cap: true, p, L: size, ang: rand() * Math.PI * 2, color: colors[Math.floor(rand() * colors.length)], dots: red, shade: rand(), seed: rand(), tp: 0 });
     tips.push({ p: [p[0], p[1], 0], dir: [1, 0, 0], d: 1, len: 0 });
   }
   return { segs: [], tips, leaves };
@@ -549,7 +596,7 @@ export function leafShape(l, kind, N = 36) {
 export function buildTree(kind, seed, radius, { detail = 1, rotation = 0, cull = true } = {}) {
   const sp = SPECIES[kind] ?? SPECIES.oak;
   const rand = mulberry32(seed >>> 0);
-  const grow = { conifer: growConifer, fern: growFern, stump: growStump, caps: growCaps, clump: growClump, lily: growLily }[sp.form] ?? growBroadleaf;
+  const grow = { conifer: growConifer, fern: growFern, stump: growStump, caps: growCaps, clump: growClump, lily: growLily, log: growLog }[sp.form] ?? growBroadleaf;
   const tree = fit(grow(rand, sp), radius);
   for (const g of tree.segs) if (g.w2 === undefined) g.w2 = g.w * 0.75;
   if (!tree.segs.length) tree.zmax = Math.max(0.05, ...(tree.leaves ?? []).map((l) => l.p[2]));

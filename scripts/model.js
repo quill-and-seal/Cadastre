@@ -159,7 +159,8 @@ export function normalizeMap(raw) {
       edge: q.edge && isTerrain(map, q.edge) ? q.edge : null,
       edgeWidth: round3(clamp(q.edgeWidth, 0.05, 3, 0.35)),
       flow: [1, -1, 0].includes(q.flow) ? q.flow : 1,
-      speed: round3(clamp(q.speed, FLOW_MIN_SPEED, FLOW_MAX_SPEED, 1))
+      speed: round3(clamp(q.speed, FLOW_MIN_SPEED, FLOW_MAX_SPEED, 1)),
+      ...(q.planks ? { planks: true } : {}), ...(q.b ? { b: true } : {})
     });
   }
   const wallIds = new Set(map.walls.map((w) => w.id));
@@ -370,6 +371,7 @@ export function updatePath(map, id, changes) {
   if (changes.closed != null) q.closed = !!changes.closed && q.nodes.length > 2;
   if (changes.flow != null && [1, -1, 0].includes(Number(changes.flow))) q.flow = Number(changes.flow);
   if (changes.speed != null) q.speed = round3(clamp(changes.speed, FLOW_MIN_SPEED, FLOW_MAX_SPEED, q.speed));
+  if (changes.planks != null) { if (changes.planks) q.planks = true; else delete q.planks; }
   return JSON.stringify(q) !== before;
 }
 

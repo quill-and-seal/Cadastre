@@ -19,7 +19,7 @@ const rgb = (c, a = 1) => `rgba(${c.map((v) => Math.round(Math.max(0, Math.min(2
 
 /**
  * Peint une tuile de sol.
- * @param {"litter"|"needles"} kind
+ * @param {"litter"|"needles"|"mud"} kind
  * @param {number} [ppc]
  * @param {number} [seed]
  * @returns {HTMLCanvasElement|OffscreenCanvas}
@@ -257,6 +257,54 @@ export function paintGround(kind, ppc = GROUND_PPC, seed = 1) {
     scatter(area * 6, 0.04, (qx, qy, rr) => sprout(qx, qy, pick(["#4a8a34", "#3d7a2c", "#5e9a3c"], rr), rr), (px, py) => fbm(px, py, ppc * 0.9, 50) > 0.55);
     scatter(area * 2.5, 0.03, (qx, qy) => flower(qx, qy, "rgba(245,245,240,0.95)"), (px, py) => fbm(px, py, ppc * 0.7, 60) > 0.62);
     relief(ppc * 2.2, 99, 0.85, 0.3);
+  } else if (kind === "mud") {
+    // Vase : terre brune gorgée d'eau. Zones luisantes (le ciel s'y reflète), flaques sombres
+    // bordées de clair, tiges de roseau couchées, algues vertes, quelques bulles.
+    // Vase olive-kaki (sèche) qui brunit et fonce là où elle est gorgée d'eau.
+    soilBase("#3a3420", "#6a6236", 13, 0.07);
+    crumbs(area * 500, ["#2e2a18", "#4a4428", "#7a7044", "#3a3018"], 0.006);
+    {
+      const g = x.getImageData(0, 0, T, T), d = g.data;
+      const sky = [118, 132, 128], water = [34, 44, 40];
+      for (let j = 0; j < T; j++) for (let i = 0; i < T; i++) {
+        const o = (j * T + i) * 4;
+        const wet = fbm(i, j, ppc * 1.5, 31), pud = fbm(i, j, ppc * 1.1, 41);
+        // Mouillé : plus sombre et un peu bleuté, avec des reflets allongés.
+        const kw = Math.max(0, Math.min(1, (wet - 0.5) / 0.15));
+        let c = [d[o], d[o + 1], d[o + 2]];
+        c = mix(c, mix(c, [44, 34, 22], 0.55), kw * 0.7);
+        const glint = vnoise(i, j, 0.25 * M, 33) * 0.6 + vnoise(i, j, 0.08 * M, 34) * 0.4;
+        c = mix(c, sky, kw * Math.max(0, glint - 0.62) * 0.8);
+        // Flaque : eau sombre, bord clair.
+        const kp = (pud - 0.7) / 0.04;
+        if (kp > -1) {
+          const inside = Math.max(0, Math.min(1, kp)), rim = Math.max(0, 1 - Math.abs(kp));
+          c = mix(c, mix(water, sky, Math.max(0, glint - 0.5) * 0.8), inside * 0.85);
+          c = mix(c, [96, 90, 70], rim * 0.35);
+        }
+        d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2];
+      }
+      x.putImageData(g, 0, 0);
+    }
+    const dry = (px, py) => fbm(px, py, ppc * 1.1, 41) < 0.68;
+    // Tiges et feuilles mortes de roseau, couchées.
+    scatter(area * 14, 0.5, (qx, qy, rr) => {
+      const a = rr() * 6.28, L = (0.15 + rr() * 0.45) * M, col = jitter(hex(pick(["#8a7448", "#9a8452", "#6e5a36", "#a89060"], rr)), 0.1, rr);
+      x.strokeStyle = "rgba(20,14,8,0.5)"; x.lineWidth = Math.max(0.8, 0.012 * M); x.lineCap = "round";
+      x.beginPath(); x.moveTo(qx, qy); x.lineTo(qx + Math.cos(a) * L, qy + Math.sin(a) * L); x.stroke();
+      x.strokeStyle = rgb(col, 0.85); x.lineWidth = Math.max(0.6, 0.007 * M);
+      x.beginPath(); x.moveTo(qx, qy); x.lineTo(qx + Math.cos(a) * L, qy + Math.sin(a) * L); x.stroke();
+    }, dry);
+    mossField(0.62, 45, ["#1c2a12", "#36521e", "#56762a", "#7c9a3a"], ppc * 1.2, area * 5000, 0.012, 0.7);
+    scatter(area * 0.5, 0.06, (qx, qy, rr) => pebble(qx, qy, 0.02 + rr() * 0.04, rr), dry);
+    // Bulles dans les flaques.
+    scatter(area * 6, 0.02, (qx, qy, rr) => {
+      const rad = (0.004 + rr() * 0.008) * M;
+      x.strokeStyle = "rgba(190,200,190,0.55)"; x.lineWidth = Math.max(0.5, rad * 0.3);
+      x.beginPath(); x.arc(qx, qy, rad, 0, 6.28); x.stroke();
+    }, (px, py) => !dry(px, py));
+    scatter(area * 4, 0.04, (qx, qy, rr) => sprout(qx, qy, pick(["#4a7a30", "#5e8a36"], rr), rr), dry);
+    relief(ppc * 2.2, 97, 0.88, 0.24);
   } else {
     // Sol d'aiguilles : peu de grain, aiguilles peu contrastées, mousse en coussins lisses.
     soilBase("#3a2414", "#5a3820", 7, 0.03);

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyBiome, sowBiome, biomeArea } from "../scripts/biomes.js";
+import { applyBiome, sowBiome, biomeArea, fireflySpots } from "../scripts/biomes.js";
 import { createMap, addProp, paintArea, normalizeMap, isEmpty } from "../scripts/model.js";
 import { rectRings, pointInRings } from "../scripts/poly.js";
 import { mulberry32 } from "../scripts/catalog.js";
@@ -76,4 +76,42 @@ test("eau peinte sous un arbre posé à la main : retiré ; arbre posé exprès 
   const again = addProp(map, "tree-oak", 5.5, 5.5);
   assert.equal(pruneBiome(map), 0);
   assert.ok(map.props.some((p) => p.id === again.id));
+});
+
+test("marais : flaques d'eau, nénuphars sur l'eau seulement, roseaux près de l'eau", async () => {
+  const { pruneBiome } = await import("../scripts/biomes.js");
+  const { waterRings } = await import("../scripts/render.js");
+  const P = await import("../scripts/poly.js");
+  const map = createMap({ width: 30, height: 20 });
+  const n = applyBiome(map, "marsh", mulberry32(9));
+  assert.ok(n > 0);
+  assert.equal(map.biome.id, "marsh");
+  const water = waterRings(map);
+  assert.ok(water.length > 0, "des flaques");
+  const of = (k) => map.props.filter((p) => p.type === `tree-${k}`);
+  assert.ok(of("lily").length > 0 && of("rush").length > 0);
+  for (const p of of("lily")) assert.ok(P.pointInRings(water, p.x, p.y), "nénuphar sur l'eau");
+  for (const p of of("rush")) assert.ok(!P.pointInRings(water, p.x, p.y), "jonc hors de l'eau");
+  const shore = P.offsetRings(water, 3.6);
+  for (const p of of("reed")) assert.ok(P.pointInRings(shore, p.x, p.y), "roseau près de l'eau");
+  // Le nettoyage garde les nénuphars sur l'eau.
+  const lilies = of("lily").length;
+  pruneBiome(map);
+  assert.equal(of("lily").length, lilies);
+  // Bois mort, ponts de planches d'une rive à l'autre, lucioles.
+  for (const p of of("knees")) assert.ok(P.pointInRings(water, p.x, p.y), "genoux de cyprès dans l'eau");
+  const bridges = map.paths.filter((q) => q.planks && q.b);
+  assert.ok(bridges.length > 0, "des ponts");
+  for (const q of bridges) {
+    const [a, b] = q.nodes;
+    assert.ok(!P.pointInRings(water, a.x, a.y) && !P.pointInRings(water, b.x, b.y), "pont posé sur deux rives");
+    assert.ok(P.pointInRings(water, (a.x + b.x) / 2, (a.y + b.y) / 2), "pont au-dessus de l'eau");
+  }
+  const flies = fireflySpots(map);
+  assert.ok(flies.length > 20);
+  // Réappliquer le biome remplace ses ponts.
+  applyBiome(map, "marsh", mulberry32(10));
+  assert.ok(map.paths.every((q) => !q.b || q.planks) && map.paths.filter((q) => q.b).length < bridges.length * 3);
+  applyBiome(map, null, mulberry32(1));
+  assert.equal(map.paths.filter((q) => q.b).length, 0);
 });
