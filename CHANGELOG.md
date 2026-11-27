@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.32
+
+- **L'eau ne se fige plus sous les arbres** : l'eau animée était masquée sous la couronne des arbres générés (comme du temps où ils étaient peints dans l'image de fond) ; on voyait l'eau figée du fond sous les branches. Les arbres générés étant dans leur propre calque, au-dessus de l'eau, elle continue maintenant de bouger dessous. Demande un réexport de la carte.
+
 ## 0.1.31
 
 - **Herbe plus belle vue de loin** : les brins animés ne s'affichent plus que de près. Sous environ 180 pixels d'écran par case, ils s'effacent en fondu (complètement sous 120) et laissent l'herbe figée de l'image de fond, la même, nette à tous les zooms avec Vellum : plus d'aspect moquette floue qui scintille, et l'affichage est plus léger. Ils reviennent en fondu en zoomant. Pas besoin de réexporter.

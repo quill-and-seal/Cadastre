@@ -134,10 +134,13 @@ export function waterFlag(map) {
     if (pts.length >= 2) masks = masks.concat(poly.strokeRings(q.closed ? [...pts, pts[0]] : pts, q.width / 2 + (q.edge ? q.edgeWidth : 0)));
   }
   for (const p of map.props ?? []) {
+    const def = propDef(map, p.type);
+    // Arbres générés : dessinés dans leur propre calque, au-dessus de l'eau animée ; l'eau continue
+    // donc de bouger sous leur couronne (masquée, elle se figeait sous les branches).
+    if (def?.proc) continue;
     const rings = propRings(map, p);
     if (!rings.length) continue;
     masks = masks.concat(rings);
-    const def = propDef(map, p.type);
     if (!def?.tree && poly.pointInRings(water, p.x, p.y)) {
       rocks.push({ x: r3(p.x), y: r3(p.y), r: r3(Math.max(def.w, def.h) * p.k * 0.45) });
     }

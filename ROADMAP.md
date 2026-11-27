@@ -41,6 +41,7 @@ Un seul modèle de carte vectoriel pour toutes les échelles : monde, région, v
 - 0.1.29 : ombres plus sombres, nettes et froides, peintes en dalles fixes ; diagnostic plus juste.
 - 0.1.30 : ombres encore plus sombres.
 - 0.1.31 : brins animés de près seulement, herbe du fond de loin.
+- 0.1.32 : eau animée sous les arbres générés.
 
 ## Biomes (V1 : 20 biomes, un par issue)
 
