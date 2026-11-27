@@ -12,7 +12,8 @@
  * Effets coupés (réglage du vent à 0), les arbres restent, immobiles.
  */
 import { diagLine, diagLoaded, diagMemory, textureBytes } from "./diagnostic.js";
-import { setShadowMask } from "./shadow-mask.js";
+import { shadeLayer, scheduleMask, SHADE_COLOR } from "./shade-layer.js";
+import { sunState } from "./sun.js";
 import { MODULE_ID, log } from "./constants.js";
 import { normalizeWind, WIND_LEVELS } from "./wind.js";
 import { gustAt, windClock } from "./grass.js";
@@ -22,13 +23,14 @@ import { pieceRecord } from "./tree-pack.js";
 /** Au-dessus de l'herbe (même rang, ordre 1), sous les tuiles et les jetons. */
 const SORT_LAYER = 100;
 /** Intensités des ombres (réglage), de légère à très marquée. */
-export const SHADOW_LEVELS = [0.35, 0.6, 0.8, 1];
 
 /**
  * Réglages du mouvement. MAX_TURN : rotation d'une branche de travers au vent par grand vent
  * (radians) ; SWAY : balancement propre ; STIFF / DAMP : ressort et amortissement.
  */
 const MAX_TURN = 0.11, SWAY = 0.035, STIFF = 9, DAMP = 3.2, CONIFER_SHIFT = 0.09;
+/** Déplacement de l'ombre d'un arbre sous le vent, par case de rayon et par unité de poussée. */
+const SHADOW_SWAY = 0.05;
 
 /** Poussée du vent sur l'arbre : la force réglée, modulée par la rafale locale (0..1 de l'herbe). */
 export const treePush = (strength, g) => strength * (0.35 + 0.9 * g);
@@ -95,16 +97,10 @@ export function treeSprites2(root, items, pages, { size, ox, oy, ppc, shadowPage
     // Scènes exportées avant les morceaux (0.1.17 à 0.1.20) : l'arbre d'une seule image, immobile.
     const pieces = t.pieces ?? [{ id: 0, page: t.page, u: t.u, v: t.v, w: t.size, h: t.size, ox: -t.half, oy: -t.half, ax: 0, ay: 0, lx: 0, ly: 0 }];
     setPieces(tr, pieces.map((q) => ({ ...q, tex: region(q) })).filter((q) => q.tex), tp, size);
-    // Ombre : immobile, à sa place sous l'arbre (pied du tronc en cx, cy de son image). Elle n'est
-    // pas affichée elle-même : ShadowTiles la peint une fois dans les dalles d'ombres.
+    // Ombre : silhouette de la couronne vue d'en haut (pied du tronc en cx, cy de son image),
+    // projetée selon le soleil par TreeShadows.
     const tex = t.s && sppc ? region({ page: t.s[0], u: t.s[1], v: t.s[2], w: t.s[3], h: t.s[4] }, shadowPages) : null;
-    if (tex) {
-      const [, , , w, h, cx, cy] = t.s;
-      const sh = tr.shadow = new PIXI.Sprite(tex);
-      sh.position.set(ox + (t.x - cx / sppc) * size, oy + (t.y - cy / sppc) * size);
-      sh.scale.set(size / sppc);
-      tr.sb = [t.x - cx / sppc, t.y - cy / sppc, t.x + (w - cx) / sppc, t.y + (h - cy) / sppc];
-    }
+    if (tex) tr.shadow = { tex, cx: t.s[5], cy: t.s[6], k: size / sppc };
     return tr;
   });
 }
@@ -126,6 +122,14 @@ export function stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated = 
     const k = tr.r * 0.8;
     const g0 = gustAt(tr.x - dir[0] * k, tr.y - dir[1] * k, t, wind), g1 = gustAt(tr.x, tr.y, t, wind), g2 = gustAt(tr.x + dir[0] * k, tr.y + dir[1] * k, t, wind);
     const conifer = tr.item.conifer, ppc = tr.ppc;
+    // Balancement de l'ombre (cases, au sommet de la couronne) : poussée sous le vent et oscillation.
+    {
+      const push = treePush(wind.strength, g1), h = Math.min(dt, 0.05);
+      const osc = Math.sin(t * 1.7 + tr.x * 3.1) * 0.02 * push;
+      const sw = tr.sway ?? (tr.sway = [0, 0]);
+      sw[0] += ((dir[0] * push * SHADOW_SWAY - dir[1] * osc) * tr.r - sw[0]) * Math.min(1, h * 3);
+      sw[1] += ((dir[1] * push * SHADOW_SWAY + dir[0] * osc) * tr.r - sw[1]) * Math.min(1, h * 3);
+    }
     for (const p of tr.parts) {
       if (p.base) continue;
       // Position de la branche le long du vent (-1 au vent, 1 sous le vent).
@@ -427,150 +431,103 @@ function drawFixed(renderer, objects, [wx, wy, ww, wh], ppc, { size, ox, oy }, m
 }
 
 /**
- * Ombres des arbres : elles ne bougent pas. Elles sont peintes une fois dans des dalles fixes de
- * SHADOW_TILE cases, côte à côte sans se chevaucher, posées dans le calque des arbres avant eux
- * (donc sur l'herbe). Les dalles à l'écran d'abord, les autres quelques millisecondes par image ;
- * une fois toutes peintes, les images d'ombres de chaque arbre sont rendues à la carte graphique.
- * L'intensité réglée est l'opacité du calque : rien à repeindre quand elle change.
+ * Ombres des arbres au soleil réglé (sun.js), posées dans le calque des ombres de la scène
+ * (shade-layer.js), sur l'herbe et sous les arbres. Chaque arbre : une tache sombre au pied, l'ombre
+ * du tronc jusqu'au bas de la couronne, puis la silhouette de la couronne (vue d'en haut) posée
+ * quelques fois entre sa hauteur basse et sa hauteur haute, le long des rayons : soleil haut, ombre
+ * ramassée sous l'arbre ; soleil bas, ombre allongée. Elle suit le balancement de l'arbre au vent.
+ * Scènes exportées en 0.1.27 à 0.1.36 : ombre déjà projetée dans l'image, posée telle quelle.
  */
-const SHADOW_TILE = 8;
-/** Finesse des dalles au plus (pixels par case), et leur total de pixels au plus. */
-const SHADOW_TILE_PPC = 96;
-const SHADOW_TILE_BUDGET = 16e6;
-/** Finesse du masque des ombres lu par l'eau (pixels par case) : il ne règle que les reflets. */
-const SHADOW_MASK_PPC = 16;
-/** Finesse de la gomme qui retire les ombres au-dessus de l'eau animée (pixels par case). */
-const WATER_ERASE_PPC = 16;
-
-/**
- * Gomme de l'eau animée : sur l'eau, l'ombre n'est pas posée par-dessus, c'est l'eau qui se dessine
- * à l'ombre (sans reflets, plus sombre). Image de l'eau (contours de l'export, îles comprises),
- * posée sur la scène, qui efface ce qu'elle couvre.
- * @param {number[][]} rings  contours de l'eau (cases, x, y à plat)
- */
-function waterEraser(rings, { size, ox, oy }) {
-  if (!rings?.length) return null;
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const r of rings) for (let i = 0; i < r.length; i += 2) {
-    x0 = Math.min(x0, r[i]); x1 = Math.max(x1, r[i]); y0 = Math.min(y0, r[i + 1]); y1 = Math.max(y1, r[i + 1]);
-  }
-  if (!(x1 > x0 && y1 > y0)) return null;
-  const ppc = Math.min(WATER_ERASE_PPC, 4096 / Math.max(x1 - x0, y1 - y0));
+const SHADOW_COPIES = 4;
+let footTex = null;
+function footTexture() {
+  if (footTex && !footTex.baseTexture.destroyed) return footTex;
   const c = document.createElement("canvas");
-  c.width = Math.ceil((x1 - x0) * ppc) + 2; c.height = Math.ceil((y1 - y0) * ppc) + 2;
+  c.width = c.height = 64;
   const x = c.getContext("2d");
-  x.beginPath();
-  for (const r of rings) {
-    for (let i = 0; i < r.length; i += 2) {
-      const px = (r[i] - x0) * ppc + 1, py = (r[i + 1] - y0) * ppc + 1;
-      if (i) x.lineTo(px, py); else x.moveTo(px, py);
-    }
-    x.closePath();
-  }
-  x.fillStyle = "#fff";
-  x.fill("evenodd");
-  const sprite = new PIXI.Sprite(PIXI.Texture.from(c));
-  sprite.position.set(ox + (x0 - 1 / ppc) * size, oy + (y0 - 1 / ppc) * size);
-  sprite.scale.set(size / ppc);
-  sprite.blendMode = PIXI.BLEND_MODES?.ERASE ?? 26;
-  return sprite;
+  const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, "rgba(255,255,255,1)"); g.addColorStop(1, "rgba(255,255,255,0)");
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+  return (footTex = PIXI.Texture.from(c));
 }
 
-export class ShadowTiles {
-  constructor(root, trees, { size, ox, oy, renderer, level, pages = [], waterRings = null }) {
-    this.size = size; this.ox = ox; this.oy = oy;
-    this.eraser = waterEraser(waterRings, { size, ox, oy });
-    this.renderer = renderer;
-    this.pages = pages;
-    this.layer = new PIXI.Container();
-    this.layer.eventMode = "none";
-    this.layer.alpha = level;
-    root.addChildAt(this.layer, 0);
-    const tiles = new Map();
-    for (const tr of trees) {
-      if (!tr.shadow) continue;
-      const [a, b, c, d] = tr.sb;
-      for (let ty = Math.floor(b / SHADOW_TILE); ty <= Math.floor(d / SHADOW_TILE); ty++) {
-        for (let tx = Math.floor(a / SHADOW_TILE); tx <= Math.floor(c / SHADOW_TILE); tx++) {
-          const id = `${tx},${ty}`;
-          let t = tiles.get(id);
-          if (!t) tiles.set(id, t = { tx, ty, shadows: [], rt: null, sprite: null });
-          t.shadows.push(tr.shadow);
-        }
+export class TreeShadows {
+  constructor(layer, trees, { size, ox, oy }) {
+    this.size = size;
+    this.group = layer.trees.addChild(new PIXI.Container());
+    this.trees = trees.filter((tr) => tr.shadow);
+    for (const tr of this.trees) {
+      const { tex, cx, cy, k } = tr.shadow;
+      const node = new PIXI.Container();
+      node.position.set(ox + tr.x * size, oy + tr.y * size);
+      const z = tr.item.z;
+      const parts = { copies: [] };
+      if (z) {
+        parts.foot = node.addChild(new PIXI.Sprite(footTexture()));
+        parts.foot.anchor.set(0.5);
+        parts.foot.width = parts.foot.height = tr.r * 1.2 * size;
+        parts.foot.tint = SHADE_COLOR;
+        parts.foot.alpha = 0.5;
+        parts.trunk = node.addChild(new PIXI.Sprite(PIXI.Texture.WHITE));
+        parts.trunk.anchor.set(0, 0.5);
+        parts.trunk.tint = SHADE_COLOR;
+        parts.trunk.alpha = 0.85;
+        parts.trunkW = Math.max(0.05, tr.r * 0.05) * size;
+      }
+      for (let i = 0; i < (z ? SHADOW_COPIES : 1); i++) {
+        const c = node.addChild(new PIXI.Sprite(tex));
+        c.anchor.set(cx / tex.width, cy / tex.height);
+        c.scale.set(k);
+        parts.copies.push(c);
+      }
+      node.parts = parts;
+      tr.shadowNode = node;
+      this.group.addChild(node);
+    }
+    // Le masque lu par l'eau couvre toute la carte : ombres mises à jour partout avant.
+    this.beforeMask = () => this.update(null, sunState());
+    (layer.beforeMask ??= new Set()).add(this.beforeMask);
+    this.layer = layer;
+    this.update(null, sunState());
+    scheduleMask();
+  }
+
+  /** Place les ombres (view : [x0, y0, x1, y1] en cases, null : toute la carte). */
+  update(view, sun) {
+    const { dir, len } = sun, size = this.size;
+    for (const tr of this.trees) {
+      const node = tr.shadowNode, P = node.parts, z = tr.item.z ?? [0, 0];
+      const sw = tr.sway ?? [0, 0];
+      if (view) {
+        const reach = z[1] * len + tr.r + 0.5;
+        const vis = tr.x + reach >= view[0] && tr.x - reach <= view[2] && tr.y + reach >= view[1] && tr.y - reach <= view[3];
+        node.visible = vis;
+        if (!vis) continue;
+      }
+      const top = Math.max(0.1, z[1]);
+      const n = tr.item.z ? Math.max(1, Math.min(SHADOW_COPIES, Math.ceil(((z[1] - z[0]) * len) / Math.max(0.3, tr.r * 0.7)) + 1)) : 1;
+      for (let i = 0; i < P.copies.length; i++) {
+        const c = P.copies[i];
+        c.visible = i < n;
+        if (!c.visible) continue;
+        const zz = n > 1 ? z[0] + ((z[1] - z[0]) * i) / (n - 1) : (z[0] + z[1]) / 2;
+        const f = zz / top;
+        c.position.set((dir[0] * zz * len + sw[0] * f) * size, (dir[1] * zz * len + sw[1] * f) * size);
+      }
+      if (P.trunk) {
+        const L = Math.max(0, z[0] * len) * size;
+        P.trunk.visible = L > 2;
+        P.trunk.rotation = Math.atan2(dir[1], dir[0]);
+        P.trunk.width = L;
+        P.trunk.height = P.trunkW;
       }
     }
-    this.tiles = [...tiles.values()];
-    this.todo = this.tiles.length;
-    const area = this.tiles.length * SHADOW_TILE * SHADOW_TILE;
-    this.ppc = Math.max(24, Math.min(SHADOW_TILE_PPC, Math.floor(Math.sqrt(SHADOW_TILE_BUDGET / Math.max(1, area)))));
-    this.bytes = 0;
-    this.trees = trees;
-    this.level0 = level;
-    this._mask(trees);
-  }
-
-  /** Masque des ombres de toute la carte, pour l'eau : dessiné une fois, tout petit. */
-  _mask(trees) {
-    const withShadow = trees.filter((tr) => tr.shadow);
-    if (!withShadow.length || !this.renderer) return;
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const tr of withShadow) {
-      x0 = Math.min(x0, tr.sb[0]); y0 = Math.min(y0, tr.sb[1]); x1 = Math.max(x1, tr.sb[2]); y1 = Math.max(y1, tr.sb[3]);
-    }
-    // Une case vide autour : hors du masque, l'eau lit « pas d'ombre ».
-    const rect = [Math.floor(x0) - 1, Math.floor(y0) - 1, Math.ceil(x1 - x0) + 3, Math.ceil(y1 - y0) + 3];
-    try {
-      const r = drawFixed(this.renderer, withShadow.map((tr) => tr.shadow), rect, SHADOW_MASK_PPC, this, false);
-      r.sprite.destroy();
-      this.maskRt = r.rt;
-      this.mask = { texture: r.rt, rect, level: this.level0 };
-      setShadowMask(this.mask);
-    } catch (error) {
-      log("Masque des ombres non dessiné", error);
-    }
-  }
-
-  set level(v) {
-    this.layer.alpha = v;
-    if (this.mask) this.mask.level = v;
-  }
-
-  /** Peint les dalles à l'écran, puis les autres petit à petit. */
-  update(view) {
-    if (!this.todo || !this.renderer) return;
-    const [x0, y0, x1, y1] = view;
-    const t0 = performance.now();
-    for (const t of this.tiles) {
-      if (t.sprite) continue;
-      const seen = (t.tx + 1) * SHADOW_TILE >= x0 && t.tx * SHADOW_TILE <= x1 && (t.ty + 1) * SHADOW_TILE >= y0 && t.ty * SHADOW_TILE <= y1;
-      if (!seen && performance.now() - t0 > BAKE_MS) continue;
-      const r = drawFixed(this.renderer, this.eraser ? [...t.shadows, this.eraser] : t.shadows, [t.tx * SHADOW_TILE, t.ty * SHADOW_TILE, SHADOW_TILE, SHADOW_TILE], this.ppc, this);
-      this.layer.addChild(r.sprite);
-      t.rt = r.rt; t.sprite = r.sprite; t.shadows = null;
-      this.bytes += r.bytes;
-      this.todo--;
-    }
-    if (!this.todo) this._release();
-    diagMemory("ombres", this.bytes + this._pageBytes());
-  }
-
-  _pageBytes() { return this.pages.reduce((n, p) => n + textureBytes(p.color?.baseTexture), 0); }
-
-  /** Toutes les dalles sont peintes : les images d'ombres des arbres ne servent plus. */
-  _release() {
-    for (const tr of this.trees) { tr.shadow?.destroy(); tr.shadow = null; }
-    this.eraser?.destroy(true);
-    this.eraser = null;
-    for (const p of this.pages) p.color?.destroy?.(true);
-    this.pages = [];
   }
 
   destroy() {
-    for (const t of this.tiles) t.rt?.destroy(true);
-    if (this.mask) setShadowMask(null);
-    this.maskRt?.destroy(true);
-    this._release();
-    diagMemory("ombres", 0);
+    this.layer.beforeMask?.delete(this.beforeMask);
+    if (!this.group.destroyed) this.group.destroy({ children: true });
+    scheduleMask();
   }
 }
 
@@ -586,45 +543,14 @@ export function expandItems(data) {
 
 let state = null;
 
-/** Contours de l'eau animée de la scène (l'animation de l'eau peut être coupée par réglage). */
-function animatedWater() {
-  try {
-    if (!Number(game.settings.get(MODULE_ID, "waterLevel"))) return null;
-  } catch { return null; }
-  return canvas.scene?.getFlag(MODULE_ID, "water")?.rings ?? null;
-}
-
-/** Intensité des ombres réglée (0..1). */
-function shadowLevel() {
-  try { return Number(game.settings.get(MODULE_ID, "treeShadow")) || SHADOW_LEVELS[3]; } catch { return SHADOW_LEVELS[3]; }
-}
-
 export function registerTrees() {
-  game.settings.register(MODULE_ID, "treeShadow", {
-    name: "CADASTRE.Settings.TreeShadow",
-    hint: "CADASTRE.Settings.TreeShadowHint",
-    scope: "world",
-    config: true,
-    type: Number,
-    choices: Object.fromEntries(SHADOW_LEVELS.map((n, i) => [n, `CADASTRE.Settings.TreeShadows.${i}`])),
-    default: SHADOW_LEVELS[3],
-    // Appliquée à l'affichage : rien à réexporter.
-    onChange: () => { if (state?.shadows) state.shadows.level = shadowLevel(); }
-  });
-  game.settings.register(MODULE_ID, "sunHeight", {
-    name: "CADASTRE.Settings.SunHeight",
-    hint: "CADASTRE.Settings.SunHeightHint",
-    scope: "world",
-    config: true,
-    type: String,
-    choices: { high: "CADASTRE.Settings.SunHeights.high", mid: "CADASTRE.Settings.SunHeights.mid", low: "CADASTRE.Settings.SunHeights.low" },
-    default: "mid"
-  });
   Hooks.on("canvasReady", () => refresh());
   // « Précharger chez les joueurs » de Vellum : les images des arbres et de leurs ombres partent avec la scène.
   Hooks.on("vellumPreload", (scene, add) => {
     const data = scene.getFlag(MODULE_ID, "trees");
     for (const p of [...(data?.pages ?? []), ...(data?.shadows?.pages ?? [])]) add(p.color);
+    const shade = scene.getFlag(MODULE_ID, "shade");
+    if (shade?.src) add(shade.src);
   });
   Hooks.on("canvasTearDown", () => teardown());
   Hooks.on("updateScene", (scene, changes) => {
@@ -645,6 +571,7 @@ function teardown() {
   state.stats?.remove();
   diagMemory("arbres", 0);
   diagMemory("arbres affinés", 0);
+  diagMemory("ombres des arbres", 0);
   if (state.root && !state.root.destroyed) state.root.destroy({ children: true });
   state = null;
 }
@@ -686,13 +613,14 @@ async function refresh() {
 
     const trees = treeSprites2(root, expandItems(data), pages, { size, ox, oy, ppc, shadowPages, sppc: data.shadows?.ppc ?? 0 });
     // Ombres (scènes exportées depuis la 0.1.27 ; avant, elles sont dans l'image de fond).
-    const shadows = me.shadows = shadowPages.length
-      ? new ShadowTiles(root, trees, { size, ox, oy, renderer: canvas.app.renderer, level: shadowLevel(), pages: shadowPages, waterRings: animatedWater() })
-      : null;
+    const layer = shadowPages.length ? shadeLayer() : null;
+    const shadows = me.shadows = layer ? new TreeShadows(layer, trees, { size, ox, oy }) : null;
+    me.shadowPages = shadowPages;
     const sharpener = me.sharpener = new TreeSharpener(trees, size, pages);
     sharpener.renderer = canvas.app.renderer;
     const baker = me.baker = new TreeBaker(root, trees, { size, ox, oy, renderer: canvas.app.renderer });
     const stats = me.stats = diagLine("Arbres");
+    diagMemory("ombres des arbres", shadowPages.reduce((n, p) => n + textureBytes(p.color?.baseTexture), 0));
     const pageBytes = pages.reduce((n, p) => n + textureBytes(p.color?.baseTexture), 0);
     diagMemory("arbres", pageBytes);
     let frames = 0, cpuMs = 0, lastStats = performance.now();
@@ -707,9 +635,9 @@ async function refresh() {
       const x1 = (Math.max(p0.x, p1.x) - ox) / size, y1 = (Math.max(p0.y, p1.y) - oy) / size;
       const viewPpc = size * Math.abs(canvas.stage.scale.x);
       // Dézoomé : forêts regroupées en quelques images fixes, rien à animer.
-      shadows?.update([x0, y0, x1, y1]);
       if (!baker.update(viewPpc * (r.resolution ?? 1), [x0, y0, x1, y1])) stepTrees(trees, t, dt, wind, dir, [x0, y0, x1, y1], animated, viewPpc);
       sharpener.update(viewPpc * (r.resolution ?? 1), performance.now(), [x0, y0, x1, y1]);
+      shadows?.update([x0, y0, x1, y1], sunState());
       if (stats) {
         frames++; cpuMs += performance.now() - c0;
         const now = performance.now();

@@ -12,6 +12,8 @@
  *   exportMap(map, opts)   : exporte des données de carte en scène (voir export.js)
  *   renderSVG(map, opts)   : rendu SVG d'une carte
  *   model                  : fonctions du modèle de carte (voir model.js)
+ *   setSunTime(h)          : heure du soleil (5 à 21), toutes les ombres suivent chez tous les joueurs
+ *   sunState()             : soleil actuel (direction et longueur des ombres)
  */
 import { MODULE_ID, log } from "./constants.js";
 import { CadastreEditorApp, CadastreManagerApp } from "./app.js";
@@ -22,6 +24,8 @@ import { mergeAssets } from "./library.js";
 import { registerWater } from "./water-layer.js";
 import { registerWind } from "./wind-layer.js";
 import { registerTrees } from "./tree-layer.js";
+import { registerSun, setSunTime, sunState } from "./sun.js";
+import { registerShade } from "./shade-layer.js";
 import { isMapEntry } from "./storage.js";
 import { exportMap } from "./export.js";
 import { registerBackground } from "./pyramid-export.js";
@@ -31,7 +35,7 @@ import * as model from "./model.js";
 
 Hooks.once("init", () => {
   // Chaque partie s'enregistre à part : si l'une échoue, les autres (eau, vent) restent actives.
-  for (const [name, register] of [["bibliothèque", registerLibrarySettings], ["eau", registerWater], ["vent", registerWind], ["arbres", registerTrees], ["fond", registerBackground], ["diagnostic", registerDiagnostic]]) {
+  for (const [name, register] of [["bibliothèque", registerLibrarySettings], ["eau", registerWater], ["vent", registerWind], ["soleil", registerSun], ["ombres", registerShade], ["arbres", registerTrees], ["fond", registerBackground], ["diagnostic", registerDiagnostic]]) {
     try {
       register();
     } catch (error) {
@@ -40,6 +44,9 @@ Hooks.once("init", () => {
   }
   game.modules.get(MODULE_ID).api = {
     openManager: () => CadastreManagerApp.open(),
+    // Heure du soleil (5 à 21) : toutes les ombres de la scène suivent, chez tous les joueurs.
+    setSunTime,
+    sunState,
     openLibrary: () => CadastreLibraryApp.open(),
     library: {
       get: getLibrary,

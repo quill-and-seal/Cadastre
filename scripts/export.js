@@ -16,7 +16,8 @@ import { paintStillWater } from "./water-gl.js";
 import { buildWallData, textureScale } from "./walls.js";
 import { isEmpty } from "./model.js";
 import { TREE_BY_TYPE } from "./trees.js";
-import { packTrees, TREE_PAGE, treePpc, sunFactor } from "./tree-pack.js";
+import { packTrees, TREE_PAGE, treePpc } from "./tree-pack.js";
+import { heightSVG, HEIGHT_PPC, MAX_HEIGHT } from "./height-export.js";
 import { makeCanvas } from "./tree-paint.js";
 import { TERRAINS, BIOME_SOILS } from "./catalog.js";
 import { loadGroundTile } from "./ground-tiles.js";
@@ -159,7 +160,8 @@ const canvasBlob = async (canvas, type, quality) => (canvas.convertToBlob
 
 /** Arbres générés, avec la progression affichée. */
 async function exportTrees(map) {
-  const ppc = treePpc(map.gridSize), sun = sunFactor();
+  // sun = 0 : silhouettes vues d'en haut, la scène les projette selon l'heure du soleil.
+  const ppc = treePpc(map.gridSize), sun = 0;
   const total = map.props.filter((p) => TREE_BY_TYPE.get(p.type)?.proc).length;
   if (!total) return packTrees(map, ppc, { sun });
   const label = (done) => game.i18n.format("CADASTRE.Export.Trees", { done, total });
@@ -271,6 +273,20 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
   }
   preview.width = preview.height = 0;
   const treeFlag = trees.items.length ? await uploadTrees(map, trees) : null;
+  // Objets et murs : carte des hauteurs, d'où la scène tire leurs ombres selon l'heure du soleil.
+  let shadeFlag = null;
+  try {
+    const ppc = Math.min(HEIGHT_PPC, 4096 / Math.max(map.width, map.height));
+    const svg = heightSVG(map, resolve, ppc);
+    if (svg) {
+      const c = await rasterizeCanvas([svg]);
+      const blob = await new Promise((done) => c.toBlob(done, "image/png"));
+      c.width = c.height = 0;
+      shadeFlag = { v: 1, src: await uploadImage(blob, "png", map.name, "-hauteurs"), width: map.width, height: map.height, maxHeight: MAX_HEIGHT };
+    }
+  } catch (error) {
+    log("Ombres des objets et des murs non exportées", error);
+  }
 
   const sceneData = {
     width: sceneWidth,
@@ -310,6 +326,8 @@ export async function exportMap(map, { scene = null, sourceId = null } = {}) {
   // Arbres générés : animés par le calque du module (tree-layer.js).
   if (tilesFlag) await scene.setFlag(MODULE_ID, "tiles", tilesFlag);
   else if (scene.getFlag(MODULE_ID, "tiles")) await scene.unsetFlag(MODULE_ID, "tiles");
+  if (shadeFlag) await scene.setFlag(MODULE_ID, "shade", shadeFlag);
+  else if (scene.getFlag(MODULE_ID, "shade")) await scene.unsetFlag(MODULE_ID, "shade");
   if (treeFlag) await scene.setFlag(MODULE_ID, "trees", treeFlag);
   else if (scene.getFlag(MODULE_ID, "trees")) await scene.unsetFlag(MODULE_ID, "trees");
   await refreshThumbnail(scene);

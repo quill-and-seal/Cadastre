@@ -370,21 +370,16 @@
         "300": "Very fine (300 px per square, recommended)",
         "400": "Maximum (400 px per square)"
       },
-      "TreeShadow": "Tree shadow intensity",
-      "TreeShadowHint": "Strength of the shadows trees cast on grass and ground (very dark blue-green). Applied immediately, no re-export needed (scenes exported with 0.1.27 or later; the crisper, cooler shadows of 0.1.30 need a re-export).",
+      "TreeShadow": "Shadow intensity",
+      "TreeShadowHint": "Strength of the shadows of trees, objects and walls. Applied immediately, no re-export needed.",
       "TreeShadows": {
         "0": "Very light",
         "1": "Light",
         "2": "Normal",
         "3": "Strong (default)"
       },
-      "SunHeight": "Sun height",
-      "SunHeightHint": "The lower the sun, the longer tree shadows get, reaching out from under the canopies. Applied on the next map export.",
-      "SunHeights": {
-        "high": "High (noon, short shadows)",
-        "mid": "Medium",
-        "low": "Low (morning or evening, long shadows)"
-      }
+      "SunTime": "Sun time",
+      "SunTimeHint": "Time of day in Cadastre scenes, from 5 to 21. Every shadow (trees, objects, walls) turns and stretches live for every player: the sun rises in the east, is south at noon (short shadows towards the top of the map), sets in the west. Macro: game.modules.get(\"cadastre\").api.setSunTime(18)."
     }
   }
 }

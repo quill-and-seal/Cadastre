@@ -17,7 +17,7 @@ self.onmessage = async (event) => {
     }
     const shadow = sprite.shadow.transferToImageBitmap();
     const pieces = sprite.pieces.map(({ canvas, ...p }) => ({ ...p, z: Number.isFinite(p.z) ? p.z : -1e9, img: canvas.transferToImageBitmap() }));
-    self.postMessage({ id, half: sprite.half, shadowW: sprite.shadowW, shadowH: sprite.shadowH, shadow, pieces, conifer: sprite.conifer, rigid: sprite.rigid },
+    self.postMessage({ id, half: sprite.half, shadowW: sprite.shadowW, shadowH: sprite.shadowH, shadow, pieces, conifer: sprite.conifer, rigid: sprite.rigid, zlo: sprite.zlo, zhi: sprite.zhi },
       [shadow, ...pieces.map((p) => p.img)]);
   } catch (error) {
     self.postMessage({ id, error: String(error?.stack ?? error) });

@@ -370,21 +370,16 @@
         "300": "Très fin (300 px par case, recommandé)",
         "400": "Maximal (400 px par case)"
       },
-      "TreeShadow": "Intensité des ombres des arbres",
-      "TreeShadowHint": "Force des ombres portées par les arbres sur l'herbe et le sol (ombres d'un bleu-vert très sombre). Appliquée tout de suite, sans réexport (scènes exportées depuis la 0.1.27 ; les ombres plus nettes et plus froides de la 0.1.30 demandent un réexport).",
+      "TreeShadow": "Intensité des ombres",
+      "TreeShadowHint": "Force des ombres des arbres, des objets et des murs. Appliquée tout de suite, sans réexport.",
       "TreeShadows": {
         "0": "Très légère",
         "1": "Légère",
         "2": "Normale",
         "3": "Marquée (par défaut)"
       },
-      "SunHeight": "Hauteur du soleil",
-      "SunHeightHint": "Plus le soleil est bas, plus les ombres des arbres s'allongent et sortent de sous les couronnes. Prise en compte au prochain export de la carte.",
-      "SunHeights": {
-        "high": "Haut (midi, ombres courtes)",
-        "mid": "Moyen",
-        "low": "Bas (matin ou soir, ombres longues)"
-      }
+      "SunTime": "Heure du soleil",
+      "SunTimeHint": "Heure du jour dans les scènes de Cadastre, de 5 h à 21 h. Toutes les ombres (arbres, objets, murs) tournent et s'allongent en direct, chez tous les joueurs : le soleil se lève à l'est, passe au sud à midi (ombres courtes vers le haut de la carte), se couche à l'ouest. Macro : game.modules.get(\"cadastre\").api.setSunTime(18)."
     }
   }
 }

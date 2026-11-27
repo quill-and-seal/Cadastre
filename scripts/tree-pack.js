@@ -4,18 +4,12 @@
  * tree-layer.js fait pivoter au vent ; son ombre est rangée dans des pages à part, posées par le
  * même calque entre l'herbe et les arbres.
  */
-import { MODULE_ID } from "./constants.js";
 import { TREE_BY_TYPE, treeRadius } from "./trees.js";
 import { treeSprites } from "./tree-sprites.js";
-import { makeCanvas, SUN_HEIGHTS } from "./tree-paint.js";
+import { makeCanvas } from "./tree-paint.js";
 
 /** Finesse des ombres au plus (pixels par case) : leur bord est flou, inutile d'en garder plus. */
 export const SHADOW_PPC = 96;
-
-/** Allongement des ombres selon le réglage « Hauteur du soleil ». */
-export function sunFactor() {
-  try { return SUN_HEIGHTS[game.settings.get(MODULE_ID, "sunHeight")] ?? SUN_HEIGHTS.mid; } catch { return SUN_HEIGHTS.mid; }
-}
 
 /** Taille d'une page d'images d'arbres, en pixels. */
 export const TREE_PAGE = 4096;
@@ -117,7 +111,8 @@ export async function packTrees(map, ppc, { sun = 1, onProgress = null } = {}) {
     // Modèle : ce que partagent les plantes identiques ; kind, seed, radius, rot : de quoi le
     // redessiner plus fin quand on zoome (tree-layer.js).
     const m = out.models.length;
-    out.models.push({ ppc: req.ppc, half: r.half, radius: req.radius, kind: req.kind, seed: req.seed, rot: req.rotation, conifer: r.conifer, rigid: r.rigid, pieces, ...(s ? { s } : {}) });
+    out.models.push({ ppc: req.ppc, half: r.half, radius: req.radius, kind: req.kind, seed: req.seed, rot: req.rotation, conifer: r.conifer, rigid: r.rigid, pieces, ...(s ? { s } : {}),
+      z: [Math.round((r.zlo ?? 0) * 100) / 100, Math.round((r.zhi ?? 0) * 100) / 100] });
     for (const { p, spin } of same) {
       // spin : rotation appliquée à l'affichage (petites plantes).
       out.items.push({ x: p.x, y: p.y, m, spin, radius: req.radius });

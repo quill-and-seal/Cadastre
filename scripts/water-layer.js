@@ -15,6 +15,7 @@ import { MODULE_ID, log } from "./constants.js";
 import { diagLine, diagLoaded } from "./diagnostic.js";
 import { getShadowMask } from "./shadow-mask.js";
 import { refreshTrees } from "./tree-layer.js";
+import { rebuildShade } from "./shade-layer.js";
 import {
   buildField, fieldPixels, coastPixels, waterPixels, normalizeWater, surfaceUniforms, bedUniforms, bedLayout, quadTriangles, waterVisible,
   WaterSim, WATER_LEVELS, SURFACE_VERT, SURFACE_FRAG, BED_FRAG, FLOAT_VERT, FLOAT_FRAG, QUAD_CORNERS, INSTANCE_FLOATS
@@ -42,7 +43,7 @@ export function registerWater() {
     },
     default: WATER_LEVELS.FULL,
     // Les ombres des arbres sont gommées au-dessus de l'eau animée seulement : elles suivent.
-    onChange: () => { refresh(); refreshTrees(); }
+    onChange: () => { refresh(); rebuildShade(); refreshTrees(); }
   });
   Hooks.on("canvasReady", () => refresh());
   Hooks.on("canvasTearDown", () => teardown());

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.37
+
+- **Soleil qui tourne : ombres dynamiques.** Nouveau réglage **Heure du soleil** (5 h à 21 h), changeable en pleine partie : toutes les ombres tournent et s'allongent en direct, chez tous les joueurs. Le soleil se lève à l'est, passe au sud à midi (ombres courtes vers le haut de la carte), se couche à l'ouest ; à l'aube et au crépuscule, ombres longues et plus pâles. Macro : `game.modules.get("cadastre").api.setSunTime(18)`. Remplace le réglage « Hauteur du soleil ».
+- **Ombres des arbres au vent** : l'ombre de chaque arbre (pied, tronc, couronne projetée selon sa hauteur) suit son balancement.
+- **Ombres des objets et des murs** : elles ne sont plus seulement une petite ombre fixe dans l'image de fond ; une carte des hauteurs exportée avec la scène les projette selon le soleil. L'intérieur des pièces reste à l'abri du soleil.
+- Toutes les ombres sont dans un même calque (sur l'herbe, sous les arbres), aplaties pour ne pas s'additionner, et gommées sur l'eau animée, qui se dessine elle-même à l'ombre (masque mis à jour quand le soleil change).
+- Réglage « Intensité des ombres » : s'applique aussi aux objets et aux murs.
+- **Demande un réexport des cartes.** Une scène exportée avant garde ses ombres d'arbres fixes, posées telles quelles.
+
 ## 0.1.36
 
 - **Éditeur : l'herbe animée ne passe plus au-dessus des arbres.** L'aperçu du vent était dessiné par-dessus les chemins, objets, arbres et murs ; il est maintenant entre le sol (et l'eau) et eux, comme dans la scène.

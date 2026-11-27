@@ -13,8 +13,6 @@ const INK = "#13221a", INK_A = "rgba(19,34,26,0.7)";
 const LIGHT = norm([-0.55, -0.7, 0.9]);
 /** Décalage de l'ombre par case de hauteur, soleil haut (lumière en haut à gauche). */
 export const SHADOW_SHIFT = [0.147, 0.193];
-/** Hauteurs du soleil : allongement des ombres (réglage « Hauteur du soleil »). */
-export const SUN_HEIGHTS = { high: 1, mid: 1.8, low: 2.8 };
 /**
  * Les ombres sont dessinées à pleine force (silhouette, et plus sombre au pied du tronc) ; leur
  * intensité est appliquée à l'affichage (réglage « Intensité des ombres »). Aperçu de l'éditeur :
@@ -49,7 +47,7 @@ export function spriteLayout(built, ppc, sun = 1) {
   const { tree } = built;
   const half = Math.ceil((tree.R + SPRITE_MARGIN) * ppc);
   const sx = Math.ceil(tree.zmax * SHADOW_SHIFT[0] * sun * ppc), sy = Math.ceil(tree.zmax * SHADOW_SHIFT[1] * sun * ppc);
-  const blur = Math.ceil(shadowBlur(ppc, sun) * 2);
+  const blur = Math.ceil(shadowBlur(ppc, Math.max(1, sun)) * 2);
   return {
     size: half * 2, half,
     shadow: { w: half * 2 + sx + blur, h: half * 2 + sy + blur, cx: half, cy: half }
@@ -99,10 +97,14 @@ export function paintTree(built, ppc, { wind = true, sun = 1 } = {}) {
       s.beginPath(); s.ellipse(c[0] + Math.cos(l.ang) * r, c[1] + Math.sin(l.ang) * r, r * 1.05, Math.max(0.5, r * (l.needle ? 0.9 : l.W * 2 * l.f)), l.ang, 0, Math.PI * 2); s.fill();
     }
     const sc = shadow.getContext("2d");
-    sc.save(); sc.globalAlpha = SHADOW_BODY; sc.filter = `blur(${shadowBlur(S, sun)}px)`; sc.drawImage(raw, 0, 0); sc.restore();
-    const g0 = sc.createRadialGradient(cx, cy, 0, cx, cy, tree.R * S * 0.6);
-    g0.addColorStop(0, `rgba(0,0,0,${SHADOW_FOOT})`); g0.addColorStop(1, "rgba(0,0,0,0)");
-    sc.fillStyle = g0; sc.beginPath(); sc.arc(cx, cy, tree.R * S * 0.6, 0, Math.PI * 2); sc.fill();
+    sc.save(); sc.globalAlpha = SHADOW_BODY; sc.filter = `blur(${shadowBlur(S, Math.max(1, sun))}px)`; sc.drawImage(raw, 0, 0); sc.restore();
+    // sun = 0 : silhouette vue d'en haut, que la scène projette elle-même selon l'heure (le pied
+    // du tronc y est dessiné à part) ; sinon, ombre déjà projetée, assombrie au pied du tronc.
+    if (sun > 0) {
+      const g0 = sc.createRadialGradient(cx, cy, 0, cx, cy, tree.R * S * 0.6);
+      g0.addColorStop(0, `rgba(0,0,0,${SHADOW_FOOT})`); g0.addColorStop(1, "rgba(0,0,0,0)");
+      sc.fillStyle = g0; sc.beginPath(); sc.arc(cx, cy, tree.R * S * 0.6, 0, Math.PI * 2); sc.fill();
+    }
     sc.globalCompositeOperation = "source-in";
     sc.fillStyle = SHADOW_COLOR; sc.fillRect(0, 0, L.shadow.w, L.shadow.h);
     sc.globalCompositeOperation = "source-over";
@@ -298,7 +300,11 @@ export function paintTree(built, ppc, { wind = true, sun = 1 } = {}) {
   }
   // Le morceau 0 (tronc, charpentières) en dessous, puis les branches de la plus basse à la plus haute.
   pieces.sort((a, b) => a.z - b.z);
-  return { ...out, pieces, rigid: !!sp.rigid, conifer: !!tree.pine };
+  // Hauteurs de la couronne (cases) : bas (un cinquième des feuilles plus bas) et haut, pour
+  // projeter l'ombre selon le soleil.
+  const zs = (leaves ?? []).map((l) => l.p[2]).sort((a, b) => a - b);
+  const zhi = zs.length ? zs[zs.length - 1] : tree.zmax, zlo = zs.length ? zs[Math.floor(zs.length * 0.2)] : tree.zmax * 0.5;
+  return { ...out, pieces, rigid: !!sp.rigid, conifer: !!tree.pine, zlo, zhi };
 }
 
 /** Dessus d'une souche : écorce, bois coupé, cernes, fentes et mousse. */

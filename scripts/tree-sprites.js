@@ -70,7 +70,7 @@ class SpritePool {
         job.resolve({ half: sprite.half, shadowW: sprite.shadowW, shadowH: sprite.shadowH, blob });
       } else {
         const pieces = sprite.pieces.map(({ canvas, ...p }) => ({ ...p, z: Number.isFinite(p.z) ? p.z : -1e9, img: canvas }));
-        job.resolve({ half: sprite.half, shadowW: sprite.shadowW, shadowH: sprite.shadowH, shadow: sprite.shadow, pieces, conifer: sprite.conifer, rigid: sprite.rigid });
+        job.resolve({ half: sprite.half, shadowW: sprite.shadowW, shadowH: sprite.shadowH, shadow: sprite.shadow, pieces, conifer: sprite.conifer, rigid: sprite.rigid, zlo: sprite.zlo, zhi: sprite.zhi });
       }
     } catch (error) {
       job.reject(error);
