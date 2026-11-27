@@ -244,8 +244,13 @@
         "calm": "Eau calme",
         "erase": "Gomme"
       },
+      "CurrentsGenerate": "Générer les courants",
+      "CurrentsGenerateHint": "Pose des courants le long des chenaux de toute l'eau de la carte, d'une sortie de la carte à l'autre, à la vitesse choisie. Les courants générés avant sont remplacés, ceux tracés à la main restent.",
+      "CurrentsClear": "Retirer",
+      "CurrentsClearHint": "Retire les courants générés (ceux tracés à la main restent).",
+      "CurrentsNone": "Aucun chenal assez long pour un courant (un étang rond reste calme).",
       "CurrentNotes": {
-        "draw": "Glisse dans le sens du courant ; il se répartit entre les traits et s'éteint contre les berges. Clic sur une rivière : son courant.",
+        "draw": "Glisse dans le sens du courant : l'eau suit l'élan dans tout le chenal, plus vite dans l'étroit, et contourne les îlots. « Générer les courants » en pose le long des chenaux. Clic sur une rivière : son courant.",
         "calm": "Peins une zone sans courant (Alt : l'efface).",
         "erase": "Efface les courants tracés et l'eau calme sous la gomme."
       },

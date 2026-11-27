@@ -19,6 +19,7 @@ import { WaterPreview } from "./water-preview.js";
 import { normalizeWater, WATER_TEXTURES } from "./water.js";
 import { WATER_TYPES, paintDepth, paintZone, paintCalm, addCurrent, eraseCurrents, currentSamples, CURRENT_SPEED } from "./water-data.js";
 import { normalizeWind } from "./wind.js";
+import { generateCurrents } from "./current-gen.js";
 
 /** Réglages du vent dans le panneau Carte : champ, clé, bornes, pas, affichage. */
 const pct = (v) => `${Math.round(v * 100)} %`;
@@ -772,6 +773,9 @@ export class MapEditor {
       if (o.currentMode === "draw") html += title("CADASTRE.Panel.FlowSpeed") + slider("currentSpeed", o.currentSpeed, CURRENT_SPEED[0], CURRENT_SPEED[1], 0.1);
       else html += radius();
       html += note(`CADASTRE.Panel.CurrentNotes.${o.currentMode}`);
+      // Courants posés d'office le long des chenaux de toute l'eau (ceux tracés à la main restent).
+      html += `<div class="cad-row"><button type="button" data-action="currents-generate" title="${esc(t("CADASTRE.Panel.CurrentsGenerateHint"))}"><i class="fa-solid fa-water"></i> ${esc(t("CADASTRE.Panel.CurrentsGenerate"))}</button>`
+        + (this.map.waterData.currents.some((c) => c.gen) ? `<button type="button" data-action="currents-clear" class="cad-danger" title="${esc(t("CADASTRE.Panel.CurrentsClearHint"))}"><i class="fa-solid fa-xmark"></i> ${esc(t("CADASTRE.Panel.CurrentsClear"))}</button>` : "") + `</div>`;
       // Rivière choisie d'un clic : sens et vitesse de son courant.
       const q = this.selection?.type === "path" && this.map.paths.find((x) => x.id === this.selection.id && x.terrain === "water");
       if (q) {
@@ -1171,6 +1175,18 @@ export class MapEditor {
       case "delete": return this._deleteSelection();
       case "duplicate": return this._duplicateSelection();
       case "open-library": return this.onOpenLibrary?.();
+      case "currents-generate":
+      case "currents-clear": {
+        this._begin();
+        const before = JSON.stringify(this.map.waterData.currents);
+        if (b.dataset.action === "currents-generate") {
+          const s = this.opts.currentSpeed;
+          const n = generateCurrents(this.map, mulberry32((Date.now() ^ (Math.random() * 2 ** 32)) >>> 0), { speed: [s * 0.8, s * 1.2] });
+          if (!n) globalThis.ui?.notifications?.info?.(this.t("CADASTRE.Panel.CurrentsNone"));
+        } else this.map.waterData.currents = this.map.waterData.currents.filter((c) => !c.gen);
+        this._commit(JSON.stringify(this.map.waterData.currents) !== before, { terrain: false });
+        return this._renderPanel();
+      }
       case "biome-apply":
       case "biome-clear": {
         // Toute la carte : sol du biome en fond, végétation semée partout où elle peut pousser

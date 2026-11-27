@@ -346,3 +346,25 @@ test("courant tracé : même débit partout, plus vif dans l'étroit, nul dans u
   assert.ok(at(10, 5).vx > 0.1, "tout le chenal avance, pas seulement le trait");
   assert.ok(Math.hypot(at(7, 16).vx, at(7, 16).vy) < 0.05, "bras sans issue : eau dormante");
 });
+
+test("génération des courants : le long des chenaux peints à la main, d'une sortie de la carte à l'autre", async () => {
+  const { generateCurrents } = await import("../scripts/current-gen.js");
+  const { addCurrent } = await import("../scripts/water-data.js");
+  const R = (x0, y0, x1, y1) => [[x0, y0, x1, y0, x1, y1, x0, y1]];
+  const map = createMap({ width: 40, height: 30 });
+  paintArea(map, R(0, 5, 20, 9), "water");
+  paintArea(map, R(16, 5, 20, 30), "water");
+  paintArea(map, R(26, 4, 34, 12), "water"); // étang rond : calme
+  const hand = addCurrent(map.waterData, [[17, 20], [19, 20]], 1);
+  let k = 1;
+  const rand = () => ((k = (k * 16807) % 2147483647) / 2147483647);
+  assert.equal(generateCurrents(map, rand), 1);
+  const c = map.waterData.currents.find((x) => x.gen);
+  const ends = [c.pts[0], c.pts.at(-1)].map(([x, y]) => (x < 1 ? "gauche" : y > 29 ? "bas" : "?")).sort();
+  assert.deepEqual(ends, ["bas", "gauche"], "de la sortie du bas à celle de gauche");
+  assert.ok(c.pts.every(([x, y]) => (y >= 5 && y <= 9) || (x >= 16 && x <= 20)), "dans le chenal");
+  // Régénérer remplace les courants générés, garde ceux tracés à la main.
+  generateCurrents(map, rand);
+  assert.equal(map.waterData.currents.filter((x) => x.gen).length, 1);
+  assert.ok(map.waterData.currents.includes(hand));
+});

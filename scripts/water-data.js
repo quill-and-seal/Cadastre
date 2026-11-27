@@ -69,7 +69,7 @@ export function normalizeWaterData(raw) {
       id: typeof c.id === "string" && c.id ? c.id : `k${++n}`,
       pts,
       speed: r3(Number.isFinite(speed) ? Math.min(CURRENT_SPEED[1], Math.max(CURRENT_SPEED[0], speed)) : 1),
-      ...(c.b ? { b: true } : {})
+      ...(c.b ? { b: true } : {}), ...(c.gen ? { gen: true } : {})
     });
   }
   out.calm = cleanRings(src.calm);
