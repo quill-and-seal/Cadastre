@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.33
+
+- **Les ombres des arbres agissent sur l'eau** : sur l'eau animée, l'ombre n'est plus une couche sombre posée par-dessus ; c'est l'eau qui se dessine à l'ombre. Sans soleil, elle perd ses taches de lumière, ses reflets du ciel et ses éclats, s'assombrit en bleuissant, et laisse mieux voir le fond. L'écume et les feuilles qui flottent s'assombrissent aussi. Suit le réglage « Intensité des ombres des arbres ». Avec l'animation de l'eau coupée, l'ombre reste posée sur l'eau du fond comme avant. Pas besoin de réexporter.
+
 ## 0.1.32
 
 - **L'eau ne se fige plus sous les arbres** : l'eau animée était masquée sous la couronne des arbres générés (comme du temps où ils étaient peints dans l'image de fond) ; on voyait l'eau figée du fond sous les branches. Les arbres générés étant dans leur propre calque, au-dessus de l'eau, elle continue maintenant de bouger dessous. Demande un réexport de la carte.

@@ -13,6 +13,8 @@
  */
 import { MODULE_ID, log } from "./constants.js";
 import { diagLine, diagLoaded } from "./diagnostic.js";
+import { getShadowMask } from "./shadow-mask.js";
+import { refreshTrees } from "./tree-layer.js";
 import {
   buildField, fieldPixels, coastPixels, waterPixels, normalizeWater, surfaceUniforms, bedUniforms, bedLayout, quadTriangles, waterVisible,
   WaterSim, WATER_LEVELS, SURFACE_VERT, SURFACE_FRAG, BED_FRAG, FLOAT_VERT, FLOAT_FRAG, QUAD_CORNERS, INSTANCE_FLOATS
@@ -39,7 +41,8 @@ export function registerWater() {
       2: "CADASTRE.Settings.WaterLevels.2"
     },
     default: WATER_LEVELS.FULL,
-    onChange: () => refresh()
+    // Les ombres des arbres sont gommées au-dessus de l'eau animée seulement : elles suivent.
+    onChange: () => { refresh(); refreshTrees(); }
   });
   Hooks.on("canvasReady", () => refresh());
   Hooks.on("canvasTearDown", () => teardown());
@@ -61,6 +64,7 @@ function teardown() {
   state.bed?.destroy(true);
   state.coastTex?.destroy(true);
   state.waterTex?.destroy(true);
+  state.noShade?.destroy(true);
   state = null;
 }
 
@@ -140,13 +144,18 @@ function refresh() {
       bake.destroy();
     }
 
-    const uniforms = { ...surfaceUniforms(field, settings, layout.rect), uField: texture, uBed: bed, uCoast: coastTex, uWater: waterTex, uTime: 0 };
+    // Ombres des arbres : lues dans le masque du calque des arbres quand il existe.
+    const noShade = PIXI.Texture.fromBuffer(new Uint8Array(4), 1, 1);
+    const uniforms = {
+      ...surfaceUniforms(field, settings, layout.rect), uField: texture, uBed: bed, uCoast: coastTex, uWater: waterTex, uTime: 0,
+      uShade: noShade, uShadeRect: new Float32Array([0, 0, 1, 1]), uShadeK: 0
+    };
     const surface = new PIXI.Mesh(quads, PIXI.Shader.from(SURFACE_VERT, SURFACE_FRAG, uniforms), undefined, PIXI.DRAW_MODES.TRIANGLES);
     root.addChild(surface);
 
     // Écume, feuilles, traits : un quadrilatère par élément, positions recalculées à chaque image.
     let sim = null, floatGeo = null, instBuf = null, floatMesh = null;
-    const floatUniforms = { uMinWidth: 0.9 / size, uAlpha: 1 };
+    const floatUniforms = { uMinWidth: 0.9 / size, uAlpha: 1, uShade: noShade, uShadeRect: new Float32Array([0, 0, 1, 1]), uShadeK: 0 };
     if (level >= WATER_LEVELS.FULL && (settings.particles || settings.strokes || field.coast)) {
       sim = new WaterSim(field, settings);
       for (let i = 0; i < 60; i++) sim.step(1 / 20);
@@ -178,6 +187,12 @@ function refresh() {
         time += dt;
         uniforms.uTime = time;
         uniforms.uPPC = view.ppc;
+        const mask = getShadowMask();
+        for (const u of [uniforms, floatUniforms]) {
+          u.uShade = mask?.texture ?? noShade;
+          u.uShadeK = mask ? Math.min(1, mask.level) : 0;
+          if (mask) u.uShadeRect.set(mask.rect);
+        }
         // Jamais plus fin qu'un pixel d'écran.
         floatUniforms.uMinWidth = 0.9 / view.ppc * (renderer.resolution ?? 1);
         if (sim && floatGeo) {
@@ -200,7 +215,7 @@ function refresh() {
     };
     tick();
     canvas.app.ticker.add(tick);
-    state = { root, tick, texture, bed, coastTex, waterTex, stats };
+    state = { root, tick, texture, bed, coastTex, waterTex, noShade, stats };
     diagLoaded("eau", start);
   } catch (error) {
     log("Eau non animée", error);

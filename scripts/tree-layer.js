@@ -12,6 +12,7 @@
  * Effets coupés (réglage du vent à 0), les arbres restent, immobiles.
  */
 import { diagLine, diagLoaded, diagMemory, textureBytes } from "./diagnostic.js";
+import { setShadowMask } from "./shadow-mask.js";
 import { MODULE_ID, log } from "./constants.js";
 import { normalizeWind, WIND_LEVELS } from "./wind.js";
 import { gustAt, windClock } from "./grass.js";
@@ -405,10 +406,10 @@ export class TreeBaker {
  * lisse au lieu de scintiller). rect : [x, y, largeur, hauteur] en cases ; ppc : pixels par case.
  * @returns {{rt, sprite, bytes:number}}  sprite : l'image, posée à sa place sur la scène
  */
-function drawFixed(renderer, objects, [wx, wy, ww, wh], ppc, { size, ox, oy }) {
+function drawFixed(renderer, objects, [wx, wy, ww, wh], ppc, { size, ox, oy }, mipmap = true) {
   const pw = Math.max(1, Math.ceil(ww * ppc)), ph = Math.max(1, Math.ceil(wh * ppc));
   // Avec réductions (mipmaps) : vue de très loin, la forêt reste lisse au lieu de scintiller.
-  const rt = PIXI.RenderTexture.create({ width: pw, height: ph, scaleMode: PIXI.SCALE_MODES?.LINEAR ?? 1, mipmap: PIXI.MIPMAP_MODES?.ON ?? 1 });
+  const rt = PIXI.RenderTexture.create({ width: pw, height: ph, scaleMode: PIXI.SCALE_MODES?.LINEAR ?? 1, mipmap: mipmap ? (PIXI.MIPMAP_MODES?.ON ?? 1) : (PIXI.MIPMAP_MODES?.OFF ?? 0) });
   const k = ppc / size;
   const transform = new PIXI.Matrix(k, 0, 0, k, -(ox + wx * size) * k, -(oy + wy * size) * k);
   let first = true;
@@ -436,10 +437,49 @@ const SHADOW_TILE = 8;
 /** Finesse des dalles au plus (pixels par case), et leur total de pixels au plus. */
 const SHADOW_TILE_PPC = 96;
 const SHADOW_TILE_BUDGET = 16e6;
+/** Finesse du masque des ombres lu par l'eau (pixels par case) : il ne règle que les reflets. */
+const SHADOW_MASK_PPC = 16;
+/** Finesse de la gomme qui retire les ombres au-dessus de l'eau animée (pixels par case). */
+const WATER_ERASE_PPC = 16;
+
+/**
+ * Gomme de l'eau animée : sur l'eau, l'ombre n'est pas posée par-dessus, c'est l'eau qui se dessine
+ * à l'ombre (sans reflets, plus sombre). Image de l'eau (contours de l'export, îles comprises),
+ * posée sur la scène, qui efface ce qu'elle couvre.
+ * @param {number[][]} rings  contours de l'eau (cases, x, y à plat)
+ */
+function waterEraser(rings, { size, ox, oy }) {
+  if (!rings?.length) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const r of rings) for (let i = 0; i < r.length; i += 2) {
+    x0 = Math.min(x0, r[i]); x1 = Math.max(x1, r[i]); y0 = Math.min(y0, r[i + 1]); y1 = Math.max(y1, r[i + 1]);
+  }
+  if (!(x1 > x0 && y1 > y0)) return null;
+  const ppc = Math.min(WATER_ERASE_PPC, 4096 / Math.max(x1 - x0, y1 - y0));
+  const c = document.createElement("canvas");
+  c.width = Math.ceil((x1 - x0) * ppc) + 2; c.height = Math.ceil((y1 - y0) * ppc) + 2;
+  const x = c.getContext("2d");
+  x.beginPath();
+  for (const r of rings) {
+    for (let i = 0; i < r.length; i += 2) {
+      const px = (r[i] - x0) * ppc + 1, py = (r[i + 1] - y0) * ppc + 1;
+      if (i) x.lineTo(px, py); else x.moveTo(px, py);
+    }
+    x.closePath();
+  }
+  x.fillStyle = "#fff";
+  x.fill("evenodd");
+  const sprite = new PIXI.Sprite(PIXI.Texture.from(c));
+  sprite.position.set(ox + (x0 - 1 / ppc) * size, oy + (y0 - 1 / ppc) * size);
+  sprite.scale.set(size / ppc);
+  sprite.blendMode = PIXI.BLEND_MODES?.ERASE ?? 26;
+  return sprite;
+}
 
 export class ShadowTiles {
-  constructor(root, trees, { size, ox, oy, renderer, level, pages = [] }) {
+  constructor(root, trees, { size, ox, oy, renderer, level, pages = [], waterRings = null }) {
     this.size = size; this.ox = ox; this.oy = oy;
+    this.eraser = waterEraser(waterRings, { size, ox, oy });
     this.renderer = renderer;
     this.pages = pages;
     this.layer = new PIXI.Container();
@@ -465,9 +505,35 @@ export class ShadowTiles {
     this.ppc = Math.max(24, Math.min(SHADOW_TILE_PPC, Math.floor(Math.sqrt(SHADOW_TILE_BUDGET / Math.max(1, area)))));
     this.bytes = 0;
     this.trees = trees;
+    this.level0 = level;
+    this._mask(trees);
   }
 
-  set level(v) { this.layer.alpha = v; }
+  /** Masque des ombres de toute la carte, pour l'eau : dessiné une fois, tout petit. */
+  _mask(trees) {
+    const withShadow = trees.filter((tr) => tr.shadow);
+    if (!withShadow.length || !this.renderer) return;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const tr of withShadow) {
+      x0 = Math.min(x0, tr.sb[0]); y0 = Math.min(y0, tr.sb[1]); x1 = Math.max(x1, tr.sb[2]); y1 = Math.max(y1, tr.sb[3]);
+    }
+    // Une case vide autour : hors du masque, l'eau lit « pas d'ombre ».
+    const rect = [Math.floor(x0) - 1, Math.floor(y0) - 1, Math.ceil(x1 - x0) + 3, Math.ceil(y1 - y0) + 3];
+    try {
+      const r = drawFixed(this.renderer, withShadow.map((tr) => tr.shadow), rect, SHADOW_MASK_PPC, this, false);
+      r.sprite.destroy();
+      this.maskRt = r.rt;
+      this.mask = { texture: r.rt, rect, level: this.level0 };
+      setShadowMask(this.mask);
+    } catch (error) {
+      log("Masque des ombres non dessiné", error);
+    }
+  }
+
+  set level(v) {
+    this.layer.alpha = v;
+    if (this.mask) this.mask.level = v;
+  }
 
   /** Peint les dalles à l'écran, puis les autres petit à petit. */
   update(view) {
@@ -478,7 +544,7 @@ export class ShadowTiles {
       if (t.sprite) continue;
       const seen = (t.tx + 1) * SHADOW_TILE >= x0 && t.tx * SHADOW_TILE <= x1 && (t.ty + 1) * SHADOW_TILE >= y0 && t.ty * SHADOW_TILE <= y1;
       if (!seen && performance.now() - t0 > BAKE_MS) continue;
-      const r = drawFixed(this.renderer, t.shadows, [t.tx * SHADOW_TILE, t.ty * SHADOW_TILE, SHADOW_TILE, SHADOW_TILE], this.ppc, this);
+      const r = drawFixed(this.renderer, this.eraser ? [...t.shadows, this.eraser] : t.shadows, [t.tx * SHADOW_TILE, t.ty * SHADOW_TILE, SHADOW_TILE, SHADOW_TILE], this.ppc, this);
       this.layer.addChild(r.sprite);
       t.rt = r.rt; t.sprite = r.sprite; t.shadows = null;
       this.bytes += r.bytes;
@@ -493,12 +559,16 @@ export class ShadowTiles {
   /** Toutes les dalles sont peintes : les images d'ombres des arbres ne servent plus. */
   _release() {
     for (const tr of this.trees) { tr.shadow?.destroy(); tr.shadow = null; }
+    this.eraser?.destroy(true);
+    this.eraser = null;
     for (const p of this.pages) p.color?.destroy?.(true);
     this.pages = [];
   }
 
   destroy() {
     for (const t of this.tiles) t.rt?.destroy(true);
+    if (this.mask) setShadowMask(null);
+    this.maskRt?.destroy(true);
     this._release();
     diagMemory("ombres", 0);
   }
@@ -515,6 +585,14 @@ export function expandItems(data) {
 }
 
 let state = null;
+
+/** Contours de l'eau animée de la scène (l'animation de l'eau peut être coupée par réglage). */
+function animatedWater() {
+  try {
+    if (!Number(game.settings.get(MODULE_ID, "waterLevel"))) return null;
+  } catch { return null; }
+  return canvas.scene?.getFlag(MODULE_ID, "water")?.rings ?? null;
+}
 
 /** Intensité des ombres réglée (0..1). */
 function shadowLevel() {
@@ -609,7 +687,7 @@ async function refresh() {
     const trees = treeSprites2(root, expandItems(data), pages, { size, ox, oy, ppc, shadowPages, sppc: data.shadows?.ppc ?? 0 });
     // Ombres (scènes exportées depuis la 0.1.27 ; avant, elles sont dans l'image de fond).
     const shadows = me.shadows = shadowPages.length
-      ? new ShadowTiles(root, trees, { size, ox, oy, renderer: canvas.app.renderer, level: shadowLevel(), pages: shadowPages })
+      ? new ShadowTiles(root, trees, { size, ox, oy, renderer: canvas.app.renderer, level: shadowLevel(), pages: shadowPages, waterRings: animatedWater() })
       : null;
     const sharpener = me.sharpener = new TreeSharpener(trees, size, pages);
     sharpener.renderer = canvas.app.renderer;

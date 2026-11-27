@@ -1054,6 +1054,10 @@ varying vec2 vPos;
 uniform sampler2D uField;
 uniform sampler2D uBed;
 uniform sampler2D uWater;
+// Ombres des arbres (calque des arbres) : opacité, sur un rectangle de la carte en cases.
+uniform sampler2D uShade;
+uniform vec4 uShadeRect;
+uniform float uShadeK;
 uniform vec2 uMapSize;
 uniform vec4 uBedRect;
 uniform float uTime, uGlow, uAlpha, uPPC;
@@ -1160,6 +1164,13 @@ void main() {
   float swell = cwk > 0.0 ? cos(((t - dot(vPos, uWaveDir) / ${WAVE_SPEED.toFixed(1)}) / uPeriod - cAlong(sA)) * 6.2832) * 0.6 * uWaves * smoothstep(0.0, 60.0, hd) : 0.0;
   float disp = cwk * (epx * exp(-max(hpx, 0.0) / 70.0) + swell * 6.0);
   float refl = mix(1.0, smoothstep(8.0, 70.0, hd), cwk);
+  // À l'ombre d'un arbre : plus de soleil, donc ni taches de lumière au fond, ni reflets du
+  // ciel, ni éclats ; sans le reflet du ciel, on voit mieux le fond (l'ombre elle-même est
+  // posée par-dessus par le calque des arbres).
+  vec2 shq = (vPos - uShadeRect.xy) / uShadeRect.zw;
+  float shade = uShadeK > 0.0 && shq.x > 0.0 && shq.y > 0.0 && shq.x < 1.0 && shq.y < 1.0
+    ? smoothstep(0.08, 0.6, texture2D(uShade, shq).a) * uShadeK : 0.0;
+  float sunlit = 1.0 - shade;
   vec2 pq = px - cn * disp;
   // Vu de loin, les détails plus fins que les pixels scintilleraient : ils s'effacent en fondu.
   float fine = smoothstep(8.0, 16.0, uPPC), tiny = smoothstep(25.0, 50.0, uPPC);
@@ -1179,14 +1190,15 @@ void main() {
   float causticK = dot(tw, vec4(0.7, 0.25, 0.12, 0.75));
   // Au bord d'une plage, l'eau n'est qu'une mince pellicule : presque transparente.
   absorb *= mix(1.0, smoothstep(0.0, 60.0, hd), cwk);
+  absorb *= 1.0 - 0.3 * shade;
   vec3 water = mix(shallow, deep, smoothstep(0.0, 1.0, depth));
   vec3 col = mix(bed * mix(vec3(0.85, 0.95, 0.92), vec3(1.0), 0.3), water, absorb);
-  col += vec3(0.85, 1.0, 0.92) * cs * causticK * (1.0 - absorb * 0.7) * uGlow * 1.4 * refl;
+  col += vec3(0.85, 1.0, 0.92) * cs * causticK * (1.0 - absorb * 0.7) * uGlow * 1.4 * refl * sunlit;
   col *= 1.0 + swell * 0.07;
   float sky = fbm(px / 140.0 + vec2(uTime * 0.01, 0.0));
-  col += vec3(0.55, 0.70, 0.80) * 0.07 * sky * uGlow * refl;
+  col += vec3(0.55, 0.70, 0.80) * 0.07 * sky * uGlow * refl * sunlit;
   float glint = pow(max(0.0, noise(q0 / 3.0 + 11.0) * w0 + noise(q1 / 3.0 + 11.0) * (1.0 - w0)), 9.0);
-  col += vec3(1.0) * glint * 0.9 * uGlow * (0.4 + 0.6 * depth) * tiny * refl;
+  col += vec3(1.0) * glint * 0.9 * uGlow * (0.4 + 0.6 * depth) * tiny * refl * sunlit;
   // Liseré d'eau claire et d'écume contre la berge (pas sur une côte : la vague le remplace).
   float bank = 1.0 - cwk;
   col = mix(col, shallow * 1.2, smoothstep(0.86, 0.98, n) * 0.5 * bank);
@@ -1212,6 +1224,9 @@ void main() {
     }
     col = mix(col, vec3(0.88, 0.93, 0.92), fw * cwk);
   }
+  // À l'ombre d'un arbre : l'eau, sans soleil ni reflet du ciel, s'assombrit et bleuit
+  // (l'ombre n'est pas posée par-dessus l'eau animée : c'est elle qui se dessine à l'ombre).
+  col = mix(col, col * vec3(0.36, 0.42, 0.5), shade);
   // Ombre portée des rochers (précalculée avec le fond).
   col *= bedT.a;
   // Près d'une côte, l'eau va jusqu'au rivage, sans laisser voir la berge dessinée.
@@ -1231,6 +1246,7 @@ uniform float uMinWidth;
 varying vec2 vLocal;
 varying vec4 vColor;
 varying float vKind;
+varying vec2 vMap;
 const float PX = ${PX.toFixed(1)};
 void main() {
   vec2 c = aVertexPosition, head = aP0.xy, ax = aP0.zw;
@@ -1262,6 +1278,7 @@ void main() {
   }
   vColor = vec4(col, alpha);
   vKind = kind;
+  vMap = p;
   gl_Position = vec4((projectionMatrix * translationMatrix * vec3(p, 1.0)).xy, 0.0, 1.0);
 }`;
 
@@ -1270,17 +1287,25 @@ precision mediump float;
 varying vec2 vLocal;
 varying vec4 vColor;
 varying float vKind;
+varying vec2 vMap;
 uniform float uAlpha;
+uniform sampler2D uShade;
+uniform vec4 uShadeRect;
+uniform float uShadeK;
 void main() {
+  // Écume et feuilles à l'ombre d'un arbre : assombries comme l'eau.
+  vec2 shq = (vMap - uShadeRect.xy) / uShadeRect.zw;
+  float shade = uShadeK > 0.0 && shq.x > 0.0 && shq.y > 0.0 && shq.x < 1.0 && shq.y < 1.0
+    ? smoothstep(0.08, 0.6, texture2D(uShade, shq).a) * uShadeK : 0.0;
   float m = 1.0;
   if (vKind < 0.5) m = smoothstep(1.0, 0.4, abs(vLocal.y));
   else if (vKind < 1.5) m = smoothstep(1.0, 0.7, length(vLocal));
   else if (vKind < 2.5) {
     m = smoothstep(1.0, 0.85, length(vLocal));
-    if (abs(vLocal.y) < 0.09) { gl_FragColor = vec4(vec3(0.16, 0.12, 0.06) * vColor.a * m * uAlpha, vColor.a * m * uAlpha); return; }
+    if (abs(vLocal.y) < 0.09) { gl_FragColor = vec4(vec3(0.16, 0.12, 0.06) * (1.0 - 0.6 * shade) * vColor.a * m * uAlpha, vColor.a * m * uAlpha); return; }
   }
   float a = vColor.a * m * uAlpha;
-  gl_FragColor = vec4(vColor.rgb * a, a);
+  gl_FragColor = vec4(vColor.rgb * (1.0 - 0.6 * shade) * vec3(1.0) * a, a);
 }`;
 
 /** Quadrilatère d'un élément (bande de 4 sommets). */
